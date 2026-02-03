@@ -42,7 +42,7 @@ water_infrastructure:
   groundwater_wells:
     well_depth_m: 50 # Depth of the well - used for well water power calculations.
     well_flow_rate_m3_day: 100 # Flow rate of the well - used for well water power calculations.
-    number_of_wells: 10 # Used to calculate average distance to treatment facility.
+    number_of_wells: 5 # Used to calculate average distance to treatment facility.
 
   water_treatment:
     system_capacity_m3_day: 2000 # System capacity of the water treatment system - used for water treatment calculations.
@@ -60,36 +60,34 @@ water_infrastructure:
 
 food_processing_infrastructure:
   fresh_food_packaging:
-    processing_capacity_kg_day: 1000 
-    shelf_life_days: 3
-    energy_kwh_per_kg: 0.5 
-    labor_hours_per_kg: 0.1 
-    additional_cost_per_kg: 1.0 
+    equipment:
+      - type: washing_sorting_line
+        fraction: 1.0
     storage_capacity_kg_total: 20000
+    shelf_life_days: 3
 
   drying:
-    processing_capacity_kg_day: 1000 
-    shelf_life_days: 3
-    energy_kwh_per_kg: 0.5 
-    labor_hours_per_kg: 0.1 
-    additional_cost_per_kg: 1.0 
+    equipment:
+      - type: solar_tunnel_dryer
+        fraction: 0.6
+      - type: simple_dehydrator
+        fraction: 0.4
     storage_capacity_kg_total: 20000
+    shelf_life_days: 180
 
   canning:
-    processing_capacity_kg_day: 1000 
-    shelf_life_days: 30
-    energy_kwh_per_kg: 0.5 
-    labor_hours_per_kg: 0.1 
-    additional_cost_per_kg: 1.0 
+    equipment:
+      - type: simple_retort
+        fraction: 1.0
     storage_capacity_kg_total: 20000
+    shelf_life_days: 365
 
   packaging:
-    processing_capacity_kg_day: 1000 
-    shelf_life_days: 3
-    energy_kwh_per_kg: 0.5 
-    labor_hours_per_kg: 0.1 
-    additional_cost_per_kg: 1.0
-    storage_capacity_kg_total: 20000 
+    equipment:
+      - type: packaged
+        fraction: 1.0
+    storage_capacity_kg_total: 20000
+    shelf_life_days: 14 
 
 # Community structure and farming layout
 community_structure:

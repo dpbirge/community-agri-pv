@@ -55,6 +55,12 @@ equipment:
   batteries: data/parameters/equipment/batteries-toy.csv
   processing: data/parameters/equipment/processing_equipment-toy.csv
   failure_rates: data/parameters/equipment/equipment_failure_rates-toy.csv
+  wells: data/parameters/equipment/wells-toy.csv
+  irrigation_systems: data/parameters/equipment/irrigation_systems-toy.csv
+  storage_systems: data/parameters/equipment/storage_systems-toy.csv
+  generators: data/parameters/equipment/generators-toy.csv
+  fresh_packaging: data/parameters/equipment/fresh_packaging-toy.csv
+  processed_packaging: data/parameters/equipment/processed_packaging-toy.csv
 
 # Prices - fresh crops
 prices_crops:
@@ -98,3 +104,8 @@ community:
   farm_profiles: data/parameters/community/farm_profiles-toy.csv
   land_allocation: data/parameters/community/land_allocation-toy.csv
   housing: data/parameters/community/housing_energy_water-toy.csv
+
+# Household demand (precomputed with seasonal variation)
+household:
+  energy: data/precomputed/household/household_energy_kwh_per_day-toy.csv
+  water: data/precomputed/household/household_water_m3_per_day-toy.csv

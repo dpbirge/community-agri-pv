@@ -86,6 +86,7 @@ def validate_scenario(scenario_path):
         full_path = project_root / scenario_path
 
     errors = []
+    warnings = []
 
     if not full_path.exists():
         return {"valid": False, "errors": [f"Scenario not found: {scenario_path}"]}
@@ -97,7 +98,7 @@ def validate_scenario(scenario_path):
         return {"valid": False, "errors": [f"YAML parse error: {e}"]}
 
     # Check required sections
-    required = ["scenario", "simulation", "energy_infrastructure", "water_infrastructure", "food_processing_infrastructure", "community_structure"]
+    required = ["scenario", "simulation", "energy_infrastructure", "water_infrastructure", "food_processing_infrastructure", "community_structure", "economics"]
     for section in required:
         if section not in scenario:
             errors.append(f"Missing required section: {section}")
@@ -150,13 +151,28 @@ def validate_scenario(scenario_path):
         for section in required_food:
             if section not in food_infra:
                 errors.append(f"Missing required food_processing_infrastructure section: {section}")
-        
-        # Validate processing capacities
+
+        # Validate equipment lists
         for section in required_food:
             if section in food_infra:
                 proc = food_infra[section]
-                if "processing_capacity_kg_day" in proc and proc["processing_capacity_kg_day"] <= 0:
-                    errors.append(f"{section}.processing_capacity_kg_day must be > 0, got {proc['processing_capacity_kg_day']}")
+                if "equipment" not in proc:
+                    errors.append(f"{section} missing required 'equipment' list")
+                else:
+                    equipment_list = proc["equipment"]
+                    if not equipment_list:
+                        errors.append(f"{section}.equipment list cannot be empty")
+                    else:
+                        total_fraction = 0.0
+                        for i, eq in enumerate(equipment_list):
+                            if "type" not in eq:
+                                errors.append(f"{section}.equipment[{i}] missing 'type'")
+                            if "fraction" not in eq:
+                                errors.append(f"{section}.equipment[{i}] missing 'fraction'")
+                            else:
+                                total_fraction += eq.get("fraction", 0)
+                        if abs(total_fraction - 1.0) > 0.01:
+                            errors.append(f"{section}.equipment fractions must sum to 1.0, got {total_fraction}")
 
     # Check farms have policies
     if "community_structure" in scenario and "farms" in scenario["community_structure"]:
@@ -164,7 +180,48 @@ def validate_scenario(scenario_path):
             if "policies" not in farm:
                 errors.append(f"Farm {i+1} missing 'policies' section")
 
-    return {"valid": len(errors) == 0, "errors": errors}
+    # Cross-validation checks (warnings, not errors - these are capacity mismatches)
+    if "water_infrastructure" in scenario:
+        water = scenario["water_infrastructure"]
+
+        # Check treatment capacity vs well capacity
+        if "groundwater_wells" in water and "water_treatment" in water:
+            wells = water["groundwater_wells"]
+            treatment = water["water_treatment"]
+
+            total_well_capacity = wells.get("number_of_wells", 0) * wells.get("well_flow_rate_m3_day", 0)
+            treatment_capacity = treatment.get("system_capacity_m3_day", 0)
+
+            # Warning 1: Treatment undersized vs simultaneous well operation
+            if treatment_capacity < total_well_capacity * 0.5:
+                warnings.append(
+                    f"Treatment capacity ({treatment_capacity} m³/day) is less than 50% of "
+                    f"total well capacity ({total_well_capacity} m³/day). Treatment may bottleneck."
+                )
+
+            # Warning 2: Treatment heavily oversized
+            if treatment_capacity > total_well_capacity * 2:
+                warnings.append(
+                    f"Treatment capacity ({treatment_capacity} m³/day) is more than 2x "
+                    f"total well capacity ({total_well_capacity} m³/day). Consider smaller treatment."
+                )
+
+        # Check storage is reasonable for throughput
+        if "irrigation_water_storage" in water and "water_treatment" in water:
+            storage = water["irrigation_water_storage"]
+            treatment = water["water_treatment"]
+
+            storage_capacity = storage.get("capacity_m3", 0)
+            daily_treatment = treatment.get("system_capacity_m3_day", 0)
+
+            # Warning 3: Storage too small for treatment throughput
+            if storage_capacity < daily_treatment * 0.25:
+                warnings.append(
+                    f"Storage ({storage_capacity} m³) provides less than 6 hours buffer "
+                    f"for treatment throughput ({daily_treatment} m³/day)."
+                )
+
+    return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}
 
 
 def validate_all():
@@ -236,6 +293,10 @@ if __name__ == "__main__":
             print("Errors:")
             for e in result["errors"]:
                 print(f"  - {e}")
+        if result.get("warnings"):
+            print("\nWarnings:")
+            for w in result["warnings"]:
+                print(f"  - {w}")
         sys.exit(0 if result["valid"] else 1)
 
     else:
@@ -253,6 +314,9 @@ if __name__ == "__main__":
             if not result["valid"]:
                 for e in result["errors"]:
                     print(f"    - {e}")
+            if result.get("warnings"):
+                for w in result["warnings"]:
+                    print(f"    [WARN] {w}")
 
         print(f"\nOverall: {'PASS' if results['all_valid'] else 'FAIL'}")
         sys.exit(0 if results["all_valid"] else 1)

@@ -8,14 +8,17 @@ This folder contains simulation configuration for the Community Agri-PV model.
 settings/
 ├── data_registry.yaml   # Single source of truth for data file paths
 ├── scenarios/           # Scenario configurations (policies, farms)
-│   └── toy_4farm.yaml
+│   └── water_policy_testing.yaml
 ├── policies/            # Policy implementations
 │   ├── water_policies.py     # 4 functional water policies
 │   ├── energy_policies.py    # Stub
 │   ├── crop_policies.py      # Stub
 │   ├── economic_policies.py  # Stub
 │   └── market_policies.py    # Stub
-├── validation.py        # Registry and scenario validation
+├── scripts/             # Configuration utilities
+│   ├── loader.py        # Scenario loader (YAML → dataclasses)
+│   ├── validation.py    # Registry and scenario validation
+│   └── calculations.py  # Calculation layer for scenario computations
 └── README.md
 ```
 
@@ -27,7 +30,7 @@ All data file paths are defined in `data_registry.yaml`. Scenarios do not contai
 ```bash
 # Edit data_registry.yaml, change "-toy.csv" to "-research.csv"
 # Then validate:
-python settings/validation.py --registry
+python settings/scripts/validation.py --registry
 ```
 
 **Registry structure:**
@@ -46,7 +49,7 @@ irrigation:
 
 **Load registry in code:**
 ```python
-from settings.validation import load_registry
+from settings.scripts.validation import load_registry
 
 registry = load_registry()
 weather_file = registry["weather"]["daily"]
@@ -63,16 +66,9 @@ Scenarios define:
 
 Scenarios do **not** define data file paths - those come from the registry.
 
-### toy_4farm.yaml
+### water_policy_testing.yaml
 
-4 equal-sized farms (125 ha each) with distinct water policies:
-
-| Farm | Water Policy | Economic Policy |
-|------|-------------|-----------------|
-| Farm 1 | always_groundwater | conservative |
-| Farm 2 | always_municipal | moderate |
-| Farm 3 | cheapest_source | aggressive |
-| Farm 4 | conserve_groundwater | balanced |
+Test scenario for water policy comparison with multiple farms using distinct water allocation strategies.
 
 ## Water Policies
 
@@ -105,19 +101,19 @@ result = policy.allocate_water(ctx)
 
 ```bash
 # Validate data registry (all files exist)
-python settings/validation.py --registry
+python settings/scripts/validation.py --registry
 
 # Validate a specific scenario
-python settings/validation.py settings/scenarios/toy_4farm.yaml
+python settings/scripts/validation.py settings/scenarios/water_policy_testing.yaml
 
 # Validate everything
-python settings/validation.py --all
+python settings/scripts/validation.py --all
 ```
 
 ## Adding New Scenarios
 
-1. Copy `toy_4farm.yaml` as template
+1. Copy `water_policy_testing.yaml` as template
 2. Modify farm counts, sizes, and policy assignments
-3. Run `python settings/validation.py settings/scenarios/your_scenario.yaml`
+3. Run `python settings/scripts/validation.py settings/scenarios/your_scenario.yaml`
 
 Scenarios share the same data registry. To use different data, edit the registry (affects all scenarios).

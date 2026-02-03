@@ -1,16 +1,18 @@
 # SOURCE: Synthetic data based on FAO agricultural processing guides, equipment manufacturer catalogs, FAO food preservation guides, solar drying technology for small-scale farms, Egyptian agricultural processing case studies
 # DATE: 2026-02-03
 # DESCRIPTION: Food processing equipment specifications for small-scale agricultural community
-# UNITS: equipment_type (string), capacity_kg_per_day (kg/day), energy_kw_continuous (kW), labor_hours_per_kg (hours/kg), capital_cost_usd (USD), maintenance_cost_per_year_usd (USD/year), lifespan_years (years)
+# UNITS: category (string), equipment_type (string), capacity_kg_per_day (kg/day), energy_kw_continuous (kW), labor_hours_per_kg (hours/kg), capital_cost_usd (USD), maintenance_cost_per_year_usd (USD/year), lifespan_years (years)
 # LOGIC: Packaged (washing, sorting, boxing) has lowest energy; canned (heating, sealing) moderate; dried (dehydration) highest energy but extends shelf life significantly. Solar drying uses minimal energy (mostly manual labor). Simple dehydrators use moderate energy. Canning equipment ranges from manual to simple retort systems. Capacities sized for 10-20% of peak daily harvest from 500 ha operation.
 # DEPENDENCIES: None
 # ASSUMPTIONS: All costs in 2024 USD; equipment suitable for hot climate operation; includes basic refrigeration for packaged line; small-scale, mostly manual labor; hot arid climate makes solar drying highly effective; focus on simple machines and manual processes, not industrial equipment
 # CONTEXT: Location: Egyptian community farms. Scale: Small-scale, mostly manual labor. Products: Tomatoes, kale (primary dried products), Tomatoes, onions (primary canned products). Climate: Hot arid - solar drying highly effective.
-equipment_type,capacity_kg_per_day,energy_kw_continuous,labor_hours_per_kg,capital_cost_usd,maintenance_cost_per_year_usd,lifespan_years
-packaged,5000,8,0.05,45000,2500,15
-solar_drying_rack,800,0,0.15,5000,200,10
-simple_dehydrator,1200,12,0.10,18000,1200,12
-solar_tunnel_dryer,1500,2,0.08,25000,1500,15
-manual_canning_line,1500,8,0.12,35000,2000,15
-simple_retort,2000,18,0.10,55000,3500,18
-pressure_canner,2500,25,0.08,85000,5500,20
+category,equipment_type,capacity_kg_per_day,energy_kw_continuous,labor_hours_per_kg,capital_cost_usd,maintenance_cost_per_year_usd,lifespan_years
+packaging,packaged,5000,8,0.05,45000,2500,15
+drying,solar_drying_rack,800,0,0.15,5000,200,10
+drying,simple_dehydrator,1200,12,0.10,18000,1200,12
+drying,solar_tunnel_dryer,1500,2,0.08,25000,1500,15
+canning,manual_canning_line,1500,8,0.12,35000,2000,15
+canning,simple_retort,2000,18,0.10,55000,3500,18
+canning,pressure_canner,2500,25,0.08,85000,5500,20
+fresh_packaging,washing_sorting_line,3000,5,0.06,30000,1800,12
+fresh_packaging,cold_storage_packing,2000,15,0.08,50000,3000,15

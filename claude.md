@@ -22,24 +22,24 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 ## Directory Structure
 
 - `/data` - All simulation datasets
-  - `/data/parameters` - Static parameters (crops, equipment, labor, community, costs)
-  - `/data/precomputed` - Layer 1 outputs (weather, PV/wind power, irrigation demand, crop yields, water treatment, microclimate)
-  - `/data/prices` - Historical price time-series (crops, processed goods, electricity, water, diesel)
-  - `/data/scripts` - Data generation scripts (Layer 1)
+  - `/parameters` - Static parameters (crops, equipment, labor, community, costs)
+  - `/precomputed` - Layer 1 outputs (weather, PV/wind, irrigation, yields, microclimate)
+  - `/prices` - Historical price time-series (crops, processed, electricity, water, diesel)
+  - `/scripts` - Data generation scripts (Layer 1)
 - `/docs` - Documentation
-  - `/docs/codereview` - Empty (planned for code review notes)
-  - `/docs/planning` - Model specifications and implementation plans
-  - `/docs/prompts` - AI assistant prompts for development workflows
-  - `/docs/research` - Empty (planned for scientific methodology documentation)
-  - `/docs/validation` - Data validation reports
-- `/notebooks` - Jupyter notebooks for interactive analysis and testing
+  - `/codereview` - Code review notes (with `_archive/`)
+  - `/planning` - Model specifications and implementation plans (with `_archive/`)
+  - `/prompts` - AI assistant prompts for development workflows (with `_archive/`)
+  - `/research` - Empty (planned for scientific methodology)
+  - `/validation` - Data validation reports (with `_archive/`)
+- `/notebooks` - Jupyter notebooks for interactive analysis
 - `/results` - Empty (simulation outputs will be written here)
-- `/scripts` - Empty (legacy, scripts moved to `/data/scripts`)
-- `/settings` - Layer 2 configuration (scenarios, policies, data registry)
-  - `/settings/policies` - Policy implementations (water policies functional, others stubbed)
-  - `/settings/scenarios` - Scenario YAML configurations
-  - `/settings/scripts` - Configuration utilities (loader, validation)
-- `/src` - Empty (Layer 3 simulation engine code - planned)
+- `/scripts` - Legacy, scripts moved to `/data/scripts`
+- `/settings` - Layer 2 configuration
+  - `/policies` - Policy implementations (water functional, others stubbed)
+  - `/scenarios` - Scenario YAML configurations
+  - `/scripts` - Configuration utilities (loader, validation, calculations)
+- `/src` - Empty (Layer 3 simulation engine - planned)
 - `/testing` - Empty (test files - planned)
 
 ## Key Files
@@ -48,7 +48,7 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 
 - [community-model-plan.md](docs/planning/community-model-plan.md) - Complete model specifications
 - [data-organization.md](docs/planning/data-organization.md) - Data structure and format specifications
-- [data-generation-orchestration.md](docs/planning/data-generation-orchestration.md) - Dataset generation task breakdown
+- [data-realism-research-plan.md](docs/planning/data-realism-research-plan.md) - Research methodology for empirical data
 
 **Data generation scripts (Layer 1):**
 
@@ -63,12 +63,9 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 - [loader.py](settings/scripts/loader.py) - Scenario loader: loads YAML scenarios into structured dataclasses
 - [data_registry.yaml](settings/data_registry.yaml) - Central registry for all data file paths
 - [validation.py](settings/scripts/validation.py) - Validates registry files exist and scenarios are valid
+- [calculations.py](settings/scripts/calculations.py) - Calculation layer for scenario-based computations
 - [water_policies.py](settings/policies/water_policies.py) - 4 functional water allocation policies
-- [toy_4farm.yaml](settings/scenarios/toy_4farm.yaml) - Example scenario with 4 farms and distinct policies
-
-**Validation:**
-
-- [data_generation_validation_report.md](docs/validation/data_generation_validation_report.md) - Layer 1 toy dataset validation (all 11 tasks passed)
+- [water_policy_testing.yaml](settings/scenarios/water_policy_testing.yaml) - Example scenario for water policy testing
 
 ## Key Functions
 
@@ -96,10 +93,10 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 ## Development
 
 - **Status**: Layer 1 complete (toy datasets validated), Layer 2 partially complete (scenarios/policies implemented), research datasets in progress
-- **Run**: 
+- **Run**:
   - `python data/scripts/generate_weather_data.py` (regenerates weather data)
   - `python settings/scripts/validation.py --registry` (validate data registry)
-  - `python settings/scripts/validation.py settings/scenarios/toy_4farm.yaml` (validate scenario)
+  - `python settings/scripts/validation.py settings/scenarios/water_policy_testing.yaml` (validate scenario)
 - **Test**: TBD
 - **Build**: TBD
 

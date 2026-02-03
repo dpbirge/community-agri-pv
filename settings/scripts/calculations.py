@@ -16,6 +16,35 @@ def _get_project_root():
     return Path(__file__).parent.parent.parent
 
 
+def _get_registry():
+    """Load data registry. Cache for performance."""
+    if not hasattr(_get_registry, "_cache"):
+        from settings.scripts.validation import load_registry
+        _get_registry._cache = load_registry()
+    return _get_registry._cache
+
+
+def _get_data_path(category: str, subcategory: str) -> Path:
+    """Get data file path from registry.
+
+    Args:
+        category: Top-level registry category (e.g., 'equipment', 'community')
+        subcategory: Sub-category key (e.g., 'pv_systems', 'housing')
+
+    Returns:
+        Full path to the data file
+
+    Raises:
+        KeyError: If registry path not found
+    """
+    registry = _get_registry()
+    try:
+        path = registry[category][subcategory]
+    except KeyError:
+        raise KeyError(f"Registry path not found: {category}.{subcategory}")
+    return _get_project_root() / path
+
+
 def _load_csv_with_metadata(file_path: Path) -> pd.DataFrame:
     """Load CSV file, skipping metadata header lines."""
     with open(file_path, "r") as f:
@@ -39,7 +68,7 @@ def calculate_pv_config(scenario: Scenario) -> Dict[str, Any]:
     pv_config = scenario.infrastructure.pv
     
     # Load PV system specifications
-    pv_specs_path = _get_project_root() / "data/parameters/equipment/pv_systems-toy.csv"
+    pv_specs_path = _get_data_path("equipment", "pv_systems")
     pv_specs = _load_csv_with_metadata(pv_specs_path)
     
     # Find matching density row
@@ -89,7 +118,7 @@ def calculate_wind_config(scenario: Scenario) -> Dict[str, Any]:
     wind_config = scenario.infrastructure.wind
     
     # Load wind turbine specifications
-    wind_specs_path = _get_project_root() / "data/parameters/equipment/wind_turbines-toy.csv"
+    wind_specs_path = _get_data_path("equipment", "wind_turbines")
     wind_specs = _load_csv_with_metadata(wind_specs_path)
     
     # Find matching turbine type
@@ -124,53 +153,53 @@ def calculate_wind_config(scenario: Scenario) -> Dict[str, Any]:
 
 
 def calculate_battery_config(scenario: Scenario) -> Dict[str, Any]:
-    """Calculate battery configuration details.
-    
+    """Calculate battery configuration.
+
+    Each bank = one battery unit. Total capacity = unit_capacity × num_banks.
+    Finds closest size match based on capacity per bank.
+
     Returns:
-        Dict with battery_count, battery_capacity_kwh, etc.
+        Dict with battery configuration including counts, capacities, and costs
     """
     battery_config = scenario.infrastructure.battery
-    
+
     # Load battery specifications
-    battery_specs_path = _get_project_root() / "data/parameters/equipment/batteries-toy.csv"
+    battery_specs_path = _get_data_path("equipment", "batteries")
     battery_specs = _load_csv_with_metadata(battery_specs_path)
-    
-    # Find matching chemistry (LFP)
-    battery_row = battery_specs[battery_specs["battery_type"].str.contains("lithium_iron_phosphate", case=False, na=False)]
-    if battery_row.empty:
-        raise ValueError(f"Battery chemistry {battery_config.chemistry} not found")
-    
-    # Select appropriate size based on capacity
-    # Use medium if capacity > 200 kWh, large if > 500 kWh, else small
-    if battery_config.sys_capacity_kwh > 500:
-        size_filter = battery_row["battery_type"].str.contains("large", case=False, na=False)
-    elif battery_config.sys_capacity_kwh > 200:
-        size_filter = battery_row["battery_type"].str.contains("medium", case=False, na=False)
-    else:
-        size_filter = battery_row["battery_type"].str.contains("small", case=False, na=False)
-    
-    battery_data = battery_row[size_filter].iloc[0]
-    unit_capacity_kwh = battery_data["capacity_kwh"]
-    unit_power_kw = battery_data["power_kw"]
-    
-    # Calculate number of battery units per bank
-    units_per_bank = int(battery_config.sys_capacity_kwh / battery_config.units / unit_capacity_kwh)
-    if units_per_bank == 0:
-        units_per_bank = 1
-    
-    total_battery_units = units_per_bank * battery_config.units
-    
+
+    # Map common abbreviations to full names
+    chemistry_map = {
+        "LFP": "lithium_iron_phosphate",
+        "VRFB": "vanadium_redox_flow",
+    }
+    chemistry_search = chemistry_map.get(battery_config.chemistry.upper(), battery_config.chemistry)
+
+    # Find matching chemistry
+    chemistry_rows = battery_specs[
+        battery_specs["battery_type"].str.contains(chemistry_search, case=False, na=False)
+    ]
+    if chemistry_rows.empty:
+        raise ValueError(f"Battery chemistry '{battery_config.chemistry}' not found")
+
+    # Select size based on per-bank capacity
+    capacity_per_bank = battery_config.sys_capacity_kwh / battery_config.units
+
+    # Find closest match
+    size_diff = (chemistry_rows["capacity_kwh"] - capacity_per_bank).abs()
+    battery_data = chemistry_rows.loc[size_diff.idxmin()]
+
     return {
-        "battery_count": total_battery_units,
-        "units_per_bank": units_per_bank,
-        "battery_banks": battery_config.units,
-        "unit_capacity_kwh": unit_capacity_kwh,
-        "unit_power_kw": unit_power_kw,
-        "total_capacity_kwh": total_battery_units * unit_capacity_kwh,
-        "total_power_kw": total_battery_units * unit_power_kw,
+        "battery_type": battery_data["battery_type"],
+        "num_banks": battery_config.units,
+        "capacity_per_bank_kwh": battery_data["capacity_kwh"],
+        "total_capacity_kwh": battery_data["capacity_kwh"] * battery_config.units,
+        "power_per_bank_kw": battery_data["power_kw"],
+        "total_power_kw": battery_data["power_kw"] * battery_config.units,
         "round_trip_efficiency": battery_data["round_trip_efficiency"],
         "cycle_life": battery_data["cycle_life"],
         "depth_of_discharge_pct": battery_data["depth_of_discharge_pct"],
+        "capital_cost_per_kwh": battery_data["capital_cost_per_kwh"],
+        "total_capital_cost": battery_data["capital_cost_per_kwh"] * battery_data["capacity_kwh"] * battery_config.units,
     }
 
 
@@ -183,14 +212,11 @@ def calculate_generator_config(scenario: Scenario) -> Dict[str, Any]:
     gen_config = scenario.infrastructure.diesel_backup
     
     # Load generator specifications
-    gen_specs_path = _get_project_root() / "data/parameters/equipment/generators-toy.csv"
+    gen_specs_path = _get_data_path("equipment", "generators")
     gen_specs = _load_csv_with_metadata(gen_specs_path)
     
     # Find matching capacity (closest match)
     gen_row = gen_specs.iloc[(gen_specs["capacity_kw"] - gen_config.capacity_kw).abs().argsort()[:1]]
-    if gen_row.empty:
-        raise ValueError(f"Generator capacity {gen_config.capacity_kw} kW not found")
-    
     gen_data = gen_row.iloc[0]
     
     return {
@@ -202,28 +228,61 @@ def calculate_generator_config(scenario: Scenario) -> Dict[str, Any]:
     }
 
 
-def calculate_well_pumping_energy(well_depth_m: float, flow_rate_m3_day: float) -> float:
-    """Calculate well pumping energy requirement (kWh/m³).
-    
+def calculate_pumping_energy(
+    well_depth_m: float,
+    flow_rate_m3_day: float,
+    horizontal_distance_km: float = 0.3,
+    pipe_diameter_m: float = 0.1,
+    pump_efficiency: float = 0.60
+) -> Dict[str, float]:
+    """Calculate pumping energy using hydraulic engineering principles.
+
+    Energy components:
+    1. Lift energy: E_lift = (ρgh) / (η × 3.6e6) kWh/m³
+       - ρ = water density (~1025 kg/m³ for brackish)
+       - g = 9.81 m/s²
+       - h = total head (m)
+       - η = pump efficiency
+
+    2. Friction losses: Darcy-Weisbach equation for horizontal pipe flow
+       - Head loss = f × (L/D) × (v²/2g)
+       - f = friction factor (~0.02 for PVC pipes)
+
     Args:
-        well_depth_m: Well depth in meters
+        well_depth_m: Well depth in meters (vertical lift)
         flow_rate_m3_day: Flow rate in m³/day
-    
+        horizontal_distance_km: Horizontal pipe distance to treatment/storage
+        pipe_diameter_m: Main pipe diameter in meters
+        pump_efficiency: Combined pump and motor efficiency
+
     Returns:
-        Energy requirement in kWh/m³
+        Dict with lift_energy, friction_energy, total_pumping_energy (all kWh/m³)
     """
-    # Load well specifications
-    wells_specs_path = _get_project_root() / "data/parameters/equipment/wells-toy.csv"
-    wells_specs = _load_csv_with_metadata(wells_specs_path)
-    
-    # Find matching well configuration (closest match)
-    depth_diff = (wells_specs["well_depth_m"] - well_depth_m).abs()
-    flow_diff = (wells_specs["flow_rate_m3_day"] - flow_rate_m3_day).abs()
-    combined_diff = depth_diff + flow_diff * 0.01  # Weight depth more heavily
-    
-    well_row = wells_specs.iloc[combined_diff.idxmin()]
-    
-    return well_row["pumping_energy_kwh_per_m3"]
+    WATER_DENSITY = 1025  # kg/m³ (brackish water)
+    GRAVITY = 9.81  # m/s²
+    FRICTION_FACTOR = 0.02  # typical for PVC pipes
+    PI = 3.14159
+
+    # Vertical lift energy (well to surface)
+    lift_head_m = well_depth_m
+    lift_energy_kwh_per_m3 = (WATER_DENSITY * GRAVITY * lift_head_m) / (pump_efficiency * 3.6e6)
+
+    # Horizontal friction losses
+    pipe_area_m2 = PI * (pipe_diameter_m / 2) ** 2
+    flow_rate_m3_s = flow_rate_m3_day / 86400
+    velocity_m_s = flow_rate_m3_s / pipe_area_m2
+
+    horizontal_distance_m = horizontal_distance_km * 1000
+    friction_head_m = FRICTION_FACTOR * (horizontal_distance_m / pipe_diameter_m) * (velocity_m_s ** 2 / (2 * GRAVITY))
+    friction_energy_kwh_per_m3 = (WATER_DENSITY * GRAVITY * friction_head_m) / (pump_efficiency * 3.6e6)
+
+    return {
+        "lift_energy_kwh_per_m3": round(lift_energy_kwh_per_m3, 4),
+        "friction_energy_kwh_per_m3": round(friction_energy_kwh_per_m3, 4),
+        "total_pumping_energy_kwh_per_m3": round(lift_energy_kwh_per_m3 + friction_energy_kwh_per_m3, 4),
+        "lift_head_m": lift_head_m,
+        "friction_head_m": round(friction_head_m, 2),
+    }
 
 
 def calculate_well_costs(number_of_wells: int, well_depth_m: float, flow_rate_m3_day: float) -> Dict[str, float]:
@@ -233,7 +292,7 @@ def calculate_well_costs(number_of_wells: int, well_depth_m: float, flow_rate_m3
         Dict with capital_cost_total, om_cost_per_year
     """
     # Load well specifications
-    wells_specs_path = _get_project_root() / "data/parameters/equipment/wells-toy.csv"
+    wells_specs_path = _get_data_path("equipment", "wells")
     wells_specs = _load_csv_with_metadata(wells_specs_path)
     
     # Find matching well configuration
@@ -272,26 +331,37 @@ def calculate_treatment_unit_sizing(total_capacity_m3_day: float, number_of_unit
 def calculate_distances(wells_config, treatment_config, farms) -> Dict[str, float]:
     """Calculate average distances between infrastructure components.
     
+    Uses simplified geometric estimation assuming uniform distribution of
+    infrastructure across the farm area. Formula based on expected distance
+    between uniformly distributed points in a square region:
+    
+        E[d] = (0.52 * sqrt(A)) / sqrt(n)
+    
+    where A = area, n = number of points. Coefficients (0.3, 0.4) are adjusted
+    for typical rural infrastructure placement patterns.
+    
+    Args:
+        wells_config: Groundwater wells configuration
+        treatment_config: Water treatment configuration  
+        farms: List of farm objects
+    
     Returns:
         Dict with average_well_to_treatment_km, average_treatment_to_farm_km, etc.
     """
-    # Simplified distance calculation - assumes uniform distribution
-    # In a real implementation, this would use actual farm locations
-    
     number_of_wells = wells_config.number_of_wells
     number_of_units = treatment_config.number_of_units
     number_of_farms = len(farms)
     
-    # Estimate average distances (simplified)
-    # Assume wells are distributed, treatment units are centralized
-    # Rough estimate: sqrt(area) / sqrt(number_of_points) * 0.5
+    # Calculate total area
     total_area_ha = sum(farm.area_ha for farm in farms)
     total_area_km2 = total_area_ha / 100
     
-    # Average distance between wells and treatment (simplified)
+    # Average distance between wells and treatment
+    # Uses 0.3 coefficient (wells tend to be distributed near treatment)
     avg_well_to_treatment_km = (total_area_km2 ** 0.5) / (number_of_wells ** 0.5) * 0.3
     
     # Average distance from treatment to farms
+    # Uses 0.4 coefficient (farms more spread out from central treatment)
     avg_treatment_to_farm_km = (total_area_km2 ** 0.5) / (number_of_farms ** 0.5) * 0.4
     
     return {
@@ -301,19 +371,18 @@ def calculate_distances(wells_config, treatment_config, farms) -> Dict[str, floa
     }
 
 
-def calculate_storage_evaporation(capacity_m3: float, storage_type: str, weather_data: pd.DataFrame = None) -> Dict[str, float]:
+def calculate_storage_evaporation(capacity_m3: float, storage_type: str) -> Dict[str, float]:
     """Calculate storage evaporation losses.
-    
+
     Args:
         capacity_m3: Storage capacity
         storage_type: Type of storage (underground_tank, surface_tank, reservoir)
-        weather_data: Optional weather data for detailed calculation
-    
+
     Returns:
         Dict with evaporation_rate_annual_pct, daily_evaporation_m3, etc.
     """
     # Load storage specifications
-    storage_specs_path = _get_project_root() / "data/parameters/equipment/storage_systems-toy.csv"
+    storage_specs_path = _get_data_path("equipment", "storage_systems")
     storage_specs = _load_csv_with_metadata(storage_specs_path)
     
     # Find matching storage type
@@ -341,7 +410,7 @@ def calculate_storage_costs(capacity_m3: float, storage_type: str) -> Dict[str, 
         Dict with capital_cost_total
     """
     # Load storage specifications
-    storage_specs_path = _get_project_root() / "data/parameters/equipment/storage_systems-toy.csv"
+    storage_specs_path = _get_data_path("equipment", "storage_systems")
     storage_specs = _load_csv_with_metadata(storage_specs_path)
     
     # Find matching storage type
@@ -368,7 +437,7 @@ def get_irrigation_efficiency(irrigation_type: str) -> float:
         Efficiency as decimal (0-1)
     """
     # Load irrigation system specifications
-    irrigation_specs_path = _get_project_root() / "data/parameters/equipment/irrigation_systems-toy.csv"
+    irrigation_specs_path = _get_data_path("equipment", "irrigation_systems")
     irrigation_specs = _load_csv_with_metadata(irrigation_specs_path)
     
     # Find matching irrigation type
@@ -394,73 +463,110 @@ def calculate_irrigation_demand_adjustment(base_demand_m3: float, irrigation_typ
     return base_demand_m3 / efficiency
 
 
-def validate_processing_capacity(processing_config, equipment_specs: pd.DataFrame) -> Dict[str, Any]:
-    """Validate processing capacity against equipment capabilities.
-    
+def _load_equipment_specs():
+    """Load processing equipment specifications from CSV. Cache for performance."""
+    if not hasattr(_load_equipment_specs, "_cache"):
+        equipment_file = _get_data_path("equipment", "processing")
+        _load_equipment_specs._cache = _load_csv_with_metadata(equipment_file)
+    return _load_equipment_specs._cache
+
+
+def calculate_processing_category_specs(category_config, expected_category: str) -> Dict[str, Any]:
+    """Calculate processing specs for a category from equipment mix.
+
+    Looks up each equipment type from CSV, validates category matches,
+    and calculates weighted averages for mixed equipment.
+
+    Args:
+        category_config: ProcessingCategoryConfig with equipment list
+        expected_category: Expected category name (drying, canning, etc.)
+
     Returns:
-        Dict with validation results
+        Dict with total_capacity, weighted_energy_kw, weighted_labor_hours_per_kg, etc.
     """
-    # This would compare processing_config.processing_capacity_kg_day
-    # against equipment_specs capacity_kg_per_day
-    # For now, return basic validation
+    equipment_specs = _load_equipment_specs()
+
+    total_capacity = 0.0
+    weighted_energy = 0.0
+    weighted_labor = 0.0
+    equipment_details = []
+
+    for eq in category_config.equipment:
+        eq_row = equipment_specs[equipment_specs["equipment_type"] == eq.type]
+        if eq_row.empty:
+            raise ValueError(
+                f"Equipment type '{eq.type}' not found in processing equipment file. "
+                f"Available types: {equipment_specs['equipment_type'].tolist()}"
+            )
+
+        eq_data = eq_row.iloc[0]
+        eq_category = eq_data["category"]
+
+        # Validate category matches
+        if eq_category != expected_category:
+            raise ValueError(
+                f"Equipment '{eq.type}' has category '{eq_category}' but was used in "
+                f"'{expected_category}' section. Use equipment from the correct category."
+            )
+
+        capacity = eq_data["capacity_kg_per_day"]
+        energy_kw = eq_data["energy_kw_continuous"]
+        labor_per_kg = eq_data["labor_hours_per_kg"]
+
+        total_capacity += capacity * eq.fraction
+        weighted_energy += energy_kw * eq.fraction
+        weighted_labor += labor_per_kg * eq.fraction
+
+        equipment_details.append({
+            "type": eq.type,
+            "fraction": eq.fraction,
+            "capacity_kg_per_day": capacity,
+            "energy_kw_continuous": energy_kw,
+            "labor_hours_per_kg": labor_per_kg,
+        })
+
     return {
-        "valid": True,
-        "message": "Processing capacity validation not fully implemented",
+        "total_capacity_kg_per_day": total_capacity,
+        "weighted_energy_kw": weighted_energy,
+        "weighted_labor_hours_per_kg": weighted_labor,
+        "storage_capacity_kg": category_config.storage_capacity_kg_total,
+        "shelf_life_days": category_config.shelf_life_days,
+        "equipment_details": equipment_details,
     }
 
 
-def calculate_processing_energy_demand(processing_config, daily_throughput_kg: float) -> float:
-    """Calculate total energy demand for processing.
-    
-    Args:
-        processing_config: Processing configuration (FreshFoodPackagingConfig, etc.)
-        daily_throughput_kg: Daily throughput in kg
-    
-    Returns:
-        Total energy demand in kWh/day
-    """
-    # Energy per kg × daily throughput
-    return processing_config.energy_kwh_per_kg * daily_throughput_kg
-
-
-def calculate_processing_labor_demand(processing_config, daily_throughput_kg: float) -> float:
-    """Calculate total labor demand for processing.
-    
-    Args:
-        processing_config: Processing configuration
-        daily_throughput_kg: Daily throughput in kg
-    
-    Returns:
-        Total labor demand in hours/day
-    """
-    # Labor hours per kg × daily throughput
-    return processing_config.labor_hours_per_kg * daily_throughput_kg
-
-
-def calculate_household_demand(community_config, housing_data: pd.DataFrame = None) -> Dict[str, float]:
+def calculate_household_demand(community_config, housing_data_path: str = None) -> Dict[str, float]:
     """Calculate household energy and water demand.
     
     Args:
         community_config: Community configuration
-        housing_data: Optional housing data for detailed calculation
+        housing_data_path: Path to housing CSV (uses default if None)
     
     Returns:
         Dict with total_energy_kwh_day, total_water_m3_day, etc.
     """
-    # Simplified calculation - would use housing_data if available
     population = community_config.population
-    households = population / 5  # Assume 5 people per household
-    
-    # Rough estimates for Egyptian community
-    energy_per_household_kwh_day = 8.0  # kWh/day per household
-    water_per_person_m3_day = 0.15  # m³/day per person
-    
+
+    # Load housing data
+    if housing_data_path is None:
+        housing_data_path = _get_data_path("community", "housing")
+
+    housing_data = _load_csv_with_metadata(housing_data_path)
+
+    # Use weighted average from housing data
+    total_occupants = housing_data["occupants_per_household"].sum()
+    avg_energy = (housing_data["kwh_per_household_per_day"] * housing_data["occupants_per_household"]).sum() / total_occupants
+    avg_water = (housing_data["m3_per_household_per_day"] * housing_data["occupants_per_household"]).sum() / total_occupants
+    avg_household_size = total_occupants / len(housing_data)
+
+    households = population / avg_household_size
+
     return {
         "households": households,
-        "total_energy_kwh_day": households * energy_per_household_kwh_day,
-        "total_water_m3_day": population * water_per_person_m3_day,
-        "energy_per_household_kwh_day": energy_per_household_kwh_day,
-        "water_per_person_m3_day": water_per_person_m3_day,
+        "total_energy_kwh_day": households * avg_energy,
+        "total_water_m3_day": households * avg_water,
+        "energy_per_household_kwh_day": avg_energy,
+        "water_per_household_m3_day": avg_water,
     }
 
 
@@ -480,80 +586,60 @@ def calculate_infrastructure(scenario: Scenario) -> Dict[str, Any]:
             "battery": calculate_battery_config(scenario),
             "generator": calculate_generator_config(scenario),
         },
-        "water": {
-            "wells": calculate_well_costs(
-                scenario.infrastructure.groundwater_wells.number_of_wells,
-                scenario.infrastructure.groundwater_wells.well_depth_m,
-                scenario.infrastructure.groundwater_wells.well_flow_rate_m3_day,
-            ),
-            "well_pumping_energy": calculate_well_pumping_energy(
-                scenario.infrastructure.groundwater_wells.well_depth_m,
-                scenario.infrastructure.groundwater_wells.well_flow_rate_m3_day,
-            ),
-            "treatment": calculate_treatment_unit_sizing(
-                scenario.infrastructure.water_treatment.system_capacity_m3_day,
-                scenario.infrastructure.water_treatment.number_of_units,
-            ),
-            "storage": calculate_storage_costs(
-                scenario.infrastructure.irrigation_storage.capacity_m3,
-                scenario.infrastructure.irrigation_storage.type,
-            ),
-            "storage_evaporation": calculate_storage_evaporation(
-                scenario.infrastructure.irrigation_storage.capacity_m3,
-                scenario.infrastructure.irrigation_storage.type,
-            ),
-            "irrigation_efficiency": get_irrigation_efficiency(
-                scenario.infrastructure.irrigation_system.type,
-            ),
-            "distances": calculate_distances(
-                scenario.infrastructure.groundwater_wells,
-                scenario.infrastructure.water_treatment,
-                scenario.farms,
-            ),
-        },
-        "processing": {
-            "fresh_packaging": {
-                "energy_kwh_per_day": calculate_processing_energy_demand(
-                    scenario.infrastructure.food_processing.fresh_food_packaging,
-                    scenario.infrastructure.food_processing.fresh_food_packaging.processing_capacity_kg_day,
-                ),
-                "labor_hours_per_day": calculate_processing_labor_demand(
-                    scenario.infrastructure.food_processing.fresh_food_packaging,
-                    scenario.infrastructure.food_processing.fresh_food_packaging.processing_capacity_kg_day,
-                ),
-            },
-            "drying": {
-                "energy_kwh_per_day": calculate_processing_energy_demand(
-                    scenario.infrastructure.food_processing.drying,
-                    scenario.infrastructure.food_processing.drying.processing_capacity_kg_day,
-                ),
-                "labor_hours_per_day": calculate_processing_labor_demand(
-                    scenario.infrastructure.food_processing.drying,
-                    scenario.infrastructure.food_processing.drying.processing_capacity_kg_day,
-                ),
-            },
-            "canning": {
-                "energy_kwh_per_day": calculate_processing_energy_demand(
-                    scenario.infrastructure.food_processing.canning,
-                    scenario.infrastructure.food_processing.canning.processing_capacity_kg_day,
-                ),
-                "labor_hours_per_day": calculate_processing_labor_demand(
-                    scenario.infrastructure.food_processing.canning,
-                    scenario.infrastructure.food_processing.canning.processing_capacity_kg_day,
-                ),
-            },
-            "packaging": {
-                "energy_kwh_per_day": calculate_processing_energy_demand(
-                    scenario.infrastructure.food_processing.packaging,
-                    scenario.infrastructure.food_processing.packaging.processing_capacity_kg_day,
-                ),
-                "labor_hours_per_day": calculate_processing_labor_demand(
-                    scenario.infrastructure.food_processing.packaging,
-                    scenario.infrastructure.food_processing.packaging.processing_capacity_kg_day,
-                ),
-            },
-        },
-        "community": calculate_household_demand(scenario.community),
+        "water": {},
     }
-    
+
+    # Calculate distances first (needed for pumping energy)
+    distances = calculate_distances(
+        scenario.infrastructure.groundwater_wells,
+        scenario.infrastructure.water_treatment,
+        scenario.farms,
+    )
+
+    results["water"] = {
+        "wells": calculate_well_costs(
+            scenario.infrastructure.groundwater_wells.number_of_wells,
+            scenario.infrastructure.groundwater_wells.well_depth_m,
+            scenario.infrastructure.groundwater_wells.well_flow_rate_m3_day,
+        ),
+        "pumping": calculate_pumping_energy(
+            scenario.infrastructure.groundwater_wells.well_depth_m,
+            scenario.infrastructure.groundwater_wells.well_flow_rate_m3_day,
+            horizontal_distance_km=distances["average_well_to_treatment_km"],
+        ),
+        "treatment": calculate_treatment_unit_sizing(
+            scenario.infrastructure.water_treatment.system_capacity_m3_day,
+            scenario.infrastructure.water_treatment.number_of_units,
+        ),
+        "storage": calculate_storage_costs(
+            scenario.infrastructure.irrigation_storage.capacity_m3,
+            scenario.infrastructure.irrigation_storage.type,
+        ),
+        "storage_evaporation": calculate_storage_evaporation(
+            scenario.infrastructure.irrigation_storage.capacity_m3,
+            scenario.infrastructure.irrigation_storage.type,
+        ),
+        "irrigation_efficiency": get_irrigation_efficiency(
+            scenario.infrastructure.irrigation_system.type,
+        ),
+        "distances": distances,
+    }
+
+    results["processing"] = {
+        "fresh_packaging": calculate_processing_category_specs(
+            scenario.infrastructure.food_processing.fresh_food_packaging, "fresh_packaging"
+        ),
+        "drying": calculate_processing_category_specs(
+            scenario.infrastructure.food_processing.drying, "drying"
+        ),
+        "canning": calculate_processing_category_specs(
+            scenario.infrastructure.food_processing.canning, "canning"
+        ),
+        "packaging": calculate_processing_category_specs(
+            scenario.infrastructure.food_processing.packaging, "packaging"
+        ),
+    }
+
+    results["community"] = calculate_household_demand(scenario.community)
+
     return results

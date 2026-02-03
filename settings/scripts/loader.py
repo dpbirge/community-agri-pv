@@ -90,56 +90,31 @@ class IrrigationSystemConfig:
 
 
 @dataclass
-class FreshFoodPackagingConfig:
-    """Fresh food packaging configuration."""
-    processing_capacity_kg_day: float
-    shelf_life_days: int
-    energy_kwh_per_kg: float
-    labor_hours_per_kg: float
-    additional_cost_per_kg: float
-    storage_capacity_kg_total: float
+class EquipmentMix:
+    """Single equipment type with its usage fraction."""
+    type: str
+    fraction: float
 
 
 @dataclass
-class DryingConfig:
-    """Food drying configuration."""
-    processing_capacity_kg_day: float
-    shelf_life_days: int
-    energy_kwh_per_kg: float
-    labor_hours_per_kg: float
-    additional_cost_per_kg: float
+class ProcessingCategoryConfig:
+    """Configuration for a processing category (drying, canning, etc.).
+
+    YAML specifies equipment mix; CSV specifies equipment specifications.
+    Energy, labor, and capacity are looked up from CSV based on equipment type.
+    """
+    equipment: list  # List of EquipmentMix
     storage_capacity_kg_total: float
-
-
-@dataclass
-class CanningConfig:
-    """Food canning configuration."""
-    processing_capacity_kg_day: float
     shelf_life_days: int
-    energy_kwh_per_kg: float
-    labor_hours_per_kg: float
-    additional_cost_per_kg: float
-    storage_capacity_kg_total: float
-
-
-@dataclass
-class ProcessedPackagingConfig:
-    """Processed food packaging configuration."""
-    processing_capacity_kg_day: float
-    shelf_life_days: int
-    energy_kwh_per_kg: float
-    labor_hours_per_kg: float
-    additional_cost_per_kg: float
-    storage_capacity_kg_total: float
 
 
 @dataclass
 class FoodProcessingConfig:
     """Food processing infrastructure configuration."""
-    fresh_food_packaging: FreshFoodPackagingConfig
-    drying: DryingConfig
-    canning: CanningConfig
-    packaging: ProcessedPackagingConfig
+    fresh_food_packaging: ProcessingCategoryConfig
+    drying: ProcessingCategoryConfig
+    canning: ProcessingCategoryConfig
+    packaging: ProcessingCategoryConfig
 
 
 @dataclass
@@ -227,6 +202,34 @@ def _require(data, key, context=""):
     return data[key]
 
 
+def _parse_equipment_list(equipment_data, context):
+    """Parse equipment list from YAML and create EquipmentMix objects."""
+    equipment_list = []
+    for eq in equipment_data:
+        eq_type = _require(eq, "type", context)
+        eq_fraction = _require(eq, "fraction", context)
+        equipment_list.append(EquipmentMix(type=eq_type, fraction=eq_fraction))
+    return equipment_list
+
+
+def _parse_processing_category(category_data, category_name):
+    """Parse a processing category from YAML into ProcessingCategoryConfig."""
+    context = f"food_processing_infrastructure.{category_name}"
+    equipment_data = _require(category_data, "equipment", context)
+    equipment_list = _parse_equipment_list(equipment_data, context)
+
+    # Validate fractions sum to 1.0
+    total_fraction = sum(eq.fraction for eq in equipment_list)
+    if abs(total_fraction - 1.0) > 0.01:
+        raise ValueError(f"{context}: equipment fractions must sum to 1.0, got {total_fraction}")
+
+    return ProcessingCategoryConfig(
+        equipment=equipment_list,
+        storage_capacity_kg_total=_require(category_data, "storage_capacity_kg_total", context),
+        shelf_life_days=_require(category_data, "shelf_life_days", context),
+    )
+
+
 def _load_infrastructure(data):
     """Parse infrastructure sections into config objects."""
     # Energy infrastructure
@@ -268,22 +271,10 @@ def _load_infrastructure(data):
     number_of_units = _require(water_treatment, "number_of_units", "water_infrastructure.water_treatment")
     if number_of_units <= 0:
         raise ValueError(f"number_of_units must be > 0, got {number_of_units}")
-    
-    fresh_capacity = _require(fresh_packaging, "processing_capacity_kg_day", "food_processing_infrastructure.fresh_food_packaging")
-    if fresh_capacity <= 0:
-        raise ValueError(f"fresh_food_packaging.processing_capacity_kg_day must be > 0, got {fresh_capacity}")
-    
-    drying_capacity = _require(drying, "processing_capacity_kg_day", "food_processing_infrastructure.drying")
-    if drying_capacity <= 0:
-        raise ValueError(f"drying.processing_capacity_kg_day must be > 0, got {drying_capacity}")
-    
-    canning_capacity = _require(canning, "processing_capacity_kg_day", "food_processing_infrastructure.canning")
-    if canning_capacity <= 0:
-        raise ValueError(f"canning.processing_capacity_kg_day must be > 0, got {canning_capacity}")
-    
-    packaging_capacity = _require(packaging, "processing_capacity_kg_day", "food_processing_infrastructure.packaging")
-    if packaging_capacity <= 0:
-        raise ValueError(f"packaging.processing_capacity_kg_day must be > 0, got {packaging_capacity}")
+
+    battery_units = _require(battery, "units", "energy_infrastructure.battery")
+    if battery_units <= 0:
+        raise ValueError(f"battery.units must be > 0, got {battery_units}")
 
     return InfrastructureConfig(
         pv=PVConfig(
@@ -301,7 +292,7 @@ def _load_infrastructure(data):
         ),
         battery=BatteryConfig(
             sys_capacity_kwh=_require(battery, "sys_capacity_kwh", "energy_infrastructure.battery"),
-            units=_require(battery, "units", "energy_infrastructure.battery"),
+            units=battery_units,
             chemistry=_require(battery, "chemistry", "energy_infrastructure.battery"),
         ),
         diesel_backup=DieselBackupConfig(
@@ -327,38 +318,10 @@ def _load_infrastructure(data):
             type=_require(irrigation_system, "type", "water_infrastructure.irrigation_system"),
         ),
         food_processing=FoodProcessingConfig(
-            fresh_food_packaging=FreshFoodPackagingConfig(
-                processing_capacity_kg_day=fresh_capacity,
-                shelf_life_days=_require(fresh_packaging, "shelf_life_days", "food_processing_infrastructure.fresh_food_packaging"),
-                energy_kwh_per_kg=_require(fresh_packaging, "energy_kwh_per_kg", "food_processing_infrastructure.fresh_food_packaging"),
-                labor_hours_per_kg=_require(fresh_packaging, "labor_hours_per_kg", "food_processing_infrastructure.fresh_food_packaging"),
-                additional_cost_per_kg=_require(fresh_packaging, "additional_cost_per_kg", "food_processing_infrastructure.fresh_food_packaging"),
-                storage_capacity_kg_total=_require(fresh_packaging, "storage_capacity_kg_total", "food_processing_infrastructure.fresh_food_packaging"),
-            ),
-            drying=DryingConfig(
-                processing_capacity_kg_day=drying_capacity,
-                shelf_life_days=_require(drying, "shelf_life_days", "food_processing_infrastructure.drying"),
-                energy_kwh_per_kg=_require(drying, "energy_kwh_per_kg", "food_processing_infrastructure.drying"),
-                labor_hours_per_kg=_require(drying, "labor_hours_per_kg", "food_processing_infrastructure.drying"),
-                additional_cost_per_kg=_require(drying, "additional_cost_per_kg", "food_processing_infrastructure.drying"),
-                storage_capacity_kg_total=_require(drying, "storage_capacity_kg_total", "food_processing_infrastructure.drying"),
-            ),
-            canning=CanningConfig(
-                processing_capacity_kg_day=canning_capacity,
-                shelf_life_days=_require(canning, "shelf_life_days", "food_processing_infrastructure.canning"),
-                energy_kwh_per_kg=_require(canning, "energy_kwh_per_kg", "food_processing_infrastructure.canning"),
-                labor_hours_per_kg=_require(canning, "labor_hours_per_kg", "food_processing_infrastructure.canning"),
-                additional_cost_per_kg=_require(canning, "additional_cost_per_kg", "food_processing_infrastructure.canning"),
-                storage_capacity_kg_total=_require(canning, "storage_capacity_kg_total", "food_processing_infrastructure.canning"),
-            ),
-            packaging=ProcessedPackagingConfig(
-                processing_capacity_kg_day=packaging_capacity,
-                shelf_life_days=_require(packaging, "shelf_life_days", "food_processing_infrastructure.packaging"),
-                energy_kwh_per_kg=_require(packaging, "energy_kwh_per_kg", "food_processing_infrastructure.packaging"),
-                labor_hours_per_kg=_require(packaging, "labor_hours_per_kg", "food_processing_infrastructure.packaging"),
-                additional_cost_per_kg=_require(packaging, "additional_cost_per_kg", "food_processing_infrastructure.packaging"),
-                storage_capacity_kg_total=_require(packaging, "storage_capacity_kg_total", "food_processing_infrastructure.packaging"),
-            ),
+            fresh_food_packaging=_parse_processing_category(fresh_packaging, "fresh_food_packaging"),
+            drying=_parse_processing_category(drying, "drying"),
+            canning=_parse_processing_category(canning, "canning"),
+            packaging=_parse_processing_category(packaging, "packaging"),
         ),
     )
 

@@ -1,25 +1,35 @@
 # Documentation
 
-Comprehensive documentation for the Community Agri-PV simulation model.
+Documentation for the Community Agri-PV simulation model.
 
 ## Structure
 
-- **`planning/`** - Model specifications and implementation plans
+- **`codereview/`** - Code review notes and analysis
+  - `_archive/` - Historical code review documents
+
+- **`planning/`** - Model specifications and research plans
   - `community-model-plan.md` - Complete model architecture and domain specifications
   - `data-organization.md` - Data structure and format specifications
-  - `data-generation-orchestration.md` - Dataset generation task breakdown
-  - `settings-implementation-plan.md` - Layer 2 configuration system design
   - `data-realism-research-plan.md` - Research methodology for empirical data
-  - `gemini-planning-review.md`, `gpt-planning-review.md` - External reviews
+  - `_archive/` - Completed planning documents
 
 - **`prompts/`** - AI assistant prompts for development workflows
-  - `ORCHESTRATION_PROMPT.md` - Data generation orchestration instructions
+  - `LAYER2_CODE_REVIEW.md` - Layer 2 code review instructions
+  - `LAYER2_FIXES.md` - Layer 2 fix documentation
   - `RESEARCH_PROMPT.md` - Research data collection instructions
-  - `VALIDATION_PROMPT.md` - Data validation instructions
+  - `_archive/` - Completed prompt documents
+
+- **`research/`** - Scientific methodology documentation (planned)
 
 - **`validation/`** - Validation reports
-  - `data_generation_validation_report.md` - Layer 1 toy dataset validation results
+  - `_archive/` - Historical validation reports
 
-## Key Documents
+## Key Document
 
 Start with `planning/community-model-plan.md` for the complete model architecture and specifications.
+
+## Current Status
+
+- **Layer 1 (Pre-computation)**: Complete - 50 toy datasets generated and validated
+- **Layer 2 (Configuration)**: Complete - Scenario loader, water policies, validation, calculations
+- **Layer 3 (Simulation)**: Not started
