@@ -1,87 +1,61 @@
 # Settings: Layer 2 Configuration
 
-This folder contains simulation configuration for the Community Agri-PV model.
+Simulation configuration for the Community Agri-PV model.
 
-## Architecture
+## Structure
 
 ```
 settings/
-├── data_registry.yaml   # Single source of truth for data file paths
-├── scenarios/           # Scenario configurations (policies, farms)
-│   └── water_policy_testing.yaml
-├── policies/            # Policy implementations
-│   ├── water_policies.py     # 4 functional water policies
-│   ├── energy_policies.py    # Stub
-│   ├── crop_policies.py      # Stub
-│   ├── economic_policies.py  # Stub
-│   └── market_policies.py    # Stub
-├── scripts/             # Configuration utilities
-│   ├── loader.py        # Scenario loader (YAML → dataclasses)
-│   ├── validation.py    # Registry and scenario validation
-│   └── calculations.py  # Calculation layer for scenario computations
-└── README.md
+├── data_registry.yaml       # Single source of truth for data file paths
+├── scenarios/               # Scenario configurations (policies, farms)
+│   ├── water_policy_only.yaml      # Multi-farm water policy comparison
+│   └── development_full_copy.yaml  # Full scenario template
+├── policies/                # Policy implementations
+│   ├── water_policies.py    # 4 functional water policies
+│   ├── energy_policies.py   # Stub
+│   ├── crop_policies.py     # Stub
+│   ├── economic_policies.py # Stub
+│   └── market_policies.py   # Stub
+└── scripts/                 # Configuration utilities
+    ├── loader.py            # Scenario loader (YAML -> dataclasses)
+    ├── validation.py        # Registry and scenario validation
+    └── calculations.py      # Calculation layer for scenario computations
 ```
 
 ## Data Registry
 
-All data file paths are defined in `data_registry.yaml`. Scenarios do not contain file paths - they reference the shared registry.
+All data file paths are defined in `data_registry.yaml`. Scenarios reference this shared registry.
 
-**To switch datasets** (e.g., toy → research):
 ```bash
-# Edit data_registry.yaml, change "-toy.csv" to "-research.csv"
-# Then validate:
+# Validate data registry (all files exist)
 python settings/scripts/validation.py --registry
+
+# Validate a specific scenario
+python settings/scripts/validation.py settings/scenarios/water_policy_only.yaml
 ```
 
-**Registry structure:**
-```yaml
-weather:
-  daily: data/precomputed/weather/daily_weather_scenario_001-toy.csv
+## Loading Scenarios
 
-crops:
-  coefficients: data/parameters/crops/crop_coefficients-toy.csv
-  ...
-
-irrigation:
-  tomato: data/precomputed/irrigation_demand/irrigation_m3_per_ha_tomato-toy.csv
-  ...
-```
-
-**Load registry in code:**
 ```python
-from settings.scripts.validation import load_registry
+from settings.scripts.loader import load_scenario
 
-registry = load_registry()
-weather_file = registry["weather"]["daily"]
-tomato_irrigation = registry["irrigation"]["tomato"]
+scenario = load_scenario("settings/scenarios/water_policy_only.yaml")
+# scenario.farms, scenario.infrastructure, scenario.water_pricing, etc.
 ```
-
-## Scenarios
-
-Scenarios define:
-- Simulation time range
-- Infrastructure configuration (capacities)
-- Farm structure and policy assignments
-- Economic parameters
-
-Scenarios do **not** define data file paths - those come from the registry.
-
-### water_policy_testing.yaml
-
-Test scenario for water policy comparison with multiple farms using distinct water allocation strategies.
 
 ## Water Policies
 
 Four functional policies for comparative testing:
 
+| Policy | Strategy |
+|--------|----------|
+| `always_groundwater` | 100% groundwater, municipal fallback if energy insufficient |
+| `always_municipal` | 100% municipal, no treatment energy needed |
+| `cheapest_source` | Dynamic selection based on daily cost comparison |
+| `conserve_groundwater` | Prefer municipal, use GW when price > threshold |
+
 ```python
-from settings.policies.water_policies import (
-    WaterPolicyContext,
-    AlwaysGroundwater,
-    AlwaysMunicipal,
-    CheapestSource,
-    ConserveGroundwater,
-)
+from settings.policies import get_water_policy, WaterPolicyContext
 
 ctx = WaterPolicyContext(
     demand_m3=1000,
@@ -92,28 +66,14 @@ ctx = WaterPolicyContext(
     energy_price_per_kwh=0.07,
 )
 
-policy = CheapestSource()
+policy = get_water_policy("cheapest_source")
 result = policy.allocate_water(ctx)
 # result.groundwater_m3, result.municipal_m3, result.cost_usd
 ```
 
-## Validation
+## Adding Scenarios
 
-```bash
-# Validate data registry (all files exist)
-python settings/scripts/validation.py --registry
-
-# Validate a specific scenario
-python settings/scripts/validation.py settings/scenarios/water_policy_testing.yaml
-
-# Validate everything
-python settings/scripts/validation.py --all
-```
-
-## Adding New Scenarios
-
-1. Copy `water_policy_testing.yaml` as template
-2. Modify farm counts, sizes, and policy assignments
-3. Run `python settings/scripts/validation.py settings/scenarios/your_scenario.yaml`
-
-Scenarios share the same data registry. To use different data, edit the registry (affects all scenarios).
+1. Copy `water_policy_only.yaml` as template
+2. Modify farms, policies, and parameters
+3. Validate: `python settings/scripts/validation.py settings/scenarios/your_scenario.yaml`
+4. Run: `python src/results.py settings/scenarios/your_scenario.yaml`

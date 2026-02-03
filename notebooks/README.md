@@ -12,5 +12,6 @@ Notebooks can be used to:
 - Test data generation scripts
 - Validate scenario configurations
 - Explore pre-computed datasets
-- Prototype simulation logic before moving to production code
-- Generate visualizations and reports
+- Run simulations and visualize results
+- Compare water policy outcomes
+- Generate custom visualizations and reports
