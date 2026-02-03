@@ -1,11 +1,12 @@
-# SOURCE: Synthetic data based on NREL ATB 2024, IEA PVPS, and manufacturer specifications
-# DATE: 2026-02-02
+# SOURCE: Synthetic data based on NREL ATB 2024, IEA PVPS, and manufacturer specifications, PV panel manufacturer specifications, NREL PV system specifications
+# DATE: 2026-02-03
 # DESCRIPTION: PV system specifications for agri-PV installation at 3 density levels
-# UNITS: ground_coverage_pct (%), module_efficiency (decimal), temp_coefficient_per_c (decimal/C), system_losses_pct (%), degradation_rate_per_year (decimal/year), tilt_angle_deg (degrees), azimuth_deg (degrees), panel_height_m (meters), lifespan_years (years)
-# LOGIC: All variants use same polycrystalline panels; density affects ground coverage and microclimate effects. Tilt optimized for 28N latitude. System losses include wiring, inverter, soiling, and mismatch losses.
+# UNITS: density_name (string), ground_coverage_pct (%), panel_type (string), module_efficiency (decimal), temp_coefficient_per_c (decimal/C), system_losses_pct (%), degradation_rate_per_year (decimal/year), tilt_angle_deg (degrees), azimuth_deg (degrees), panel_height_m (meters), lifespan_years (years), panel_wattage_w (W), panel_area_m2 (m2), panels_per_kw (panels/kW)
+# LOGIC: All variants use same polycrystalline panels; density affects ground coverage and microclimate effects. Tilt optimized for 28N latitude. System losses include wiring, inverter, soiling, and mismatch losses. Standard 400W panels (1.96 m2 each) used for calculations. Panels per kW = 1000 / panel_wattage_w.
 # DEPENDENCIES: None
-# ASSUMPTIONS: Fixed-tilt south-facing installation; 3.0m clearance for agricultural equipment; hot desert environment increases soiling losses slightly
-density_name,ground_coverage_pct,panel_type,module_efficiency,temp_coefficient_per_c,system_losses_pct,degradation_rate_per_year,tilt_angle_deg,azimuth_deg,panel_height_m,lifespan_years
-low,30,polycrystalline_standard,0.185,-0.0045,15.0,0.006,28,180,3.0,25
-medium,50,polycrystalline_standard,0.185,-0.0045,15.5,0.006,28,180,3.0,25
-high,80,polycrystalline_standard,0.185,-0.0045,16.0,0.006,28,180,3.0,25
+# ASSUMPTIONS: Fixed-tilt south-facing installation; 3.0m clearance for agricultural equipment; hot desert environment increases soiling losses slightly; standard polycrystalline panel wattage 400W; panel area 1.96 m2 per panel (typical for 400W polycrystalline)
+# CONTEXT: Panel type: Polycrystalline standard. Use case: Agri-PV installation. Standard sizes: Common panel sizes used in 2024.
+density_name,ground_coverage_pct,panel_type,module_efficiency,temp_coefficient_per_c,system_losses_pct,degradation_rate_per_year,tilt_angle_deg,azimuth_deg,panel_height_m,lifespan_years,panel_wattage_w,panel_area_m2,panels_per_kw
+low,30,polycrystalline_standard,0.185,-0.0045,15.0,0.006,28,180,3.0,25,400,1.96,2.5
+medium,50,polycrystalline_standard,0.185,-0.0045,15.5,0.006,28,180,3.0,25,400,1.96,2.5
+high,80,polycrystalline_standard,0.185,-0.0045,16.0,0.006,28,180,3.0,25,400,1.96,2.5

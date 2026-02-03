@@ -1,0 +1,12 @@
+# SOURCE: Synthetic data based on FAO Irrigation and Drainage Papers, Egyptian irrigation equipment suppliers, irrigation efficiency studies for hot arid climates
+# DATE: 2026-02-03
+# DESCRIPTION: Irrigation system specifications for hot arid climate in Sinai Peninsula
+# UNITS: irrigation_type (string), efficiency (decimal), capital_cost_per_ha (USD/ha), om_cost_per_ha_per_year (USD/ha/year)
+# LOGIC: Drip irrigation has highest efficiency (90%) due to direct root zone application and minimal evaporation. Sprinkler moderate (75%) due to evaporation losses. Furrow lowest (60%) due to surface runoff and evaporation. Costs reflect Egyptian market prices for small-scale community farms.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot arid climate, year-round irrigation needed; small-scale community farms (10-50 ha per farm); treated brackish groundwater source; costs in 2024 USD; includes installation and basic automation
+# CONTEXT: Location: Sinai Peninsula, Egypt. Climate: Hot arid, year-round irrigation. Scale: Small-scale community farms. Water source: Treated brackish groundwater. Current assumption: Drip irrigation at 90% efficiency used in existing irrigation demand calculations.
+irrigation_type,efficiency,capital_cost_per_ha,om_cost_per_ha_per_year
+drip_irrigation,0.90,3500,180
+sprinkler_irrigation,0.75,2200,120
+furrow_irrigation,0.60,800,50

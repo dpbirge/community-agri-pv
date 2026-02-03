@@ -1,0 +1,100 @@
+# Data Registry - Community Agri-PV Simulation
+# Single source of truth for all data file paths
+#
+# To switch datasets:
+#   - Edit paths below (e.g., change "-toy.csv" to "-research.csv")
+#   - Run: python settings/validation.py --registry
+#
+# All scenarios share this registry. Data consistency is enforced by design.
+
+# Weather and climate
+weather:
+  daily: data/precomputed/weather/daily_weather_scenario_001-toy.csv
+
+# Crop parameters
+crops:
+  coefficients: data/parameters/crops/crop_coefficients-toy.csv
+  growth_stages: data/parameters/crops/growth_stages-toy.csv
+  processing_specs: data/parameters/crops/processing_specs-toy.csv
+  spoilage_rates: data/parameters/crops/spoilage_rates-toy.csv
+
+# Irrigation demand (m³/ha/day by crop)
+irrigation:
+  tomato: data/precomputed/irrigation_demand/irrigation_m3_per_ha_tomato-toy.csv
+  potato: data/precomputed/irrigation_demand/irrigation_m3_per_ha_potato-toy.csv
+  onion: data/precomputed/irrigation_demand/irrigation_m3_per_ha_onion-toy.csv
+  kale: data/precomputed/irrigation_demand/irrigation_m3_per_ha_kale-toy.csv
+  cucumber: data/precomputed/irrigation_demand/irrigation_m3_per_ha_cucumber-toy.csv
+
+# Crop yields (kg/ha by crop)
+yields:
+  tomato: data/precomputed/crop_yields/yield_kg_per_ha_tomato-toy.csv
+  potato: data/precomputed/crop_yields/yield_kg_per_ha_potato-toy.csv
+  onion: data/precomputed/crop_yields/yield_kg_per_ha_onion-toy.csv
+  kale: data/precomputed/crop_yields/yield_kg_per_ha_kale-toy.csv
+  cucumber: data/precomputed/crop_yields/yield_kg_per_ha_cucumber-toy.csv
+
+# Power generation (normalized kWh/kW)
+power:
+  pv: data/precomputed/pv_power/pv_normalized_kwh_per_kw_daily-toy.csv
+  wind: data/precomputed/wind_power/wind_normalized_kwh_per_kw_daily-toy.csv
+
+# Water treatment
+water_treatment:
+  energy: data/precomputed/water_treatment/treatment_kwh_per_m3-toy.csv
+  equipment: data/parameters/equipment/water_treatment-toy.csv
+
+# Microclimate effects
+microclimate:
+  pv_shade: data/precomputed/microclimate/pv_shade_adjustments-toy.csv
+
+# Equipment parameters
+equipment:
+  pv_systems: data/parameters/equipment/pv_systems-toy.csv
+  wind_turbines: data/parameters/equipment/wind_turbines-toy.csv
+  batteries: data/parameters/equipment/batteries-toy.csv
+  processing: data/parameters/equipment/processing_equipment-toy.csv
+  failure_rates: data/parameters/equipment/equipment_failure_rates-toy.csv
+
+# Prices - fresh crops
+prices_crops:
+  tomato: data/prices/crops/historical_tomato_prices-toy.csv
+  potato: data/prices/crops/historical_potato_prices-toy.csv
+  onion: data/prices/crops/historical_onion_prices-toy.csv
+  kale: data/prices/crops/historical_kale_prices-toy.csv
+  cucumber: data/prices/crops/historical_cucumber_prices-toy.csv
+
+# Prices - processed goods
+prices_processed:
+  dried_tomato: data/prices/processed/historical_dried_tomato_prices-toy.csv
+  dried_kale: data/prices/processed/historical_dried_kale_prices-toy.csv
+  canned_tomato: data/prices/processed/historical_canned_tomato_prices-toy.csv
+  canned_onion: data/prices/processed/historical_canned_onion_prices-toy.csv
+  packaged_tomato: data/prices/processed/historical_packaged_tomato_prices-toy.csv
+  packaged_potato: data/prices/processed/historical_packaged_potato_prices-toy.csv
+  packaged_onion: data/prices/processed/historical_packaged_onion_prices-toy.csv
+  packaged_kale: data/prices/processed/historical_packaged_kale_prices-toy.csv
+  packaged_cucumber: data/prices/processed/historical_packaged_cucumber_prices-toy.csv
+  pickled_cucumber: data/prices/processed/historical_pickled_cucumber_prices-toy.csv
+
+# Prices - utilities
+prices_utilities:
+  electricity: data/prices/electricity/historical_grid_electricity_prices-toy.csv
+  municipal_water: data/prices/water/historical_municipal_water_prices-toy.csv
+  diesel: data/prices/diesel/historical_diesel_prices-toy.csv
+
+# Costs
+costs:
+  capital: data/parameters/costs/capital_costs-toy.csv
+  operating: data/parameters/costs/operating_costs-toy.csv
+
+# Labor
+labor:
+  requirements: data/parameters/labor/labor_requirements-toy.csv
+  wages: data/parameters/labor/labor_wages-toy.csv
+
+# Community
+community:
+  farm_profiles: data/parameters/community/farm_profiles-toy.csv
+  land_allocation: data/parameters/community/land_allocation-toy.csv
+  housing: data/parameters/community/housing_energy_water-toy.csv

@@ -12,7 +12,8 @@ np.random.seed(42)
 # Configuration
 START_DATE = "2015-01-01"
 END_DATE = "2024-12-31"
-BASE_PATH = Path(__file__).parent
+# BASE_PATH points to data/prices/ from scripts/ directory
+BASE_PATH = Path(__file__).parent.parent / "data" / "prices"
 
 # Exchange rate history (EGP to USD) - reflecting gradual devaluation 2015-2024
 EGP_USD_RATES = {

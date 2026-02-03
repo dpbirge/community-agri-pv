@@ -1,0 +1,167 @@
+# Community Agri-PV Simulation Model Testing Scenario - Layer 2 Configuration
+
+scenario:
+  name: water_policy_testing
+  description: "Scenario for water policy testing"
+  version: "0.1"
+  location: "Sinai Peninsula, Red Sea coast, Egypt (~28N, 34E)"
+  notes: null
+  author: "John Doe"
+
+simulation:
+  start_date: "2015-01-01"
+  end_date: "2024-12-31"
+  time_step: daily
+  weather_scenario: "001"
+
+# Shared community infrastructure configurations (capacities only - data from registry)
+energy_infrastructure:
+  pv:
+    sys_capacity_kw: 500 # Total system capacity of the PV system. Number of panels and their area are computed from this value based on capacity and density.
+    type: fixed_tilt # (Only option is fixed_tilt for now.)
+    tilt_angle: 28 # Tilt angle of the panels - adjusted to optimize for summer or fall/spring peak output. Default is 28 degrees for Sinai Peninsula.
+    percent_over_crops: 0.50 # Percent of the area of the farm that is covered by the panels. 
+    density: medium # Density of the panels when over crops. Options: low, medium, high. Low is 30% ground coverage, medium is 50% ground coverage, high is 80% ground coverage.
+    height_m: 3 # Height of the panels above the crops - impacts microclimate and irradiance. Default is 3 meters.
+
+  wind:
+    sys_capacity_kw: 50  # System capacity of the wind turbines - number of turbines and their capacity is computed from this value.
+    type: small # Type of the wind turbine (on top of pole/tower) Options: small, medium, large. Small is 10 kW, medium is 30 kW, large is 60 kW.
+    hub_height_m: 15 # Height of the wind turbine tower - used for wind speed calculation.
+
+  battery:
+    sys_capacity_kwh: 1000 # Total system capacity of the batteries - number of batteries and their capacity is computed from this value.
+    units: 2 # Number of battery banks. (Future calculations can consider losses and failures of individual batteries.)
+    chemistry: LFP # Chemistry of the batteries. (Only option is LFP for now.)
+
+  backup_generator:
+    capacity_kw: 100 # Capacity of the diesel backup generator.
+    type: diesel # Type of the backup generator. (Only option is diesel for now.)
+  
+water_infrastructure:
+  groundwater_wells:
+    well_depth_m: 50 # Depth of the well - used for well water power calculations.
+    well_flow_rate_m3_day: 100 # Flow rate of the well - used for well water power calculations.
+    number_of_wells: 10 # Used to calculate average distance to treatment facility.
+
+  water_treatment:
+    system_capacity_m3_day: 2000 # System capacity of the water treatment system - used for water treatment calculations.
+    number_of_units: 4 # Number of water treatment units - used to calculate individual system sizing and average distance from wells and to fields.
+    salinity_level: moderate # Salinity level of the water - used for water treatment calculations.
+    # Available options: light, moderate, heavy. Light is 1000-3000 ppm, moderate is 3000-10000 ppm, heavy is 10000-20000 ppm.
+    tds_ppm: 6500 # Total dissolved solids of the water - used for water treatment calculations.
+    
+  irrigation_water_storage:
+    capacity_m3: 500 # Capacity of the irrigation water storage system - used for irrigation water storage calculations.
+    type: reservoir # Type of the irrigation water storage system - available options: underground_tank, surface_tank, reservoir.
+
+  irrigation_system:
+    type: drip_irrigation # Type of the irrigation system - available options: drip_irrigation, sprinkler_irrigation, furrow_irrigation. Efficiency is computed from this value.
+
+food_processing_infrastructure:
+  fresh_food_packaging:
+    processing_capacity_kg_day: 1000 
+    shelf_life_days: 3
+    energy_kwh_per_kg: 0.5 
+    labor_hours_per_kg: 0.1 
+    additional_cost_per_kg: 1.0 
+    storage_capacity_kg_total: 20000
+
+  drying:
+    processing_capacity_kg_day: 1000 
+    shelf_life_days: 3
+    energy_kwh_per_kg: 0.5 
+    labor_hours_per_kg: 0.1 
+    additional_cost_per_kg: 1.0 
+    storage_capacity_kg_total: 20000
+
+  canning:
+    processing_capacity_kg_day: 1000 
+    shelf_life_days: 30
+    energy_kwh_per_kg: 0.5 
+    labor_hours_per_kg: 0.1 
+    additional_cost_per_kg: 1.0 
+    storage_capacity_kg_total: 20000
+
+  packaging:
+    processing_capacity_kg_day: 1000 
+    shelf_life_days: 3
+    energy_kwh_per_kg: 0.5 
+    labor_hours_per_kg: 0.1 
+    additional_cost_per_kg: 1.0
+    storage_capacity_kg_total: 20000 
+
+# Community structure and farming layout
+community_structure:
+  total_farms: 4
+  total_area_ha: 500
+  community_population: 150 # Population of the community - used for housing water and energy demand sizing.
+
+  farms:
+    - id: farm_1
+      name: "Conservative Farm"
+      area_ha: 125
+      yield_factor: 1.0
+      starting_capital_usd: 100000
+      policies:
+        economic: conservative
+        water: always_groundwater
+        energy: pv_first
+
+    - id: farm_2
+      name: "Municipal Water Farm"
+      area_ha: 125
+      yield_factor: 1.0
+      starting_capital_usd: 100000
+      policies:
+        economic: moderate
+        water: always_municipal
+        energy: pv_first
+
+    - id: farm_3
+      name: "Cost Optimizer Farm"
+      area_ha: 125
+      yield_factor: 1.0
+      starting_capital_usd: 100000
+      policies:
+        economic: aggressive
+        water: cheapest_source
+        energy: pv_first
+
+    - id: farm_4
+      name: "Aquifer Conservation Farm"
+      area_ha: 125
+      yield_factor: 1.0
+      starting_capital_usd: 100000
+      policies:
+        economic: balanced
+        water: conserve_groundwater
+        energy: pv_first
+
+  # Crop allocation (same for all farms)
+  crops:
+    - name: tomato
+      area_fraction: 0.25
+    - name: potato
+      area_fraction: 0.25
+    - name: onion
+      area_fraction: 0.20
+    - name: kale
+      area_fraction: 0.15
+    - name: cucumber
+      area_fraction: 0.15
+
+# Economic parameters
+economics:
+  currency: USD
+  discount_rate: 0.06
+  debt:
+    principal_usd: 500000 # Principal amount of the debt.
+    term_years: 15 # Term of the debt.
+    interest_rate: 0.045 # Interest rate of the debt.
+
+# Policy parameters (override defaults)
+community_policy_parameters:
+  conserve_groundwater:
+    price_threshold_multiplier: 1.5
+    max_gw_ratio: 0.30
