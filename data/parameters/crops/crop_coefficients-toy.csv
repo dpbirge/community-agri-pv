@@ -1,0 +1,19 @@
+# SOURCE: FAO Irrigation and Drainage Paper 56 (Table 12) + hot arid adjustments
+# DATE: 2026-02-02
+# DESCRIPTION: Crop coefficients for 5 crops, adjusted for Sinai Red Sea hot arid climate
+# UNITS:
+#   - kc_initial: Crop coefficient at planting (dimensionless)
+#   - kc_mid: Crop coefficient at full canopy (dimensionless)
+#   - kc_end: Crop coefficient at harvest (dimensionless)
+#   - root_depth_m: Maximum effective root depth (meters)
+#   - season_length_days: Total growing period planting to harvest (days)
+#   - water_stress_sensitivity: High/Medium/Low yield sensitivity to water deficit
+# LOGIC: FAO-56 base Kc values increased 5-10% for hot arid advection effects
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS: Drip irrigation (90% efficiency), well-managed crops, no salinity stress
+crop_name,kc_initial,kc_mid,kc_end,root_depth_m,season_length_days,water_stress_sensitivity
+tomato,0.65,1.2,0.75,1.2,135,high
+potato,0.55,1.18,0.8,0.6,120,high
+onion,0.75,1.1,0.8,0.4,150,medium
+kale,0.75,1.1,1.0,0.5,85,low
+cucumber,0.65,1.05,0.8,0.8,95,high

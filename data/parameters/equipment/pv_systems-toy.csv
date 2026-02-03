@@ -1,0 +1,11 @@
+# SOURCE: Synthetic data based on NREL ATB 2024, IEA PVPS, and manufacturer specifications
+# DATE: 2026-02-02
+# DESCRIPTION: PV system specifications for agri-PV installation at 3 density levels
+# UNITS: ground_coverage_pct (%), module_efficiency (decimal), temp_coefficient_per_c (decimal/C), system_losses_pct (%), degradation_rate_per_year (decimal/year), tilt_angle_deg (degrees), azimuth_deg (degrees), panel_height_m (meters), lifespan_years (years)
+# LOGIC: All variants use same polycrystalline panels; density affects ground coverage and microclimate effects. Tilt optimized for 28N latitude. System losses include wiring, inverter, soiling, and mismatch losses.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Fixed-tilt south-facing installation; 3.0m clearance for agricultural equipment; hot desert environment increases soiling losses slightly
+density_name,ground_coverage_pct,panel_type,module_efficiency,temp_coefficient_per_c,system_losses_pct,degradation_rate_per_year,tilt_angle_deg,azimuth_deg,panel_height_m,lifespan_years
+low,30,polycrystalline_standard,0.185,-0.0045,15.0,0.006,28,180,3.0,25
+medium,50,polycrystalline_standard,0.185,-0.0045,15.5,0.006,28,180,3.0,25
+high,80,polycrystalline_standard,0.185,-0.0045,16.0,0.006,28,180,3.0,25

@@ -1,0 +1,33 @@
+# SOURCE: Food processing industry benchmarks, USDA processing energy data
+# DATE: 2026-02-02
+# DESCRIPTION: Processing requirements for 5 crops across 4 processing types
+# UNITS:
+#   - energy_kwh_per_kg: Electricity for processing (kWh per kg input)
+#   - labor_hours_per_kg: Labor time required (hours per kg input)
+#   - weight_loss_pct: Mass lost during processing (percentage of input weight)
+#   - value_add_multiplier: Price multiplier vs fresh product (dimensionless)
+#   - processing_time_hours: Time from input to output (hours)
+# LOGIC: Fresh=baseline, packaged=minimal, canned=moderate, dried=intensive
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS: Modern equipment, efficient operations, bulk processing scale
+crop_name,processing_type,energy_kwh_per_kg,labor_hours_per_kg,weight_loss_pct,value_add_multiplier,processing_time_hours
+tomato,fresh,0.0,0.0,0.0,1.0,0.0
+tomato,packaged,0.05,0.02,3.0,1.25,2.0
+tomato,canned,0.4,0.08,15.0,1.8,8.0
+tomato,dried,2.5,0.12,88.0,3.5,24.0
+potato,fresh,0.0,0.0,0.0,1.0,0.0
+potato,packaged,0.045,0.018,3.0,1.25,2.0
+potato,canned,0.44,0.088,15.0,1.8,8.0
+potato,dried,3.0,0.144,78.0,3.5,24.0
+onion,fresh,0.0,0.0,0.0,1.0,0.0
+onion,packaged,0.04,0.016,3.0,1.25,2.0
+onion,canned,0.36,0.072,15.0,1.8,8.0
+onion,dried,2.25,0.108,80.0,3.5,24.0
+kale,fresh,0.0,0.0,0.0,1.0,0.0
+kale,packaged,0.055,0.022,3.0,1.25,2.0
+kale,canned,0.32,0.064,15.0,1.8,8.0
+kale,dried,2.0,0.096,82.0,3.5,24.0
+cucumber,fresh,0.0,0.0,0.0,1.0,0.0
+cucumber,packaged,0.05,0.02,3.0,1.25,2.0
+cucumber,canned,0.28,0.056,15.0,1.8,8.0
+cucumber,dried,3.25,0.156,92.0,3.5,24.0

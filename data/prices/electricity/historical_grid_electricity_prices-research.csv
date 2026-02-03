@@ -1,0 +1,32 @@
+# SOURCE: EgyptERA (egyptera.org/en/TarrifAug2024.aspx, egyptera.org/en/Tarrif2024N.aspx), CEIC Data (ceicdata.com/en/egypt/electricity-price), Egypt Today, Egypt Independent, World Bank, Central Bank of Egypt exchange rates, Egyptian Initiative for Personal Rights (eipr.org)
+# DATE: 2026-02-02
+# DESCRIPTION: Historical electricity tariffs for agricultural/irrigation users in Egypt (2015-2024), based on official EgyptERA tariff schedules and news reports documenting tariff changes during Egypt's subsidy removal program
+# UNITS: date (YYYY-MM-DD), usd_per_kwh_offpeak (USD), usd_per_kwh_peak (USD), usd_per_kwh_avg_daily (USD), rate_schedule (standard/summer), egp_per_kwh_original (Egyptian Pounds), usd_egp_exchange_rate (EGP per USD)
+# LOGIC: Agricultural/irrigation tariffs at low voltage (380V) from EgyptERA. Peak/off-peak differentials derived from medium voltage agricultural rates (1.5x ratio for peak, 0.92x for off-peak based on Jan 2024 MV agricultural rates showing 177.6/118.4 pt ratio). USD conversion uses annual average exchange rates from World Bank/Central Bank of Egypt. Tariff changes applied at fiscal year boundaries (July 1) or documented change dates.
+# DEPENDENCIES: None
+# ASSUMPTIONS: (1) Agricultural rates represent low-voltage irrigation users at 380V connection; (2) Peak/off-peak differential ratio of ~1.5 for peak and ~0.92 for off-peak derived from Jan 2024 MV agricultural schedule; (3) Pre-2024 agricultural rates estimated from tariff progression documentation showing ~28-42% annual increases during reform; (4) Exchange rates use annual period averages; (5) Agricultural sector receives preferential rates compared to commercial (~15% discount historically)
+# DATA_QUALITY: MODERATE - Aug 2024 tariff HIGH confidence (200 pt/kWh directly from EgyptERA for LV agricultural); Jan 2024 MV agricultural HIGH confidence (128.3 pt avg, 118.4 off-peak, 177.6 peak from EgyptERA); 2019-2023 MODERATE confidence (news sources + reform program documentation); 2015-2018 LOWER confidence (estimated from reform progression and available commercial/residential data)
+# COMPARISON_TO_TOY: Key differences from toy data: (1) Research confirms Aug 2024 agricultural rate of 200 pt/kWh = 2.0 EGP, toy shows ~4.87-5.02 EGP - toy appears to use higher consumption tier or different category; (2) Research USD rates generally lower (0.03-0.08 USD) vs toy (0.05-0.10 USD); (3) Exchange rate progression matches well; (4) Both show subsidy removal trend but toy has more aggressive EGP rate increases
+# TARIFF_REFORM_TIMELINE: PM Decree 1257/2014 began subsidy removal; Original 5-year plan (2014-2019) extended to 8 years after Nov 2016 float; Decree 100/2020 extended to 2024-2025 due to COVID-19; July 2024 ended tariff freeze; Aug 2024 14-50% increases implemented
+# KEY_2024_TARIFFS_VERIFIED: LV Agricultural 200 pt/kWh (Aug 2024); MV Agricultural avg 128.3 pt/kWh, off-peak 118.4, peak 177.6 (Jan 2024); Industrial flat rate 233 pt/kWh
+date,usd_per_kwh_offpeak,usd_per_kwh_peak,usd_per_kwh_avg_daily,rate_schedule,egp_per_kwh_original,usd_egp_exchange_rate
+2015-07-01,0.0403,0.0656,0.0483,standard,0.38,7.88
+2016-01-01,0.0431,0.0702,0.0517,standard,0.42,8.13
+2016-07-01,0.0419,0.0683,0.0502,standard,0.50,9.96
+2016-11-03,0.0332,0.0542,0.0399,standard,0.55,13.80
+2017-01-01,0.0391,0.0637,0.0469,standard,0.70,15.25
+2017-07-01,0.0415,0.0677,0.0498,standard,0.88,17.68
+2018-01-01,0.0477,0.0778,0.0572,standard,0.85,17.83
+2018-07-01,0.0562,0.0916,0.0674,standard,1.00,17.83
+2019-01-01,0.0599,0.0977,0.0719,standard,0.99,16.52
+2019-07-01,0.0703,0.1146,0.0843,standard,1.15,16.35
+2020-01-01,0.0656,0.1070,0.0787,standard,1.20,15.76
+2020-07-01,0.0616,0.1004,0.0739,standard,1.17,15.86
+2021-01-01,0.0669,0.1091,0.0803,standard,1.05,15.70
+2021-07-01,0.0669,0.1091,0.0803,standard,1.05,15.70
+2022-01-01,0.0574,0.0936,0.0689,standard,1.10,19.16
+2022-07-01,0.0574,0.0936,0.0689,standard,1.10,19.16
+2023-01-01,0.0389,0.0634,0.0467,standard,1.20,30.85
+2023-07-01,0.0486,0.0793,0.0584,standard,1.50,30.85
+2024-01-01,0.0244,0.0366,0.0283,standard,1.28,48.50
+2024-08-01,0.0379,0.0568,0.0437,standard,2.00,48.50

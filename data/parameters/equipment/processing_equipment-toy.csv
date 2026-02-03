@@ -1,0 +1,11 @@
+# SOURCE: Synthetic data based on FAO agricultural processing guides, equipment manufacturer catalogs
+# DATE: 2026-02-02
+# DESCRIPTION: Food processing equipment specifications for small-scale agricultural community
+# UNITS: capacity_kg_per_day (kg/day), energy_kw_continuous (kW), capital_cost_usd (USD), maintenance_cost_per_year_usd (USD/year), lifespan_years (years)
+# LOGIC: Packaged (washing, sorting, boxing) has lowest energy; canned (heating, sealing) moderate; dried (dehydration) highest energy but extends shelf life significantly. Capacities sized for 10-20% of peak daily harvest from 500 ha operation.
+# DEPENDENCIES: None
+# ASSUMPTIONS: All costs in 2024 USD; equipment suitable for hot climate operation; includes basic refrigeration for packaged line
+equipment_type,capacity_kg_per_day,energy_kw_continuous,capital_cost_usd,maintenance_cost_per_year_usd,lifespan_years
+packaged,5000,8,45000,2500,15
+canned,2000,25,85000,5500,20
+dried,1500,40,120000,7000,15

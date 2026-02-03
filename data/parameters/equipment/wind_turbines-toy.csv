@@ -1,0 +1,11 @@
+# SOURCE: Synthetic data based on small wind turbine manufacturer specifications (Bergey, Xzeres, Enercon)
+# DATE: 2026-02-02
+# DESCRIPTION: Wind turbine specifications for 3 microgrid-scale turbine sizes
+# UNITS: rated_capacity_kw (kW), cut_in_speed_ms (m/s), rated_speed_ms (m/s), cut_out_speed_ms (m/s), hub_height_m (meters), rotor_diameter_m (meters), capacity_factor_typical (decimal), lifespan_years (years)
+# LOGIC: Small turbines have lower cut-in speeds for light wind operation; larger turbines have better efficiency in strong winds. Capacity factors based on moderate wind regime (3-5 m/s average).
+# DEPENDENCIES: None
+# ASSUMPTIONS: Moderate wind resource typical of Sinai coastal areas; capacity factors conservative for hot dusty environment
+turbine_name,rated_capacity_kw,cut_in_speed_ms,rated_speed_ms,cut_out_speed_ms,hub_height_m,rotor_diameter_m,capacity_factor_typical,lifespan_years
+small,10,2.5,10.0,25.0,24,7.0,0.20,20
+medium,30,3.0,11.0,25.0,30,13.0,0.25,22
+large,60,3.5,12.0,25.0,37,18.0,0.28,25

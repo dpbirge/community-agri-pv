@@ -1,0 +1,18 @@
+# SOURCE: Synthetic data for community agri-PV model
+# DATE: 2026-02-02
+# DESCRIPTION: Household types with energy and water demand profiles for ~150 person community
+# UNITS: occupants_per_household (people), kwh_per_household_per_day (kWh/day), m3_per_household_per_day (cubic meters/day)
+# LOGIC: Three household sizes representing typical rural Egyptian family structures
+# LOGIC: Energy demand dominated by cooling (AC) in hot arid climate, plus refrigeration and lighting
+# LOGIC: Water demand based on 75-100 liters per person per day for domestic use
+# DEPENDENCIES: None
+# ASSUMPTIONS: Population ~150 people distributed across ~35 households
+# ASSUMPTIONS: Distribution: 6 small (2-person), 12 medium (4-person), 15 large (6-person) = 150 people in 33 households
+# ASSUMPTIONS: Hot climate requires AC for 6-10 hours daily during summer months
+# ASSUMPTIONS: All households have basic appliances (refrigerator LED lights fans phone charging)
+# ASSUMPTIONS: Energy range 13-20 kWh/household/day per specification
+# ASSUMPTIONS: Water range 0.3-0.6 m3/household/day per specification
+category,occupants_per_household,kwh_per_household_per_day,m3_per_household_per_day,equipment_list
+small_household,2,13.5,0.30,Small AC unit (1.0 kW 6 hrs = 6 kWh); Refrigerator (0.15 kW continuous = 3.6 kWh); LED lighting 5 bulbs (0.05 kW 4 hrs = 0.2 kWh); Ceiling fan (0.075 kW 8 hrs = 0.6 kWh); TV (0.1 kW 4 hrs = 0.4 kWh); Phone charging and small appliances (2.7 kWh)
+medium_household,4,16.0,0.45,Medium AC unit (1.5 kW 7 hrs = 10.5 kWh); Refrigerator (0.15 kW continuous = 3.6 kWh); LED lighting 8 bulbs (0.08 kW 4 hrs = 0.32 kWh); Ceiling fans x2 (0.15 kW 6 hrs = 0.9 kWh); TV (0.1 kW 5 hrs = 0.5 kWh); Washing machine (0.5 kWh/load 1 load); Phone charging and small appliances (2.18 kWh)
+large_household,6,19.5,0.55,Large AC unit (2.0 kW 8 hrs = 16 kWh); Refrigerator (0.18 kW continuous = 4.32 kWh); LED lighting 12 bulbs (0.12 kW 4 hrs = 0.48 kWh); Ceiling fans x3 (0.225 kW 6 hrs = 1.35 kWh); TV (0.12 kW 5 hrs = 0.6 kWh); Washing machine (0.5 kWh/load 1.5 loads); Phone charging and small appliances (3.0 kWh)

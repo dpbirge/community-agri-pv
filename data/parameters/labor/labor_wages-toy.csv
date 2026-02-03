@@ -1,0 +1,26 @@
+# SOURCE: Egyptian Ministry of Manpower minimum wage decrees (2024-2025), ERI Economic Research Institute
+#         salary data for Egypt, ILO Global Wage Report 2024-25, Trading Economics Egypt wage statistics
+# DATE: 2026-02-02
+# DESCRIPTION: Labor wage rates by worker category for agricultural operations in Egypt.
+#              Wages reflect Egyptian agricultural sector rates as of late 2024.
+# UNITS: usd_per_hour (US dollars), egp_per_hour_original (Egyptian pounds), typical_hours_per_week (hours)
+# LOGIC: Base wages derived from Egyptian minimum wage (EGP 6,000/month as of May 2024, increased to EGP 7,000 March 2025)
+#        and ERI salary data for farm workers (EGP 60/hour average). Skilled workers earn 1.5-2.5x unskilled rates.
+#        Exchange rate: Average 2024 rate of 45.33 EGP/USD used for conversions.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Wages are gross hourly rates before deductions. Agricultural sector wages are typically
+#              at or slightly above minimum wage. Informal sector workers may earn less.
+#              Work weeks vary by season and worker type. Year-round workers average 40-48 hours/week.
+#              Seasonal workers may work 50-60 hours/week during peak periods.
+#
+worker_category,skill_level,usd_per_hour,egp_per_hour_original,usd_egp_exchange_rate,typical_hours_per_week
+field_worker,unskilled,1.10,50,45.33,48
+field_supervisor,semi-skilled,1.55,70,45.33,48
+processing_worker,semi-skilled,1.43,65,45.33,45
+equipment_operator,skilled,1.99,90,45.33,45
+manager_administrator,skilled,2.65,120,45.33,40
+seasonal_harvester,unskilled,1.00,45,45.33,55
+irrigation_technician,semi-skilled,1.66,75,45.33,45
+quality_inspector,skilled,1.77,80,45.33,40
+maintenance_technician,skilled,2.21,100,45.33,42
+logistics_driver,semi-skilled,1.55,70,45.33,50

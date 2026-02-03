@@ -1,0 +1,43 @@
+# SOURCE: HCWW (Holding Company for Water and Wastewater), Egyptian Official Gazette, EWRA (Egyptian Water Regulatory Agency),
+#         Ahram Online (https://english.ahram.org.eg/NewsContent/3/12/100283/Business/Economy/First-price-hike-on-water-bills-for-Egyptian-house.aspx),
+#         MadaMasr (https://www.madamasr.com/en/2018/06/03/news/u/government-raises-household-water-tariffs-by-46/),
+#         Egypt Today (https://www.egypttoday.com/Article/3/51421/Egypt-s-government-raises-drinking-water-and-sewage-fees),
+#         Egypt Independent (https://www.egyptindependent.com/water-prices-increased/),
+#         Zawia3 (https://zawia3.com/en/water/),
+#         World Bank (https://data.worldbank.org/indicator/PA.NUS.FCRF?locations=EG),
+#         Central Bank of Egypt exchange rates
+# DATE: 2026-02-02
+# DESCRIPTION: Historical municipal water tariffs for Egypt showing tiered residential pricing structure (2015-2024)
+# UNITS: date (YYYY-01-01 annual), usd_per_m3_tier1/2/3 (USD per cubic meter), egp_per_m3_original_tier1/2/3 (Egyptian Pounds per cubic meter), usd_egp_exchange_rate (EGP per 1 USD)
+# LOGIC: Egypt uses tiered (progressive) water pricing to incentivize conservation. Tier 1 (0-10 m3/month) is lowest rate for low-income protection.
+#        Tier 2 (11-20 m3/month) is mid-consumption. Tier 3 (21-30 m3/month) represents moderate-high consumption.
+#        Additional tiers exist (31-40 m3 and >40 m3) but Tier 3 is representative upper bound for typical residential/small agricultural use.
+#        Sewage surcharge (not included in rates) was 57% pre-2017, 63% in 2017, 75% from 2018 onward.
+# DEPENDENCIES: None
+# ASSUMPTIONS: 1) Agricultural Nile irrigation water is historically FREE or near-free to Egyptian farmers (subsidized by government);
+#              2) Municipal water rates apply to rural communities using piped water, not gravity-fed Nile irrigation;
+#              3) For Sinai Peninsula communities using groundwater/desalination, costs may be higher than municipal rates;
+#              4) Rates shown are official tariffs; some governorates reported 2-3x higher effective bills in 2024 due to implementation changes;
+#              5) Exchange rates are annual averages from World Bank/Central Bank of Egypt;
+#              6) Rates for 2019-2023 are extrapolated based on 2018 tariffs (no official increases announced until 2024);
+#              7) For brackish groundwater desalination in Sinai, costs range $0.50-1.00/m3 vs municipal rates.
+# DATA_QUALITY: MODERATE - Official tariff data confirmed for 2014-2018 from Egyptian Official Gazette and news sources.
+#               Rates for 2019-2023 are held constant at 2018 levels as no documented tariff changes were found.
+#               2024 data reflects reported 2-3x bill increases but official new tariff structure not published.
+#               Exchange rates are well-documented from World Bank data.
+# COMPARISON_TO_TOY: Toy data shows agricultural_bulk category with USD $0.19-0.75/m3 range (2015-2024).
+#                    Research shows municipal Tier 1 at $0.03-0.06/m3 (much lower) and Tier 3 at $0.09-0.15/m3.
+#                    Discrepancy explained: Toy data may represent total cost including pumping/infrastructure for bulk agricultural users,
+#                    while research reflects subsidized municipal tariffs which are among world's lowest.
+#                    Desalination cost ($0.50-1.00/m3) more closely matches toy data upper range - appropriate for Sinai groundwater scenario.
+date,usd_per_m3_tier1,usd_per_m3_tier2,usd_per_m3_tier3,egp_per_m3_original_tier1,egp_per_m3_original_tier2,egp_per_m3_original_tier3,usd_egp_exchange_rate,notes
+2015-01-01,0.0473,0.0867,0.0867,0.36,0.66,0.66,7.61,2014 tariff reform rates; first increase in 8+ years; Tier 2/3 same rate for 10+ m3 users
+2016-01-01,0.0399,0.0733,0.0733,0.36,0.66,0.66,9.02,25% nominal increase reported but EGP devaluation; Nov 2016 float caused major EGP depreciation
+2017-01-01,0.0253,0.0675,0.0928,0.45,1.20,1.65,17.78,August 2017 tariff reform per Official Gazette; IMF-prompted subsidy reduction; 50% increase
+2018-01-01,0.0364,0.0897,0.1262,0.65,1.60,2.25,17.83,June 2018 tariff increase per Official Gazette; 46.5% increase for highest tier; sewage up to 75%
+2019-01-01,0.0387,0.0952,0.1340,0.65,1.60,2.25,16.81,No documented tariff change; rates held at 2018 levels; EGP strengthened slightly
+2020-01-01,0.0411,0.1012,0.1423,0.65,1.60,2.25,15.81,No documented tariff change; COVID period; Parliament discussed water waste penalties July 2020
+2021-01-01,0.0414,0.1020,0.1434,0.65,1.60,2.25,15.70,No documented tariff change; May 2021 govt announced subsidy phase-out plan for FY2022/23
+2022-01-01,0.0338,0.0833,0.1171,0.65,1.60,2.25,19.21,No documented tariff change; significant EGP devaluation throughout 2022
+2023-01-01,0.0211,0.0519,0.0730,0.65,1.60,2.25,30.85,No documented tariff change; major EGP devaluation; EU agreement for annual increases
+2024-01-01,0.0288,0.0710,0.1000,1.40,3.45,4.85,48.50,Reported 2-3x bill increases in governorates; estimated EGP rates doubled from 2018 base; citizens report 50 EGP insufficient where previously adequate

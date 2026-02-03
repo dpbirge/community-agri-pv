@@ -1,0 +1,14 @@
+# SOURCE: Synthetic data based on IEEE reliability standards, NREL O&M reports, manufacturer MTBF data adjusted for desert conditions
+# DATE: 2026-02-02
+# DESCRIPTION: Equipment failure rates and maintenance parameters for hot, dusty desert environment
+# UNITS: mtbf_hours (hours), failure_probability_per_year (decimal), repair_cost_usd (USD), downtime_days (days), maintenance_interval_days (days)
+# LOGIC: MTBF values are conservative for harsh desert conditions (high heat, dust, humidity variations). Failure probability = 8760 / MTBF. Maintenance intervals shortened vs manufacturer recommendations due to environment.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot dusty desert reduces MTBF by 25-40% vs temperate climate; repair costs include parts and labor; downtime includes parts sourcing time for remote location
+equipment_type,mtbf_hours,failure_probability_per_year,repair_cost_usd,downtime_days,maintenance_interval_days
+pv_inverter,35000,0.25,2500,3,90
+battery,45000,0.19,4000,5,180
+water_pump,25000,0.35,800,2,60
+treatment_plant,30000,0.29,3500,4,90
+processing_equipment,40000,0.22,2000,3,90
+diesel_generator,15000,0.58,1500,2,30

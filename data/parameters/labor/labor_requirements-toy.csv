@@ -1,0 +1,49 @@
+# SOURCE: FAO agricultural labor benchmarks, Requirements of Manual Labor for Farm Operations (Gezira, 2025),
+#         University of Florida IFAS Extension, Small-farm labor studies for vegetable production
+# DATE: 2026-02-02
+# DESCRIPTION: Labor requirements by activity type for small-scale agricultural operations in Sinai, Egypt.
+#              Values represent manual/semi-mechanized operations typical of a 500 ha community farm system.
+# UNITS: hours_per_unit as specified per unit type (per_hectare, per_kg, per_day, per_equipment)
+# LOGIC: Labor hours derived from FAO benchmarks for developing countries with manual/semi-mechanized operations.
+#        Field work hours based on Gezira scheme data (Sudan) and adapted for Egyptian conditions.
+#        Processing labor from small-scale food processing benchmarks.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Semi-mechanized field operations (tractor for tillage, manual planting/harvesting).
+#              Labor hours assume experienced workers in hot arid climate conditions.
+#              Processing activities occur in covered facilities.
+#              40-hour standard work week for planning purposes.
+#
+activity_type,unit,hours_per_unit,skill_level,seasonality
+planting_transplant,per_hectare,210,unskilled,seasonal
+planting_direct_seed,per_hectare,80,unskilled,seasonal
+weeding_manual,per_hectare,150,unskilled,seasonal
+harvesting_tomato,per_hectare,320,unskilled,seasonal
+harvesting_potato,per_hectare,180,unskilled,seasonal
+harvesting_onion,per_hectare,160,unskilled,seasonal
+harvesting_kale,per_hectare,280,unskilled,seasonal
+harvesting_cucumber,per_hectare,350,unskilled,seasonal
+irrigation_management,per_hectare,40,semi-skilled,year_round
+pest_scouting,per_hectare,25,semi-skilled,seasonal
+fertilizer_application,per_hectare,35,semi-skilled,seasonal
+land_preparation,per_hectare,20,skilled,seasonal
+management_planning,per_day,4,skilled,year_round
+management_coordination,per_day,2,semi-skilled,year_round
+management_sales,per_day,3,skilled,year_round
+management_administration,per_day,4,skilled,year_round
+canning_preparation,per_kg,0.015,semi-skilled,seasonal
+canning_processing,per_kg,0.020,semi-skilled,seasonal
+canning_quality_control,per_kg,0.005,skilled,seasonal
+packaging_sorting,per_kg,0.008,unskilled,seasonal
+packaging_grading,per_kg,0.006,semi-skilled,seasonal
+packaging_boxing,per_kg,0.004,unskilled,seasonal
+drying_preparation,per_kg,0.012,semi-skilled,seasonal
+drying_processing,per_kg,0.008,semi-skilled,seasonal
+maintenance_pv_systems,per_equipment,4,skilled,year_round
+maintenance_water_treatment,per_equipment,8,skilled,year_round
+maintenance_irrigation,per_equipment,6,semi-skilled,year_round
+maintenance_processing_equipment,per_equipment,12,skilled,year_round
+maintenance_vehicles,per_equipment,8,skilled,year_round
+logistics_loading,per_kg,0.002,unskilled,year_round
+logistics_unloading,per_kg,0.002,unskilled,year_round
+logistics_transport,per_day,8,semi-skilled,year_round
+logistics_inventory,per_day,3,semi-skilled,year_round

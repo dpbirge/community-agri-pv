@@ -1,0 +1,30 @@
+# SOURCE: NREL Annual Technology Baseline 2024, IRENA O&M Cost Database, industry benchmarks
+# DATE: 2026-02-02
+# DESCRIPTION: Annual operating and maintenance costs for energy, water, and agricultural equipment - Community Agri-PV model
+# UNITS: USD per unit as specified in cost_metric column
+# LOGIC: O&M costs reflect desert environment adjustments (+10-20% for dust, heat stress on equipment). PV cleaning frequency increased for sandy conditions. Wind O&M higher than PV due to mechanical components. Water treatment includes membrane replacement amortized over membrane life.
+# DEPENDENCIES: Links to capital_costs-toy.csv for equipment types; links to equipment specifications in data/parameters/equipment/
+# ASSUMPTIONS: (1) All costs in 2024 USD, (2) Desert environment increases cleaning and filter replacement frequency, (3) Skilled labor available locally for routine maintenance, (4) Major repairs may require external technicians (included in cost estimates), (5) Consumables (membranes, filters, lubricants) included in O&M costs
+#
+equipment_type,cost_metric,usd_per_unit,description
+pv_system,per_kw_per_year,18,"Panel cleaning (monthly in dusty conditions) and inverter inspection and wiring checks and monitoring system"
+pv_inverter_replacement_reserve,per_kw_per_year,8,"Reserve fund for inverter replacement at year 10-12 (amortized over system life)"
+battery_storage_lfp,per_kwh_per_year,6,"Monitoring and capacity testing (quarterly) and thermal management and cell balancing checks"
+battery_storage_lead_acid,per_kwh_per_year,12,"Watering and terminal cleaning and equalization charging and electrolyte checks"
+wind_turbine_small,per_kw_per_year,45,"Blade inspection and gearbox lubrication and bearing checks and yaw system maintenance"
+wind_turbine_medium,per_kw_per_year,38,"Scheduled preventive maintenance and oil changes and vibration monitoring"
+wind_turbine_large,per_kw_per_year,32,"Full service contract coverage and remote monitoring and annual major inspection"
+water_treatment_bwro,per_m3_produced,0.35,"Membrane replacement (2-3 year cycle amortized) and antiscalant chemicals and filter cartridges and energy"
+water_treatment_membrane_replacement,per_m3_day_capacity_per_year,45,"Membrane replacement reserve (3-year replacement cycle at $135/m3-day)"
+water_treatment_chemicals,per_m3_produced,0.08,"Antiscalant and pH adjustment and chlorination and cleaning chemicals"
+water_treatment_filters,per_m3_produced,0.04,"Sediment pre-filters and cartridge filters (monthly replacement)"
+diesel_generator,per_kwh_generated,0.08,"Oil changes (every 250 hours) and air filters and fuel filters and coolant and minor repairs"
+diesel_generator_major_overhaul,per_kw_per_year,15,"Reserve for major overhaul at 10000-15000 hours (amortized)"
+processing_packaging,per_kg_processed,0.02,"Cleaning supplies and packaging materials wear and belt replacement and lubrication"
+processing_canning,per_kg_processed,0.06,"Can/jar costs and sealing materials and sterilization energy and cleaning chemicals"
+processing_drying,per_kg_processed,0.04,"Tray cleaning and dehydrator maintenance and air filter replacement and energy (included in energy model)"
+irrigation_drip_system,per_hectare_per_year,180,"Emitter replacement (5-10% annually) and filter cleaning and pipe repairs and pressure testing"
+irrigation_pump_maintenance,per_unit_per_year,250,"Impeller inspection and seal replacement and motor maintenance and control panel checks"
+water_storage_tank,per_m3_capacity_per_year,3,"Cleaning (annual) and inspection and minor leak repairs and valve maintenance"
+mounting_structure,per_kw_per_year,2,"Corrosion inspection and bolt tightening and structural integrity checks (annual)"
+electrical_bos,per_kw_per_year,4,"Cable inspection and junction box cleaning and grounding checks and monitoring calibration"

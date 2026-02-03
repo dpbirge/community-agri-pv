@@ -1,0 +1,12 @@
+# SOURCE: Synthetic data based on NREL ATB 2024, IRENA battery cost reports, manufacturer specifications (Tesla, BYD, LG Chem)
+# DATE: 2026-02-02
+# DESCRIPTION: Battery energy storage system specifications for microgrid applications
+# UNITS: capacity_kwh (kWh), power_kw (kW), round_trip_efficiency (decimal), cycle_life (cycles), depth_of_discharge_pct (%), lifespan_years (years)
+# LOGIC: Lithium iron phosphate (LFP) chosen for hot climate tolerance and safety. Cycle life based on 80% depth of discharge. Power rating assumes 4-hour discharge duration.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot desert environment reduces cycle life by ~10% vs temperate; includes battery management system; flow battery included as alternative for longer duration storage
+battery_type,capacity_kwh,power_kw,round_trip_efficiency,cycle_life,depth_of_discharge_pct,lifespan_years
+lithium_iron_phosphate_small,50,12.5,0.92,4500,80,12
+lithium_iron_phosphate_medium,200,50,0.92,4500,80,12
+lithium_iron_phosphate_large,500,125,0.92,4500,80,12
+vanadium_redox_flow,400,80,0.75,12000,100,20

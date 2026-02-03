@@ -1,0 +1,11 @@
+# SOURCE: DOE Desalination Databases, Membrane Manufacturer Specifications (DuPont FilmTec, Toray), Academic Literature on BWRO Systems
+# DATE: 2026-02-02
+# DESCRIPTION: Water treatment energy consumption curves for brackish water reverse osmosis (BWRO) systems at three salinity levels typical of the Sinai Red Sea region. Values represent energy requirements, recovery rates, and brine production for desalination operations.
+# UNITS: salinity_level (categorical), tds_ppm_min/max (mg/L or ppm), energy_kwh_per_m3_* (kWh per cubic meter of product water), recovery_rate_pct (percent of feedwater recovered as product), brine_disposal_m3_per_m3_product (cubic meters brine per cubic meter product water)
+# LOGIC: Energy consumption increases with feedwater salinity due to higher osmotic pressure requiring greater pumping energy. Recovery rates decrease with salinity to prevent membrane scaling and maintain permeate quality. Brine volume = (1/recovery_rate) - 1. Typical values based on modern BWRO systems with energy recovery devices.
+# DEPENDENCIES: None (standalone reference table)
+# ASSUMPTIONS: Single-pass BWRO with energy recovery devices (ERDs), target permeate TDS <500 ppm, operating temperature 25-30C typical of Sinai region, membrane age 0-3 years (performance within manufacturer specs)
+salinity_level,tds_ppm_min,tds_ppm_max,energy_kwh_per_m3_min,energy_kwh_per_m3_typical,energy_kwh_per_m3_max,recovery_rate_pct,brine_disposal_m3_per_m3_product
+light,1000,3000,0.5,0.9,1.5,87.5,0.14
+moderate,3000,10000,1.5,2.2,3.0,80.0,0.25
+heavy,10000,20000,3.0,4.0,5.0,70.0,0.43

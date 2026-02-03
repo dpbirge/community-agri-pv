@@ -1,0 +1,32 @@
+# SOURCE: FAO Irrigation and Drainage Paper 56 (Table 11) + crop physiology literature
+# DATE: 2026-02-02
+# DESCRIPTION: Growth stage durations and water requirements for 5 crops
+# UNITS:
+#   - stage: Growth stage name (initial/development/mid/late)
+#   - duration_days: Days in this stage (integer)
+#   - kc: Average crop coefficient for this stage (dimensionless)
+#   - water_stress_impact: Yield loss % per 10% water deficit during this stage
+# LOGIC: Stage durations from FAO-56 Table 11, adapted for hot arid climate
+# DEPENDENCIES: crop_coefficients-toy.csv (season_length_days must match sum of durations)
+# ASSUMPTIONS: Linear Kc transition between stages, stress impacts based on crop physiology
+crop_name,stage,duration_days,kc,water_stress_impact
+tomato,initial,30,0.65,3
+tomato,development,40,0.92,5
+tomato,mid,40,1.2,8
+tomato,late,25,0.9,4
+potato,initial,25,0.55,2
+potato,development,30,0.85,4
+potato,mid,44,1.18,7
+potato,late,21,0.9,3
+onion,initial,15,0.75,2
+onion,development,26,0.9,4
+onion,mid,70,1.1,6
+onion,late,39,0.9,3
+kale,initial,15,0.75,2
+kale,development,25,0.92,4
+kale,mid,30,1.1,5
+kale,late,15,1.02,3
+cucumber,initial,20,0.65,3
+cucumber,development,25,0.85,5
+cucumber,mid,30,1.05,7
+cucumber,late,20,0.9,4

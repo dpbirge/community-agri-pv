@@ -1,0 +1,15 @@
+# SOURCE: [Describe source - synthetic generator, historical data, etc.]
+# DATE: YYYY-MM-DD
+# DESCRIPTION: Daily weather data for Sinai Red Sea region
+# LOCATION: Sinai Peninsula, Red Sea coast, Egypt (~28°N latitude)
+# UNITS:
+#   - temp_max_c: Maximum daily temperature (Celsius)
+#   - temp_min_c: Minimum daily temperature (Celsius)
+#   - solar_irradiance_kwh_m2: Daily solar irradiance (kWh/m²/day)
+#   - wind_speed_ms: Average daily wind speed (m/s)
+#   - precip_mm: Daily precipitation (mm/day)
+# LOGIC: [Describe how values were generated]
+# DEPENDENCIES: None (base input data)
+# ASSUMPTIONS: Hot arid desert climate, minimal rainfall, high solar resource, seasonal temperature variation
+# TIME_RANGE: 2010-01-01 to 2024-12-31 (15 years)
+date,temp_max_c,temp_min_c,solar_irradiance_kwh_m2,wind_speed_ms,precip_mm,weather_scenario_id

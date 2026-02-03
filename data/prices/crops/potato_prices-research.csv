@@ -1,0 +1,20 @@
+# SOURCE: SelinaWamucii (https://selinawamucii.com/insights/prices/egypt/potatoes/), Tridge (https://tridge.com/intelligences/potato/EG), CEIC Data, FAO
+# DATE: 2026-02-02
+# DESCRIPTION: Annual Egyptian potato prices (farmgate, wholesale, retail) with EGP original values and USD conversion
+# UNITS: usd_per_kg (USD/kg), egp_per_kg (Egyptian pounds/kg), exchange rate (EGP per USD)
+# LOGIC: Prices derived from export data and CEIC wholesale records. Farmgate = ~60-70% of wholesale; Retail = ~150-180% of wholesale. Potato is Egypt's second most important vegetable crop.
+# DEPENDENCIES: USD/EGP exchange rates from World Bank; CEIC historical wholesale data (2015-2016 in EGP)
+# ASSUMPTIONS: Egypt produces ~6.87M tonnes (2023 FAO). 0.177M hectares, 29.29 tons/ha yield. Two main seasons with price seasonality. Export prices higher than domestic wholesale.
+# DATA_QUALITY: High. CEIC provides verified wholesale EGP data (2015-2016). SelinaWamucii export prices (2017-2021) well-documented. Tridge confirms recent wholesale ranges.
+# COMPARISON_TO_TOY: Research shows lower prices than toy data. Toy range $0.49-$0.76/kg; research range $0.25-$0.55/kg wholesale. Egyptian domestic prices significantly below export prices due to oversupply.
+date,usd_per_kg_farmgate,usd_per_kg_wholesale,usd_per_kg_retail,egp_per_kg_original,usd_egp_exchange_rate,season,notes
+2015-01-01,0.25,0.42,0.67,3.25,7.70,annual,CEIC verified wholesale 3.25 EGP/kg
+2016-01-01,0.29,0.44,0.70,4.40,10.07,annual,CEIC verified wholesale 4.40 EGP/kg; currency float
+2017-01-01,0.28,0.40,0.64,7.13,17.83,annual,Export price $0.40/kg documented
+2018-01-01,0.34,0.49,0.78,8.73,17.81,annual,Export price $0.49/kg; strong export year
+2019-01-01,0.38,0.55,0.88,9.25,16.81,annual,Export price $0.55/kg; 747K tonnes exported
+2020-01-01,0.33,0.47,0.75,7.43,15.81,annual,COVID impact; export price $0.47/kg
+2021-01-01,0.38,0.54,0.86,8.48,15.70,annual,Recovery; export price $0.54/kg
+2022-01-01,0.32,0.46,0.74,8.85,19.23,annual,Devaluation begins; domestic prices stable in USD
+2023-01-01,0.28,0.40,0.64,12.27,30.67,annual,Major devaluation; Tridge range $0.14-0.40/kg wholesale
+2024-01-01,0.25,0.36,0.58,16.33,45.36,annual,Continued devaluation; wholesale $0.15-0.36/kg Tridge

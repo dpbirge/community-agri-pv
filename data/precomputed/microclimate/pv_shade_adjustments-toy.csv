@@ -1,0 +1,11 @@
+# SOURCE: Fraunhofer ISE agri-PV research; University of Arizona agri-PV microclimate studies
+# DATE: 2026-02-02
+# DESCRIPTION: Microclimate adjustments for agri-PV systems quantifying how panel density affects temperature, irradiance, wind, and evapotranspiration below panels
+# UNITS: temp_adjustment_c (degrees Celsius, negative = cooling); irradiance_multiplier (fraction 0-1, 1.0 = full sun); wind_speed_multiplier (fraction 0-1, 1.0 = ambient wind); evapotranspiration_multiplier (fraction 0-1, 1.0 = reference ET)
+# LOGIC: Higher panel density provides more shading, reducing temperature and irradiance reaching crops, reducing wind speed through obstruction, and lowering evapotranspiration through combined effects of cooler temps and less solar radiation. ET multiplier derived from combined temp and irradiance effects.
+# DEPENDENCIES: None - standalone reference table used by irrigation demand and crop yield calculations
+# ASSUMPTIONS: Values represent midpoint of typical ranges from literature. Actual microclimate effects vary with panel height (assumed 3.0m), panel angle (assumed 28 deg south-facing), and local conditions. Wind reduction assumes typical agricultural setting without significant surrounding obstructions.
+density_variant,ground_coverage_pct,temp_adjustment_c,irradiance_multiplier,wind_speed_multiplier,evapotranspiration_multiplier
+low,30,-0.75,0.80,0.95,0.925
+medium,50,-1.50,0.60,0.85,0.875
+high,80,-3.00,0.35,0.70,0.75

@@ -1,0 +1,79 @@
+# SOURCE: Egyptian Ministry of Petroleum and Mineral Resources, Central Bank of Egypt, SIS.gov.eg,
+#   GlobalPetrolPrices.com, energypedia.info, Daily News Egypt, Egypt Oil & Gas, World Bank,
+#   IMF Egypt Country Reports, Trading Economics
+#   URLs: https://www.sis.gov.eg/Story/192142/Egypt-Raises-Fuel-Prices-for-First-Time-in-2024,
+#   https://egyptoil-gas.com/news/egypt-raises-gasoline-diesel-prices/,
+#   https://energypedia.info/wiki/Fuel_Prices_Egypt,
+#   https://dailynewsegypt.com/2016/11/04/government-raises-fuel-prices,
+#   https://dailynewsegypt.com/2017/06/29/government-raises-fuel-prices-gasoline-92-surges-egp-5/,
+#   https://dailynewsegypt.com/2018/06/16/government-reduces-fuel-subsides-by-16-66/,
+#   https://dailynewsegypt.com/2019/07/05/egypt-slash-fuel-subsidies-raising-petrol-and-diesel-prices-by-25/,
+#   https://www.globalpetrolprices.com/Egypt/diesel_prices/,
+#   https://www.cbe.org.eg/en/economic-research/statistics/exchange-rates,
+#   https://data.worldbank.org/indicator/PA.NUS.FCRF?locations=EG
+# DATE: 2026-02-02
+# DESCRIPTION: Historical diesel pump prices in Egypt from 2012-2024, documenting fuel subsidy reform
+#   phases and currency devaluations. Prices are official government-regulated pump prices for diesel
+#   (known locally as "Solar" or "Mazout").
+# UNITS: usd_per_liter (USD per liter at period exchange rate), egp_per_liter_original (Egyptian Pounds
+#   per liter - official pump price), usd_egp_exchange_rate (EGP per 1 USD, period average)
+# LOGIC: Egypt's fuel subsidy reform occurred in distinct phases:
+#   Phase 1 (Pre-2014): Heavy subsidies, diesel at EGP 1.10/L since 2008
+#   Phase 2 (July 2014): First major reform - 64% price increase to EGP 1.80/L under IMF pressure
+#   Phase 3 (Nov 2016): Currency floatation (EGP 8.88 to ~18/USD), diesel raised to EGP 2.35/L
+#   Phase 4 (June 2017): Further subsidy cuts, diesel to EGP 3.65/L
+#   Phase 5 (June 2018): Diesel to EGP 5.50/L
+#   Phase 6 (July 2019): Final pre-COVID cut, diesel to EGP 6.75/L, automatic pricing introduced
+#   Phase 7 (2020-2021): Prices held stable despite oil volatility (COVID period)
+#   Phase 8 (July 2022): First increase in 3 years to EGP 7.25/L (Ukraine war impact)
+#   Phase 9 (May 2023): Diesel to EGP 8.25/L
+#   Phase 10 (Mar 2024): Currency floatation (30 to 50 EGP/USD), diesel to EGP 10.00/L
+#   Phase 11 (July 2024): Diesel to EGP 11.50/L
+#   Phase 12 (Oct 2024): Diesel to EGP 13.50/L
+# DEPENDENCIES: None
+# ASSUMPTIONS:
+#   1. Exchange rates are period averages from Central Bank of Egypt / World Bank data
+#   2. Dates represent effective date of price changes; prices valid until next change
+#   3. Pre-2014 data interpolated from energypedia historical records
+#   4. Agricultural diesel uses same pump price (no separate agricultural pricing after 2014)
+#   5. Prices represent urban pump prices; may vary slightly by region
+#   6. 2020-2021 prices assumed stable based on quarterly review reports showing no changes
+# DATA_QUALITY: MODERATE-HIGH
+#   - Official government-announced prices verified against multiple sources
+#   - Exchange rates from Central Bank of Egypt and World Bank official data
+#   - Some interpolation required for months between price announcements
+#   - USD calculations derived from EGP prices and period exchange rates
+# COMPARISON_TO_TOY: Toy data uses monthly granularity with modulated prices based on global oil.
+#   Research data uses actual government-announced prices at change dates. Key differences:
+#   - Toy: EGP 2.90-3.16 in 2015 vs Research: EGP 1.80 (subsidy still heavy)
+#   - Toy: Smooth monthly variation vs Research: Step changes at policy announcements
+#   - Toy: Exchange rates roughly match but not identical
+#   - Research file confirms subsidy reform was more dramatic than toy assumptions
+date,usd_per_liter,egp_per_liter_original,usd_egp_exchange_rate,subsidy_regime
+2012-01-01,0.18,1.10,6.06,HEAVILY_SUBSIDIZED
+2013-01-01,0.16,1.10,6.87,HEAVILY_SUBSIDIZED
+2014-01-01,0.16,1.10,6.95,HEAVILY_SUBSIDIZED
+2014-07-05,0.25,1.80,7.15,REFORM_PHASE_1
+2015-01-01,0.24,1.80,7.63,REFORM_PHASE_1
+2015-07-01,0.24,1.80,7.63,REFORM_PHASE_1
+2016-01-01,0.20,1.80,8.88,REFORM_PHASE_1
+2016-07-01,0.20,1.80,8.88,REFORM_PHASE_1
+2016-11-04,0.13,2.35,18.00,CURRENCY_FLOAT_2016
+2017-01-01,0.13,2.35,17.78,REFORM_PHASE_2
+2017-06-29,0.21,3.65,17.78,REFORM_PHASE_2
+2018-01-01,0.20,3.65,17.83,REFORM_PHASE_2
+2018-06-16,0.31,5.50,17.83,REFORM_PHASE_3
+2019-01-01,0.33,5.50,16.55,REFORM_PHASE_3
+2019-07-05,0.41,6.75,16.55,SUBSIDY_REMOVAL_NEAR
+2020-01-01,0.43,6.75,15.76,AUTOMATIC_PRICING
+2020-07-01,0.43,6.75,15.76,AUTOMATIC_PRICING
+2021-01-01,0.43,6.75,15.66,AUTOMATIC_PRICING
+2021-07-01,0.43,6.75,15.66,AUTOMATIC_PRICING
+2022-01-01,0.35,6.75,19.16,AUTOMATIC_PRICING
+2022-07-13,0.38,7.25,19.16,UKRAINE_WAR_IMPACT
+2023-01-01,0.24,7.25,30.85,CURRENCY_FLOAT_2023
+2023-05-04,0.27,8.25,30.85,SUBSIDY_REDUCTION
+2024-01-01,0.17,8.25,48.50,PRE_FLOAT_2024
+2024-03-06,0.20,10.00,50.09,CURRENCY_FLOAT_2024
+2024-07-25,0.24,11.50,48.50,SUBSIDY_PHASE_OUT
+2024-10-15,0.28,13.50,48.50,SUBSIDY_PHASE_OUT

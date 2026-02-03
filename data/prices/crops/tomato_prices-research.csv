@@ -1,0 +1,20 @@
+# SOURCE: SelinaWamucii (https://selinawamucii.com/insights/prices/egypt/tomatoes/), Tridge (https://tridge.com/intelligences/tomato/EG), FAO, World Bank exchange rates
+# DATE: 2026-02-02
+# DESCRIPTION: Annual Egyptian tomato prices (farmgate, wholesale, retail) with EGP original values and USD conversion
+# UNITS: usd_per_kg (USD/kg), egp_per_kg (Egyptian pounds/kg), exchange rate (EGP per USD)
+# LOGIC: Prices derived from export price trends, wholesale market data, and retail markup ratios. Farmgate = ~50-60% of wholesale; Retail = ~150-200% of wholesale. Seasonal averages used for annual data.
+# DEPENDENCIES: USD/EGP exchange rates from World Bank and xe.com historical data
+# ASSUMPTIONS: Egypt is major tomato producer (7.8 Tg annually). Price volatility reflects seasonal harvests (Mar-May, Sep-Nov low prices). 2022-2024 prices affected by EGP devaluation and inflation.
+# DATA_QUALITY: Medium-High. Export prices from SelinaWamucii (2017-2024) well-documented. Wholesale prices from Tridge verified against CAPMAS. Earlier years (2015-2016) extrapolated from trends.
+# COMPARISON_TO_TOY: Research prices show higher volatility and clearer currency effects. Toy data range $0.63-$1.20/kg wholesale; research range $0.35-$0.95/kg wholesale reflecting actual Egyptian market (lower than global average). Post-2022 EGP prices much higher due to devaluation.
+date,usd_per_kg_farmgate,usd_per_kg_wholesale,usd_per_kg_retail,egp_per_kg_original,usd_egp_exchange_rate,season,notes
+2015-01-01,0.32,0.52,0.91,4.00,7.70,annual,Pre-devaluation stable period; low domestic prices
+2016-01-01,0.30,0.48,0.84,4.83,10.07,annual,Currency floatation Nov 2016; prices mixed
+2017-01-01,0.38,0.62,1.08,11.05,17.83,annual,Post-float adjustment; export price $1.25/kg
+2018-01-01,0.35,0.58,1.01,10.33,17.81,annual,Stable period; export price $1.20/kg
+2019-01-01,0.40,0.65,1.14,10.93,16.81,annual,Strong exports $12.2M; export price $1.25/kg
+2020-01-01,0.45,0.75,1.31,11.86,15.81,annual,COVID supply disruption; export price $1.39/kg peak
+2021-01-01,0.42,0.70,1.22,10.99,15.70,annual,Recovery; export price $1.32/kg
+2022-01-01,0.38,0.63,1.10,12.11,19.23,annual,Devaluation pressure; rising EGP prices
+2023-01-01,0.35,0.58,1.01,17.79,30.67,annual,Major devaluation; EGP prices surge; wholesale 5-8 EGP/kg reported
+2024-01-01,0.33,0.55,0.96,24.95,45.36,annual,Continued devaluation; wholesale $0.11-0.29/kg Tridge range

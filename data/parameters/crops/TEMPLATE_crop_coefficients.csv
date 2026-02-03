@@ -1,0 +1,15 @@
+# SOURCE: FAO Irrigation and Drainage Paper 56 + adjustments for hot arid climate
+# DATE: YYYY-MM-DD
+# DESCRIPTION: Crop coefficients and growing characteristics for 5 crops
+# CROPS: tomato, potato, onion, kale, cucumber
+# UNITS:
+#   - kc_initial: Crop coefficient at planting (dimensionless, 0-1)
+#   - kc_mid: Crop coefficient at full canopy/peak growth (dimensionless, 0.8-1.2)
+#   - kc_end: Crop coefficient at harvest (dimensionless, 0-1)
+#   - root_depth_m: Maximum effective root depth (meters)
+#   - season_length_days: Total growing period from planting to harvest (days)
+#   - water_stress_sensitivity: High/Medium/Low sensitivity to water stress
+# LOGIC: FAO-56 Table 12 values, adjusted for hot arid conditions (higher Kc due to advection)
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS: Drip irrigation, well-managed crops, no water stress under proper irrigation
+crop_name,kc_initial,kc_mid,kc_end,root_depth_m,season_length_days,water_stress_sensitivity

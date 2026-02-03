@@ -1,0 +1,30 @@
+# SOURCE: NREL Annual Technology Baseline 2024, IRENA Renewable Cost Database 2024, industry reports
+# DATE: 2026-02-02
+# DESCRIPTION: Capital costs for energy, water, and agricultural equipment - Community Agri-PV model
+# UNITS: USD per unit as specified in cost_metric column; installation_cost_pct is percentage of equipment cost
+# LOGIC: Equipment costs reflect utility-scale pricing for renewable energy systems and small-scale pricing for agricultural/processing equipment. Installation costs account for transportation to remote Sinai location (15-30% premium).
+# DEPENDENCIES: None - standalone parameter file
+# ASSUMPTIONS: (1) All costs normalized to 2024 USD, (2) Sinai location adds 10-15% to typical installation costs for logistics, (3) PV costs reflect global polycrystalline module prices, (4) Battery costs reflect lithium iron phosphate (LFP) chemistry, (5) Water treatment costs for brackish RO systems, (6) Processing equipment sized for small community operation
+#
+equipment_type,cost_metric,usd_per_unit,installation_cost_pct,source,year_basis
+pv_system,per_kw_installed,850,25,NREL ATB 2024 - Utility PV,2024
+battery_storage_lfp,per_kwh_capacity,280,20,NREL ATB 2024 - Battery Storage,2024
+battery_storage_lead_acid,per_kwh_capacity,180,15,IRENA Renewable Cost Database,2024
+wind_turbine_small_10kw,per_kw_rated,2800,30,Small Wind Certification Council,2024
+wind_turbine_medium_30kw,per_kw_rated,2200,28,IRENA Renewable Cost Database,2024
+wind_turbine_large_60kw,per_kw_rated,1850,25,IRENA Renewable Cost Database,2024
+water_treatment_bwro_light,per_m3_day_capacity,450,35,DesalData Industry Report,2024
+water_treatment_bwro_moderate,per_m3_day_capacity,650,35,DesalData Industry Report,2024
+water_treatment_bwro_heavy,per_m3_day_capacity,950,40,DesalData Industry Report,2024
+diesel_generator_backup,per_kw,350,15,Industry Survey - Caterpillar/Cummins,2024
+processing_equipment_packaging,per_unit,25000,20,Food Processing Equipment Guide,2024
+processing_equipment_canning,per_unit,85000,25,Food Processing Equipment Guide,2024
+processing_equipment_drying,per_unit,45000,22,Food Processing Equipment Guide,2024
+water_storage_tank_steel,per_m3_capacity,120,18,Tank Industry Association,2024
+water_storage_tank_concrete,per_m3_capacity,85,25,Tank Industry Association,2024
+irrigation_drip_system,per_hectare,2200,30,FAO Irrigation Technology Report,2024
+irrigation_pump_solar,per_unit,4500,20,IRENA Solar Pumping Guide,2024
+inverter_string,per_kw,85,15,NREL ATB 2024,2024
+inverter_central,per_kw,55,18,NREL ATB 2024,2024
+mounting_structure_fixed_tilt,per_kw,120,0,NREL ATB 2024,2024
+electrical_bos,per_kw,95,0,NREL ATB 2024,2024

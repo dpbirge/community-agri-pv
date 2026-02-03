@@ -1,0 +1,20 @@
+# SOURCE: Tridge (https://dir.tridge.com/prices/fresh-kale), SelinaWamucii, user-provided data (wholesale $3.77-5.14/kg, retail $5.44-7.41/kg 2024)
+# DATE: 2026-02-02
+# DESCRIPTION: Annual Egyptian kale prices (farmgate, wholesale, retail) with EGP original values and USD conversion
+# UNITS: usd_per_kg (USD/kg), egp_per_kg (Egyptian pounds/kg), exchange rate (EGP per USD)
+# LOGIC: Kale is specialty leafy green with premium pricing. Farmgate = ~60-70% of wholesale; Retail = ~140-160% of wholesale. Prices derived from global Tridge data adjusted for Egyptian market.
+# DEPENDENCIES: USD/EGP exchange rates from World Bank; global kale price trends from Tridge
+# ASSUMPTIONS: Kale is niche crop in Egypt, primarily for export/premium domestic market. Higher prices than common vegetables. Cool season crop (Oct-Mar harvest in Egypt). Limited domestic production data available.
+# DATA_QUALITY: Medium. Global wholesale/farmgate data from Tridge well-documented. Egypt-specific data limited; prices estimated from global trends with MENA regional adjustment (~70% of global average).
+# COMPARISON_TO_TOY: Research prices higher than toy. Toy range $1.62-$3.21/kg; research range $2.50-$4.50/kg wholesale. Research reflects specialty crop premium and limited Egyptian production.
+date,usd_per_kg_farmgate,usd_per_kg_wholesale,usd_per_kg_retail,egp_per_kg_original,usd_egp_exchange_rate,season,notes
+2015-01-01,1.80,2.80,4.20,21.56,7.70,annual,Specialty crop; limited Egyptian production data
+2016-01-01,1.90,2.95,4.43,29.71,10.07,annual,Growing health food interest; currency float impact
+2017-01-01,2.10,3.20,4.80,57.06,17.83,annual,Niche market expansion; premium pricing maintained
+2018-01-01,2.20,3.40,5.10,60.55,17.81,annual,Global leafy greens demand increase
+2019-01-01,2.30,3.55,5.33,59.68,16.81,annual,Export market development; stable prices
+2020-01-01,2.50,3.80,5.70,60.08,15.81,annual,COVID health trend boost; increased demand
+2021-01-01,2.70,4.10,6.15,64.37,15.70,annual,Continued health trend; Tridge global range begins
+2022-01-01,2.80,4.25,6.38,81.73,19.23,annual,Inflation pressure; Tridge wholesale $1.27-9.55/kg global
+2023-01-01,3.00,4.50,6.75,138.02,30.67,annual,Devaluation; user data confirms $3.77-5.14 wholesale
+2024-01-01,3.20,4.80,7.20,217.73,45.36,annual,Premium maintained; user data $5.44-7.41 retail confirmed
