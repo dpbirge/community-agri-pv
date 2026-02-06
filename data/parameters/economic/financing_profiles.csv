@@ -1,0 +1,28 @@
+# Financing Profile Definitions
+# =============================
+# This file defines financial parameters for different infrastructure financing categories.
+# Each category represents a complete financing profile that determines both CAPEX and OPEX costs to the community.
+#
+# Fields:
+# - financing_status: Categorical identifier used in scenario configurations
+# - description: Brief explanation of the financing category
+# - capex_cost_multiplier: Fraction of capital costs paid by community (0.0 = none, 1.0 = full)
+# - has_debt_service: Whether this category includes loan repayment (true/false)
+# - loan_term_years: Duration of loan repayment (0 if no loan)
+# - interest_rate: Annual interest rate for loan (0.0 if no loan)
+# - opex_cost_multiplier: Fraction of O&M costs paid by community (0.0 = none, 1.0 = full)
+# - notes: Additional context about the financing category
+#
+# Data source: Typical financing structures for community infrastructure projects
+# Author: David Birge
+# Date: 2026-02-05
+# Version: 0.1.0
+# Status: toy
+
+financing_status,description,capex_cost_multiplier,has_debt_service,loan_term_years,interest_rate,opex_cost_multiplier,notes
+existing_owned,Already owned/depreciated assets,0.0,false,0,0.000,1.0,Community already owns; only O&M costs apply
+grant_full,Full grant covering CAPEX and O&M,0.0,false,0,0.000,0.0,Donor covers all costs; typically requires compliance monitoring
+grant_capex,Grant covers CAPEX only,0.0,false,0,0.000,1.0,Donor funds equipment/construction; community maintains operations
+purchased_cash,Community cash purchase,1.0,false,0,0.000,1.0,Community paid upfront from reserves; no debt service
+loan_standard,Standard commercial loan,0.0,true,10,0.060,1.0,Market-rate financing from commercial bank; typical 10-year term
+loan_concessional,Concessional development loan,0.0,true,15,0.035,1.0,Below-market rate from development bank; typical 15-year term

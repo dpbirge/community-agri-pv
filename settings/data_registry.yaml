@@ -3,7 +3,7 @@
 #
 # To switch datasets:
 #   - Edit paths below (e.g., change "-toy.csv" to "-research.csv")
-#   - Run: python settings/validation.py --registry
+#   - Run: python src/settings/validation.py --registry
 #
 # All scenarios share this registry. Data consistency is enforced by design.
 
@@ -93,6 +93,10 @@ prices_utilities:
 costs:
   capital: data/parameters/costs/capital_costs-toy.csv
   operating: data/parameters/costs/operating_costs-toy.csv
+
+# Economic parameters
+economic:
+  financing_profiles: data/parameters/economic/financing_profiles.csv
 
 # Labor
 labor:

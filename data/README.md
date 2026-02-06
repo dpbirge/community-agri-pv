@@ -6,26 +6,30 @@ All datasets for the Community Agri-PV simulation model.
 
 ```
 data/
-├── precomputed/              # Layer 1 time-series outputs
-│   ├── weather/              # Daily weather (temperature, radiation, wind)
-│   ├── irrigation_demand/    # Daily irrigation m3/ha per crop
-│   ├── crop_yields/          # Seasonal yield kg/ha per crop
-│   ├── pv_power/             # Normalized PV output kWh/kW
-│   ├── wind_power/           # Normalized wind output kWh/kW
-│   ├── microclimate/         # PV shade adjustments
-│   └── water_treatment/      # Treatment energy kWh/m3 by salinity
 ├── parameters/               # Static parameters
-│   ├── crops/                # Crop coefficients, growth stages, processing specs
-│   ├── equipment/            # Wind turbines, water treatment specs
-│   ├── labor/                # Labor requirements and wages
-│   ├── community/            # Farm profiles, land allocation, housing
-│   └── costs/                # Capital and operating costs
+│   ├── community/            # Farm profiles, land allocation, housing (3 files)
+│   ├── costs/                # Capital and operating costs (3 files)
+│   ├── crops/                # Crop coefficients, growth stages, processing specs (9 files)
+│   ├── economic/             # Financing profiles (1 file)
+│   ├── equipment/            # PV, wind, batteries, water treatment, irrigation, etc. (15 files)
+│   ├── labor/                # Labor requirements and wages (3 files)
+│   └── water/                # Water source metadata and aquifer parameters
+├── precomputed/              # Layer 1 time-series outputs
+│   ├── crop_yields/          # Seasonal yield kg/ha per crop (5 files)
+│   ├── household/            # Daily household energy and water demand (2 files)
+│   ├── irrigation_demand/    # Daily irrigation m³/ha per crop (5 files)
+│   ├── microclimate/         # PV shade adjustments (2 files)
+│   ├── pv_power/             # Normalized PV output kWh/kW (1 file)
+│   ├── water_treatment/      # Treatment energy kWh/m³ by salinity (1 file)
+│   ├── weather/              # Daily weather: temperature, radiation, wind (3 files)
+│   └── wind_power/           # Normalized wind output kWh/kW (1 file)
 ├── prices/                   # Historical price time-series
-│   ├── crops/                # Fresh crop prices
-│   ├── processed/            # Processed product prices
-│   ├── electricity/          # Grid electricity prices
-│   ├── water/                # Municipal water prices
-│   └── diesel/               # Diesel fuel prices
+│   ├── crops/                # Fresh crop prices (10 files)
+│   ├── diesel/               # Diesel fuel prices (2 files)
+│   ├── electricity/          # Grid electricity prices (2 files)
+│   ├── inputs/               # Fertilizer costs (1 file)
+│   ├── processed/            # Processed product prices (11 files)
+│   └── water/                # Municipal water prices (2 files)
 └── scripts/                  # Data generation scripts (Layer 1)
     ├── generate_weather_data.py
     ├── generate_crop_parameters.py
@@ -34,6 +38,13 @@ data/
     ├── generate_power_data.py
     └── generate_household_demand.py
 ```
+
+## Dataset Counts
+
+- **Parameters**: 35 files across 7 categories
+- **Precomputed**: 20 files across 8 categories
+- **Prices**: 28 files across 6 categories
+- **Total**: 78 CSV files + 1 YAML metadata file
 
 ## Data Quality Suffixes
 
@@ -60,6 +71,7 @@ python data/scripts/generate_crop_parameters.py
 python data/scripts/generate_price_data.py
 python data/scripts/generate_irrigation_and_yields.py
 python data/scripts/generate_power_data.py
+python data/scripts/generate_household_demand.py
 ```
 
-See [docs/planning/data-organization.md](../docs/planning/data-organization.md) for complete specifications.
+See [docs/architecture/data-organization.md](../docs/architecture/data-organization.md) for complete specifications.

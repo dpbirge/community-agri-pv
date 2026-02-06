@@ -7,19 +7,7 @@ Simulation configuration for the Community Agri-PV model.
 ```
 settings/
 ├── data_registry.yaml       # Single source of truth for data file paths
-├── scenarios/               # Scenario configurations (policies, farms)
-│   ├── water_policy_only.yaml      # Multi-farm water policy comparison
-│   └── development_full_copy.yaml  # Full scenario template
-├── policies/                # Policy implementations
-│   ├── water_policies.py    # 4 functional water policies
-│   ├── energy_policies.py   # Stub
-│   ├── crop_policies.py     # Stub
-│   ├── economic_policies.py # Stub
-│   └── market_policies.py   # Stub
-└── scripts/                 # Configuration utilities
-    ├── loader.py            # Scenario loader (YAML -> dataclasses)
-    ├── validation.py        # Registry and scenario validation
-    └── calculations.py      # Calculation layer for scenario computations
+└── mvp-settings.yaml        # MVP scenario configuration
 ```
 
 ## Data Registry
@@ -28,34 +16,38 @@ All data file paths are defined in `data_registry.yaml`. Scenarios reference thi
 
 ```bash
 # Validate data registry (all files exist)
-python settings/scripts/validation.py --registry
+python src/settings/validation.py --registry
 
 # Validate a specific scenario
-python settings/scripts/validation.py settings/scenarios/water_policy_only.yaml
+python src/settings/validation.py settings/mvp-settings.yaml
 ```
 
 ## Loading Scenarios
 
 ```python
-from settings.scripts.loader import load_scenario
+from src.settings.loader import load_scenario
 
-scenario = load_scenario("settings/scenarios/water_policy_only.yaml")
+scenario = load_scenario("settings/mvp-settings.yaml")
 # scenario.farms, scenario.infrastructure, scenario.water_pricing, etc.
 ```
 
-## Water Policies
+## Policies
 
-Four functional policies for comparative testing:
+All six policy types are implemented in `src/policies/`:
 
-| Policy | Strategy |
-|--------|----------|
-| `always_groundwater` | 100% groundwater, municipal fallback if energy insufficient |
-| `always_municipal` | 100% municipal, no treatment energy needed |
-| `cheapest_source` | Dynamic selection based on daily cost comparison |
-| `conserve_groundwater` | Prefer municipal, use GW when price > threshold |
+| Domain | Policies | File |
+|--------|----------|------|
+| **Water** | `always_groundwater`, `always_municipal`, `cheapest_source`, `conserve_groundwater`, `quota_enforced` | `water_policies.py` |
+| **Energy** | `pv_first_battery_grid_diesel`, `grid_first`, `cheapest_energy` | `energy_policies.py` |
+| **Food** | `all_fresh`, `maximize_storage`, `balanced`, `market_responsive` | `food_policies.py` |
+| **Crop** | `fixed_schedule`, `deficit_irrigation`, `weather_adaptive` | `crop_policies.py` |
+| **Economic** | `balanced`, `aggressive_growth`, `conservative`, `risk_averse` | `economic_policies.py` |
+| **Market** | `sell_immediately`, `hold_for_peak`, `process_when_low`, `adaptive_marketing` | `market_policies.py` |
+
+## Policy Usage
 
 ```python
-from settings.policies import get_water_policy, WaterPolicyContext
+from src.policies import get_water_policy, WaterPolicyContext
 
 ctx = WaterPolicyContext(
     demand_m3=1000,
@@ -73,7 +65,7 @@ result = policy.allocate_water(ctx)
 
 ## Adding Scenarios
 
-1. Copy `water_policy_only.yaml` as template
+1. Copy `mvp-settings.yaml` as template
 2. Modify farms, policies, and parameters
-3. Validate: `python settings/scripts/validation.py settings/scenarios/your_scenario.yaml`
-4. Run: `python src/results.py settings/scenarios/your_scenario.yaml`
+3. Validate: `python src/settings/validation.py settings/your-scenario.yaml`
+4. Run: `python src/simulation/results.py settings/your-scenario.yaml`

@@ -1,0 +1,97 @@
+# Water Source Technical Definitions
+# Reference file for water infrastructure and treatment parameters
+
+# Water source types available in the simulation
+water_sources:
+  # Community-owned groundwater with brackish water reverse osmosis treatment
+  community_groundwater:
+    description: "Brackish groundwater from community-owned wells, treated on-site with BWRO"
+    treatment_type: bwro  # Brackish Water Reverse Osmosis
+    typical_tds_ppm: 3000-10000  # Total Dissolved Solids range for brackish water
+
+    # Cost components (calculated dynamically in simulation):
+    # 1. Pumping energy (depth-dependent)
+    # 2. BWRO treatment energy (salinity-dependent)
+    # 3. Equipment maintenance (membrane replacement, pump maintenance)
+
+  # Municipal seawater desalination delivered via pipeline
+  municipal_seawater:
+    description: "Seawater desalination (SWRO) from regional utility, delivered via pipeline"
+    treatment_type: swro  # Seawater Reverse Osmosis
+    typical_tds_ppm: 35000  # Seawater salinity
+
+    # Cost: Single delivered price per m3 (includes all production and delivery costs)
+
+# Desalination treatment types
+treatment_types:
+  bwro:
+    name: "Brackish Water Reverse Osmosis"
+    abbreviation: "BWRO"
+    description: "Lower-pressure RO treatment for brackish groundwater (TDS < 10,000 ppm)"
+
+    # Energy requirements by salinity level
+    energy_requirements_kwh_per_m3:
+      light:     # TDS < 3,000 ppm
+        min: 1.5
+        max: 2.5
+        typical: 2.0
+      moderate:  # TDS 3,000-10,000 ppm
+        min: 3.5
+        max: 4.5
+        typical: 4.0
+      heavy:     # TDS > 10,000 ppm
+        min: 4.5
+        max: 6.0
+        typical: 5.0
+
+    # Maintenance costs (membrane replacement, cleaning, pump maintenance)
+    maintenance_usd_per_m3:
+      min: 0.05
+      max: 0.15
+      typical: 0.10
+
+  swro:
+    name: "Seawater Reverse Osmosis"
+    abbreviation: "SWRO"
+    description: "High-pressure RO treatment for seawater (TDS ~35,000 ppm)"
+
+    # Energy requirements (higher due to greater osmotic pressure)
+    energy_requirements_kwh_per_m3:
+      typical:
+        min: 4.0
+        max: 6.0
+        typical: 5.0
+
+    # Full production cost (for reference - municipal price reflects this)
+    production_cost_usd_per_m3:
+      min: 0.50
+      max: 1.50
+      typical: 0.75
+
+# Salinity classification for groundwater
+salinity_levels:
+  light:
+    tds_ppm_range: [0, 3000]
+    description: "Low salinity, suitable for most crops with minimal treatment"
+
+  moderate:
+    tds_ppm_range: [3000, 10000]
+    description: "Moderate salinity, requires BWRO treatment, common in coastal aquifers"
+
+  heavy:
+    tds_ppm_range: [10000, 35000]
+    description: "High salinity, approaches seawater, requires more intensive treatment"
+
+# Infrastructure capacity guidelines
+infrastructure_guidelines:
+  treatment_capacity:
+    # Treatment capacity should be sized relative to well extraction capacity
+    min_ratio_to_wells: 0.5  # At minimum, treat 50% of what wells can extract
+    recommended_ratio: 1.0   # Ideally match well capacity
+    buffer_ratio: 1.2        # Best practice: 20% buffer for maintenance downtime
+
+  storage_capacity:
+    # Treated water storage provides buffer for demand variability
+    min_hours_buffer: 6      # Minimum 6 hours of peak demand
+    recommended_hours: 12    # Recommended 12 hours buffer
+    notes: "Storage smooths treatment operations and provides emergency reserve"

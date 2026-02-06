@@ -6,6 +6,6 @@
 # DEPENDENCIES: None
 # ASSUMPTIONS: Hot desert environment reduces membrane life by ~20% vs temperate climate; costs include pre-treatment and post-treatment
 salinity_level,tds_ppm,energy_kwh_per_m3,membrane_life_months,recovery_rate_pct,capital_cost_per_m3_day,maintenance_cost_per_m3
-light,2000,1.0,48,88,850,0.15
+low,2000,1.0,48,88,850,0.15
 moderate,6500,2.2,36,80,1100,0.25
-heavy,15000,4.0,24,70,1400,0.40
+high,15000,4.0,24,70,1400,0.40

@@ -4,32 +4,37 @@ Documentation for the Community Agri-PV simulation model.
 
 ## Structure
 
-- **`codereview/`** - Code review notes and analysis
-  - `_archive/` - Historical code review documents
-
-- **`planning/`** - Model specifications and research plans
-  - `community-model-plan.md` - Complete model architecture and domain specifications
+- **`architecture/`** - Core model specifications (start here)
+  - `community-model-plan.md` - Complete domain model specifications
+  - `mvp-structure.md` - Configuration schema and policy structure
+  - `mvp-calculations.md` - Calculation methodologies and formulas
   - `data-organization.md` - Data structure and format specifications
-  - `data-realism-research-plan.md` - Research methodology for empirical data
-  - `water_simulation_mvp_plan.md` - Water simulation implementation plan
-  - `_archive/` - Completed planning documents
+
+- **`codereview/`** - Code review reports
+  - Calculations vs code verification reports
+  - `archive/` - Historical code review documents
+
+- **`planning/`** - Implementation plans and research plans
+  - `code-review-fix-plan-claude-2026-02-05.md` - Current fix plan
+  - `archive/` - Completed planning documents (water simulation, Layer 2 fixes, etc.)
 
 - **`prompts/`** - AI assistant prompts for development workflows
-  - `RESEARCH_PROMPT.md` - Research data collection instructions
-  - `water_simulation_implementation.md` - Water simulation development prompt
-  - `_archive/` - Completed prompt documents
+  - `RESEARCH_PROMPT.md` - Research data collection instructions (active)
+  - `_archive/` - Completed workflow prompts
 
-- **`research/`** - Scientific methodology documentation (planned)
+- **`research/`** - Research findings
+  - `egyptian_utility_pricing.md` - Egyptian electricity pricing research
+  - `egyptian_water_pricing.md` - Egyptian water pricing research
 
 - **`validation/`** - Validation reports
   - `_archive/` - Historical validation reports
 
 ## Key Documents
 
-Start with `planning/community-model-plan.md` for the complete model architecture and specifications.
+Start with `architecture/community-model-plan.md` for the complete model architecture and specifications.
 
 ## Current Status
 
 - **Layer 1 (Pre-computation)**: Complete - 50 toy datasets, 14 research datasets
-- **Layer 2 (Configuration)**: Complete - Scenario loader, water policies, validation, calculations
-- **Layer 3 (Simulation)**: Water simulation MVP complete - Multi-farm water policy comparison working
+- **Layer 2 (Configuration)**: Complete - Scenario loader, all 6 policy types implemented, validation, calculations
+- **Layer 3 (Simulation)**: Water simulation MVP complete with energy, crop, food processing, and economic tracking

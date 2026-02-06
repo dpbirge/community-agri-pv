@@ -1,0 +1,49 @@
+# SOURCE: USDA FoodData Central (moisture content), FAO Small-Scale Postharvest Handling (drying ratios),
+#   FAO/UNIDO Pre-Feasibility Studies for Crop Processing in Upper Egypt (labor, value-add),
+#   FAO Nubaria SDT Project (sun-dried tomato labor data), USDA ERS Price Spreads (canned/fresh price ratios),
+#   Colorado State Extension (drying guidelines), ASABE/EPA (canning energy data),
+#   Journal of Food Science & Technology (onion dehydration review), Tridge/Xinhua (Egyptian dried tomato market)
+# DATE: 2026-02-05
+# DESCRIPTION: Research-grade processing parameters for 5 crops across 4 processing types
+# UNITS:
+#   - energy_kwh_per_kg: Electricity for processing (kWh per kg fresh input)
+#   - labor_hours_per_kg: Labor time required (hours per kg fresh input)
+#   - weight_loss_pct: Mass lost during processing (percentage of fresh input weight)
+#   - value_add_multiplier: Price multiplier of processed product per kg vs fresh product per kg (dimensionless)
+#   - processing_time_hours: Time from input to output per batch (hours)
+# LOGIC: Weight loss for drying derived from USDA moisture content data using formula:
+#   dried_output = (1 - moisture_fresh) / (1 - moisture_dried); weight_loss = 1 - dried_output.
+#   Cross-validated against FAO empirical drying ratios (25 lbs fresh → X lbs dried).
+#   Value-add multipliers based on Egyptian/international wholesale price ratios for processed vs fresh products.
+#   Energy values for drying based on latent heat of vaporization (0.63 kWh/kg water) at 30% dryer efficiency
+#   with 40-50% solar thermal contribution in arid Sinai climate. Canning energy from ASABE industrial data
+#   scaled for small-scale operations.
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS:
+#   - Community-scale processing (not industrial), semi-automated equipment
+#   - Solar-assisted drying in hot arid climate (Sinai Peninsula) reduces electrical energy vs pure electric
+#   - Canning includes pickling for onion and cucumber (high-acid process, lower retort requirements)
+#   - Value-add multipliers reflect Egyptian wholesale/export market conditions
+#   - Labor estimates assume semi-manual community operations (4x more labor-intensive than industrial)
+#   - Dried product target moisture: tomato 14%, potato 6.5%, onion 5%, kale 8%, cucumber 5%
+crop_name,processing_type,energy_kwh_per_kg,labor_hours_per_kg,weight_loss_pct,value_add_multiplier,processing_time_hours
+tomato,fresh,0.0,0.0,0.0,1.0,0.0
+tomato,packaged,0.05,0.02,3.0,1.2,2.0
+tomato,canned,0.45,0.07,12.0,1.5,8.0
+tomato,dried,2.0,0.10,93.0,8.0,24.0
+potato,fresh,0.0,0.0,0.0,1.0,0.0
+potato,packaged,0.03,0.015,2.0,1.15,2.0
+potato,canned,0.55,0.09,18.0,1.4,10.0
+potato,dried,2.5,0.14,78.0,5.0,20.0
+onion,fresh,0.0,0.0,0.0,1.0,0.0
+onion,packaged,0.03,0.015,3.0,1.15,2.0
+onion,canned,0.40,0.06,10.0,1.3,6.0
+onion,dried,1.8,0.10,89.0,5.0,18.0
+kale,fresh,0.0,0.0,0.0,1.0,0.0
+kale,packaged,0.06,0.025,5.0,1.3,3.0
+kale,canned,0.50,0.08,20.0,1.3,8.0
+kale,dried,1.2,0.08,87.0,6.0,6.0
+cucumber,fresh,0.0,0.0,0.0,1.0,0.0
+cucumber,packaged,0.04,0.02,3.0,1.2,2.0
+cucumber,canned,0.35,0.05,8.0,1.6,6.0
+cucumber,dried,2.8,0.12,95.0,4.0,20.0

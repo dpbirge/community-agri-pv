@@ -4,9 +4,9 @@
 # UNITS: tds_ppm (mg/L), energy_kwh_per_m3 (kWh/m³), membrane_life_months (months), recovery_rate_pct (%), capital_cost_per_m3_day (USD per m³/day capacity), maintenance_cost_per_m3 (USD/m³)
 # LOGIC: Energy consumption scales with TDS due to osmotic pressure (~1 psi additional pressure per 100 ppm TDS increase). Recovery rate decreases with TDS to prevent scaling (CaCO3, CaSO4, silica). At ~15,000 ppm, system approaches SWRO territory requiring higher-pressure membranes. Membrane life decreases with TDS due to fouling and cleaning frequency. Capital costs increase with TDS due to higher-pressure pumps, additional pre-treatment, and energy recovery devices needed.
 # DEPENDENCIES: None
-# ASSUMPTIONS: Hot arid environment (Egypt/Sinai) reduces membrane life ~15-20% vs temperate baseline. Small-scale systems (100-500 m³/day capacity) have higher per-unit costs than large municipal plants. Costs include pre-treatment (cartridge filtration, antiscalant dosing) and post-treatment (remineralization). No energy recovery device (ERD) for light salinity; ERD optional for moderate; ERD required for heavy. USD 2024 equivalent values.
+# ASSUMPTIONS: Hot arid environment (Egypt/Sinai) reduces membrane life ~15-20% vs temperate baseline. Small-scale systems (100-500 m³/day capacity) have higher per-unit costs than large municipal plants. Costs include pre-treatment (cartridge filtration, antiscalant dosing) and post-treatment (remineralization). No energy recovery device (ERD) for low salinity; ERD optional for moderate; ERD required for high. USD 2024 equivalent values.
 # DATA_QUALITY: Research-grade - values derived from peer-reviewed literature and manufacturer specifications. Ranges validated across multiple sources (PMC, MDPI, ACS, DuPont). Energy values represent typical operational SEC, not theoretical minimums.
-# COMPARISON_TO_TOY: Toy file overestimated energy for light (1.0 vs 0.7 kWh/m³) and heavy (4.0 vs 2.8 kWh/m³) salinity. Toy file overestimated recovery rates (88% vs 75% for light; 70% vs 50% for heavy). Toy file underestimated maintenance costs. Capital costs in toy file were reasonable for small-scale but research shows wider range ($500-$1500/m³/day).
+# COMPARISON_TO_TOY: Toy file overestimated energy for low (1.0 vs 0.7 kWh/m³) and high (4.0 vs 2.8 kWh/m³) salinity. Toy file overestimated recovery rates (88% vs 75% for low; 70% vs 50% for high). Toy file underestimated maintenance costs. Capital costs in toy file were reasonable for small-scale but research shows wider range ($500-$1500/m³/day).
 #
 # KEY RESEARCH FINDINGS:
 # - BWRO energy: 0.5-2.5 kWh/m³ typical range (vs SWRO 2.5-5.4 kWh/m³)
@@ -29,6 +29,6 @@
 # [8] AXEON Water - TDS key parameter in RO system design
 #
 salinity_level,tds_ppm,energy_kwh_per_m3,membrane_life_months,recovery_rate_pct,capital_cost_per_m3_day,maintenance_cost_per_m3
-light,2000,0.7,42,75,650,0.45
+low,2000,0.7,42,75,650,0.45
 moderate,6000,1.5,36,65,900,0.55
-heavy,15000,2.8,28,50,1200,0.70
+high,15000,2.8,28,50,1200,0.70

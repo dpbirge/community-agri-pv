@@ -1,0 +1,5 @@
+# Ignore all CSV exports
+*.csv
+
+# But keep this .gitignore
+!.gitignore

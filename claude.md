@@ -21,43 +21,59 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 
 ## Directory Structure
 
-- `/data` - All simulation datasets
-  - `/parameters` - Static parameters (crops, equipment, labor, community, costs)
-  - `/precomputed` - Layer 1 outputs (weather, PV/wind, irrigation, yields, microclimate)
-  - `/prices` - Historical price time-series (crops, processed, electricity, water, diesel)
-  - `/scripts` - Data generation scripts (Layer 1)
+- `/data` - All simulation datasets (78 CSV files)
+  - `/parameters` - Static parameters: crops, equipment, labor, community, costs, economic, water (35 files)
+  - `/precomputed` - Layer 1 outputs: weather, PV/wind, irrigation, yields, microclimate, household demand (20 files)
+  - `/prices` - Historical price time-series: crops, processed, electricity, water, diesel, inputs (28 files)
+  - `/scripts` - Data generation scripts (6 Python files, Layer 1)
 - `/docs` - Documentation
-  - `/codereview` - Code review notes
-  - `/planning` - Model specifications and implementation plans
-  - `/prompts` - AI assistant prompts for development workflows
-  - `/research` - Empty (planned for scientific methodology)
+  - `/architecture` - Core model specifications (4 key docs)
+  - `/codereview` - Code review reports and archive
+  - `/planning` - Implementation plans (active + archive)
+  - `/prompts` - AI assistant prompts (active + archive)
+  - `/research` - Research findings (Egyptian pricing, utilities)
   - `/validation` - Data validation reports
 - `/notebooks` - Jupyter notebooks for interactive analysis
+  - `run_simulation.ipynb` - Primary simulation runner with interactive plots
+  - `/exports` - CSV exports from notebook sessions
 - `/results` - Simulation outputs (timestamped folders with CSV, JSON, plots)
-- `/scripts` - Legacy (moved to `/data/scripts`)
+- `/scripts` - Test plotting scripts (test_plot1-6)
 - `/settings` - Layer 2 configuration
-  - `/policies` - Policy implementations (water functional, others stubbed)
-  - `/scenarios` - Scenario YAML configurations
-  - `/scripts` - Configuration utilities (loader, validation, calculations)
-- `/src` - Layer 3 simulation engine (water simulation MVP)
-- `/testing` - Empty (test files planned)
+  - `data_registry.yaml` - Central registry for all data file paths
+  - `mvp-settings.yaml` - MVP scenario configuration
+- `/src` - Layer 3 simulation engine
+  - `/policies` - Policy implementations (6 domains, 23 total policies)
+  - `/settings` - Configuration utilities (loader, validation, calculations)
+  - `/simulation` - Simulation engine (state, data_loader, metrics, results, sensitivity, monte_carlo)
+- `/testing` - Test files (not yet implemented)
 
 ## Key Files
 
 **Simulation Engine (Layer 3):**
 
-- [simulation.py](src/simulation.py) - Main simulation loop (`run_simulation()`)
-- [state.py](src/state.py) - State management dataclasses (SimulationState, FarmState, CropState)
-- [data_loader.py](src/data_loader.py) - Data loading and caching (`SimulationDataLoader`)
-- [metrics.py](src/metrics.py) - Metrics calculation (`compute_all_metrics()`, `compare_policies()`)
-- [results.py](src/results.py) - Output generation (CSV, JSON, matplotlib plots)
+- [simulation.py](src/simulation/simulation.py) - Main simulation loop (`run_simulation()`) with energy dispatch
+- [state.py](src/simulation/state.py) - State management dataclasses (SimulationState, FarmState, CropState, AquiferState, EnergyState, EconomicState)
+- [data_loader.py](src/simulation/data_loader.py) - Data loading and caching (`SimulationDataLoader`)
+- [metrics.py](src/simulation/metrics.py) - Metrics calculation (`compute_all_metrics()`, `compare_policies()`, `compute_net_income()`)
+- [results.py](src/simulation/results.py) - Output generation (CSV, JSON, matplotlib plots)
+- [sensitivity.py](src/simulation/sensitivity.py) - Parameter sensitivity analysis
+- [monte_carlo.py](src/simulation/monte_carlo.py) - Monte Carlo simulation framework
+
+**Policies (Layer 2):**
+
+- [water_policies.py](src/policies/water_policies.py) - 5 water allocation policies
+- [energy_policies.py](src/policies/energy_policies.py) - 3 energy dispatch policies (merit-order parameters)
+- [food_policies.py](src/policies/food_policies.py) - 4 food processing policies
+- [crop_policies.py](src/policies/crop_policies.py) - 3 crop management policies
+- [economic_policies.py](src/policies/economic_policies.py) - 4 economic strategy policies
+- [market_policies.py](src/policies/market_policies.py) - 4 market timing policies
 
 **Configuration (Layer 2):**
 
-- [loader.py](settings/scripts/loader.py) - Scenario loader: loads YAML scenarios into structured dataclasses
+- [loader.py](src/settings/loader.py) - Scenario loader: loads YAML scenarios into structured dataclasses
 - [data_registry.yaml](settings/data_registry.yaml) - Central registry for all data file paths
-- [validation.py](settings/scripts/validation.py) - Validates registry files exist and scenarios are valid
-- [water_policies.py](settings/policies/water_policies.py) - 4 functional water allocation policies
+- [validation.py](src/settings/validation.py) - Validates registry files exist and scenarios are valid
+- [calculations.py](src/settings/calculations.py) - Derived calculations (pumping energy, infrastructure costs, household demand)
 
 **Data Generation (Layer 1):**
 
@@ -65,27 +81,44 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 - [generate_crop_parameters.py](data/scripts/generate_crop_parameters.py) - Crop coefficients, growth stages, processing specs
 - [generate_irrigation_and_yields.py](data/scripts/generate_irrigation_and_yields.py) - FAO Penman-Monteith irrigation demand and yield calculations
 - [generate_power_data.py](data/scripts/generate_power_data.py) - PV and wind normalized power output
+- [generate_price_data.py](data/scripts/generate_price_data.py) - Historical price time-series
+- [generate_household_demand.py](data/scripts/generate_household_demand.py) - Household energy and water demand
 
-**Planning:**
+**Visualization:**
 
-- [community-model-plan.md](docs/planning/community-model-plan.md) - Complete model specifications
-- [data-organization.md](docs/planning/data-organization.md) - Data structure and format specifications
-- [water_simulation_mvp_plan.md](docs/planning/water_simulation_mvp_plan.md) - Water simulation implementation plan
+- [notebook_plotting.py](src/notebook_plotting.py) - Interactive plotting and tables for Jupyter notebooks
+- [run_simulation.ipynb](notebooks/run_simulation.ipynb) - Primary simulation notebook with widget-based plot selection
+
+**Architecture & Planning:**
+
+- [community-model-plan.md](docs/architecture/community-model-plan.md) - Complete model domain specifications
+- [mvp-structure.md](docs/architecture/mvp-structure.md) - Configuration schema and policy structure
+- [mvp-calculations.md](docs/architecture/mvp-calculations.md) - Calculation methodologies and formulas
+- [data-organization.md](docs/architecture/data-organization.md) - Data structure and format specifications
 
 ## Key Functions
 
-- `src.simulation.run_simulation(scenario)` - Main entry point, runs daily loop, returns SimulationState
-- `src.results.write_results(state, scenario)` - Generates all output files and plots
-- `settings.scripts.loader.load_scenario(path)` - Loads YAML scenario, returns Scenario dataclass
-- `settings.policies.get_water_policy(name, **kwargs)` - Factory function to instantiate water policies
+- `src.simulation.simulation.run_simulation(scenario)` - Main entry point, runs daily loop, returns SimulationState
+- `src.simulation.simulation.dispatch_energy(...)` - Merit-order energy dispatch (PV → wind → battery → grid → diesel)
+- `src.simulation.simulation.calculate_system_constraints(scenario)` - Per-farm infrastructure capacity allocation
+- `src.simulation.results.write_results(state, scenario)` - Generates all output files and plots
+- `src.simulation.metrics.compute_all_metrics(state)` - Computes yearly and community metrics
+- `src.simulation.metrics.compare_policies(state)` - Cross-policy comparison summaries
+- `src.simulation.sensitivity.run_sensitivity(...)` - One-at-a-time parameter sensitivity analysis
+- `src.simulation.monte_carlo.run_monte_carlo(...)` - Stochastic simulation with random sampling
+- `src.settings.loader.load_scenario(path)` - Loads YAML scenario, returns Scenario dataclass
+- `src.settings.calculations.calculate_pumping_energy(...)` - Well pumping energy requirements
+- `src.policies.get_water_policy(name, **kwargs)` - Factory function to instantiate water policies
 - `BaseWaterPolicy.allocate_water(ctx)` - Policy pattern: takes WaterPolicyContext, returns WaterAllocation
 
 ## Conventions
 
-- **Policy pattern**: Policies are classes with `allocate_*` methods taking context objects, returning allocation results
+- **Policy pattern**: Policies are classes with `allocate_*` or `decide_*` methods taking context dataclasses, returning allocation/decision dataclasses
+- **Factory functions**: Each policy domain has `get_*_policy(name)` for lookup by scenario YAML name
 - **Configuration**: Scenarios reference policies by name; data files referenced via central registry
 - **Layer separation**: Layer 3 cannot modify Layer 1 or Layer 2 during execution
 - **Data format**: CSV files with metadata headers; filename suffixes: `-toy` (synthetic), `-research` (empirical), `-real` (measured)
+- **State management**: Dataclasses for all state; daily records appended to lists; yearly metrics snapshotted at year boundaries
 
 ## Project Context
 
@@ -100,15 +133,15 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 
 - **Run simulation**:
   ```bash
-  python src/results.py settings/scenarios/water_policy_only.yaml
+  python src/simulation/results.py settings/mvp-settings.yaml
   ```
 - **Validate scenario**:
   ```bash
-  python settings/scripts/validation.py settings/scenarios/water_policy_only.yaml
+  python src/settings/validation.py settings/mvp-settings.yaml
   ```
 - **Validate data registry**:
   ```bash
-  python settings/scripts/validation.py --registry
+  python src/settings/validation.py --registry
   ```
 - **Regenerate data**:
   ```bash
@@ -124,14 +157,13 @@ Model is built incrementally per the implementation guide in the model plan:
 1. ✅ Layer 1 libraries (pre-compute physical data) - **COMPLETE**
 2. ✅ Layer 2 configuration (scenarios, policies, data registry) - **COMPLETE**
    - ✅ Scenario loader (YAML → dataclasses)
-   - ✅ Water policies (4 functional policies)
+   - ✅ All 6 policy types implemented (water, energy, food, crop, economic, market)
    - ✅ Data registry system
-   - ⏳ Energy/crop/economic/market policies (stubbed)
 3. ✅ Water simulation MVP - **COMPLETE**
-   - ✅ Daily simulation loop
+   - ✅ Daily simulation loop with energy dispatch
    - ✅ Multi-farm water policy comparison
    - ✅ Yearly metrics and output generation
-   - ✅ Visualization plots
+   - ✅ Visualization plots and interactive notebook
 4. Physical systems (single farm, deterministic)
 5. Scale to 3 farms
 6. Add policies and events
@@ -139,7 +171,7 @@ Model is built incrementally per the implementation guide in the model plan:
 8. Economic system
 9. Multi-year simulation
 10. Stochastic elements
-11. Monte Carlo capability
+11. Monte Carlo capability (framework implemented in `monte_carlo.py`)
 12. Scale to full community (20+ farms)
 13. Scenario comparison and reporting
 

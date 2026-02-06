@@ -1,0 +1,37 @@
+# SOURCE: Barron-Gafford et al. (2019) Nature Sustainability; Marrou et al. (2013a,b) European J. Agronomy / Agricultural & Forest Meteorology; Weselek et al. (2019, 2021) Agronomy for Sustainable Development; Dupraz et al. (2011) Renewable Energy; Dinesh & Pearce (2016) Renewable & Sustainable Energy Reviews; Hatfield & Prueger (2015) Weather & Climate Extremes; Wahid et al. (2007) Environmental & Experimental Botany; FAO crop information; Frontiers in Sustainable Food Systems (2025) zucchini dryland agrivoltaics; MDPI AgriEngineering (2025) tomato agrivoltaic greenhouse Spain; Frontiers in Horticulture (2025) cranberry agrivoltaic shading
+# DATE: 2026-02-05
+# DESCRIPTION: Agri-PV microclimate effects on crop yields by crop and panel density for Sinai Peninsula hot arid conditions (~28N). Values derived from empirical agrivoltaic and shade-agriculture studies, with extrapolation for crop/density combinations lacking direct measurements.
+# UNITS:
+#   - temperature_reduction_C: Average daytime air temperature reduction under panels (degrees Celsius)
+#   - et_reduction_pct: Evapotranspiration reduction under panels (percentage, 0-100)
+#   - par_reduction_pct: PAR (photosynthetically active radiation) reduction under panels (percentage, 0-100)
+#   - net_yield_effect_pct: Net yield change under panels, positive = yield increase (percentage, can be negative)
+#   - heat_stress_threshold_C: Air temperature above which crop experiences yield-reducing heat stress (degrees Celsius)
+# LOGIC: Temperature reduction scales approximately linearly with panel coverage (validated by Marrou 2013b, Barron-Gafford 2019). PAR reduction is roughly proportional to ground coverage ratio but modulated by diffuse light. ET reduction combines lower radiation and cooler temperatures. Net yield effect integrates shade benefit (heat stress relief, water savings) minus light reduction cost; in hot arid climates (>35C peak), shade benefit dominates at low-medium density for most crops. Heat stress thresholds from FAO data, Hatfield & Prueger 2015, and crop-specific studies.
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS:
+#   - Sinai hot arid climate with peak summer temperatures regularly exceeding 40C, meaning shade benefits are near-maximal
+#   - Low density = 30% ground coverage, medium = 50%, high = 80% (fixed-tilt panels at 28 degrees)
+#   - Temperature reduction values are daytime averages; nighttime temperatures may be slightly warmer under panels (Marrou 2013b)
+#   - Net yield effects assume year-round production with significant heat stress days (>100 days/year above crop thresholds)
+#   - Kale net yield effects are strongly positive because it is a cool-season crop that benefits greatly from heat reduction in hot arid climates
+#   - Tomato and cucumber are light-demanding fruiting crops: they benefit from moderate shade in extreme heat but lose yield at high shade due to PAR limitation
+#   - Potato benefits from shade during tuber initiation (heat-sensitive stage) but is moderately light-demanding
+#   - Onion is relatively heat-tolerant but benefits from reduced ET; moderate shade tolerance
+#   - Values marked "estimated" are extrapolated from related crop or shade-level studies; all others have direct or close-analog empirical support
+crop_name,pv_density,temperature_reduction_C,et_reduction_pct,par_reduction_pct,net_yield_effect_pct,heat_stress_threshold_C,source
+tomato,low,1.5,10,18,5,35,Barron-Gafford2019;Marrou2013
+tomato,medium,3.0,18,35,3,35,Barron-Gafford2019;Marrou2013
+tomato,high,4.5,28,55,-12,35,estimated;MDPI-AgriEng2025
+potato,low,1.5,10,18,8,29,Weselek2021;Frontiers2019
+potato,medium,3.0,18,35,11,29,Weselek2021;Frontiers2019
+potato,high,4.5,28,55,-5,29,estimated;Weselek2021
+onion,low,1.5,10,18,3,33,estimated;FAO
+onion,medium,3.0,18,35,0,33,estimated;FAO
+onion,high,4.5,28,55,-10,33,estimated
+kale,low,1.5,10,18,12,27,Weselek2021;Marrou2013
+kale,medium,3.0,18,35,18,27,Weselek2021;Marrou2013
+kale,high,4.5,28,55,5,27,estimated;Marrou2013
+cucumber,low,1.5,10,18,4,35,Barron-Gafford2019;Marrou2013
+cucumber,medium,3.0,18,35,0,35,Barron-Gafford2019;estimated
+cucumber,high,4.5,28,55,-15,35,estimated;FrontiersSusFoodSys2025

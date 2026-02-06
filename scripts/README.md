@@ -1,5 +1,10 @@
 # Scripts
 
-Legacy folder. Data generation scripts have been moved to `data/scripts/`.
+Utility and test scripts for the Community Agri-PV simulation model.
 
-This folder is kept for potential future utility scripts that don't fit elsewhere.
+## Contents
+
+- `test_plot1.py` through `test_plot6.py` - Test scripts for validating individual plot outputs
+- `test_plot2_table1.py`, `test_plot4_table2.py` - Table rendering tests
+
+Data generation scripts are located in `data/scripts/`.
