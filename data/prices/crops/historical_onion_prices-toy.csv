@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data generated for Community Agri-PV model
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Monthly wholesale onion prices (USD/kg) for Egypt/MENA region
 # UNITS: usd_per_kg (USD per kilogram, wholesale)
 # LOGIC: Sinusoidal seasonality (low prices at harvest) + AR(1) persistence + random shocks

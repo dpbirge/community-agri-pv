@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data derived from raw potato prices
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Monthly wholesale packaged potato prices (USD/kg)
 # UNITS: usd_per_kg (USD per kilogram, wholesale)
 # LOGIC: Base crop price x value-add multiplier (1.2-1.4x) with stochastic spread

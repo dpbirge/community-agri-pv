@@ -5,18 +5,18 @@ Documentation for the Community Agri-PV simulation model.
 ## Structure
 
 - **`architecture/`** - Core model specifications (start here)
-  - `community-model-plan.md` - Complete domain model specifications
-  - `mvp-structure.md` - Configuration schema and policy structure
-  - `mvp-calculations.md` - Calculation methodologies and formulas
-  - `data-organization.md` - Data structure and format specifications
+  - `overview.md` - Complete domain model specifications
+  - `structure.md` - Configuration schema and policy structure
+  - `calculations.md` - Calculation methodologies and formulas
+  - `policies.md` - Policy decision rules and pseudocode
+  - `data.md` - Data structure and format specifications
 
 - **`codereview/`** - Code review reports
-  - Calculations vs code verification reports
+  - `calculations-vs-code-review-2026-02-05.md` - Active issue tracker (2 remaining items + deferred)
   - `archive/` - Historical code review documents
 
 - **`planning/`** - Implementation plans and research plans
-  - `code-review-fix-plan-claude-2026-02-05.md` - Current fix plan
-  - `archive/` - Completed planning documents (water simulation, Layer 2 fixes, etc.)
+  - `archive/` - Completed planning documents (water simulation, Layer 2 fixes, code review fix plan, etc.)
 
 - **`prompts/`** - AI assistant prompts for development workflows
   - `RESEARCH_PROMPT.md` - Research data collection instructions (active)
@@ -31,7 +31,7 @@ Documentation for the Community Agri-PV simulation model.
 
 ## Key Documents
 
-Start with `architecture/community-model-plan.md` for the complete model architecture and specifications.
+Start with `architecture/overview.md` for the complete model architecture and specifications.
 
 ## Current Status
 

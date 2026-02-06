@@ -6,11 +6,11 @@
 
 This document defines the configuration schema and policy structure for the community farm simulation model. It serves as the single source of truth for what parameters exist, their valid options, and how they organize into a complete simulation scenario.
 
-There are two main sections: system configurations (static initial conditions) and policies (rule-sets governing simulation behavior). For calculation methodologies and formulas, see `mvp-calculations.md`.
+There are two main sections: system configurations (static initial conditions) and policies (rule-sets governing simulation behavior). For detailed policy rule-sets and pseudocode, see `docs/architecture/policies.md`. For calculation methodologies and formulas, see `docs/architecture/calculations.md`.
 
 ## 2. System configurations
 
-System configurations are static settings that describe initial conditions of a given simulation.
+System configurations are static settings that describe initial conditions for a given simulation.
 
 ### System Financing
 
@@ -59,9 +59,8 @@ All community-owned systems include a `financing_status` parameter that indicate
 
 ### Energy system
 
-**PV (agri-PV):**
+**PV (agri-PV, fixed-tilt):**
 - sys_capacity_kw
-- type: [fixed_tilt, single_axis_tracking, dual_axis_tracking]
 - tilt_angle
 - percent_over_crops
 - density: [low, medium, high]
@@ -71,7 +70,6 @@ All community-owned systems include a `financing_status` parameter that indicate
 **Wind:**
 - sys_capacity_kw
 - type: [small, medium, large]
-- hub_height_m
 - financing_status: [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]
 
 **Battery:**
@@ -82,11 +80,8 @@ All community-owned systems include a `financing_status` parameter that indicate
 
 **Backup generator:**
 - capacity_kw
-- type: [diesel, natural_gas, biodiesel]
+- type: [diesel]
 - financing_status: [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]
-
-**Grid:**
-- pricing_regime: [subsidized, unsubsidized]
 
 ### Food processing system
 
@@ -143,6 +138,7 @@ All community-owned systems include a `financing_status` parameter that indicate
 - planting_date
 - percent_planted
 
+
 ### Economic configuration
 
 - currency: [USD, EGP, EUR]
@@ -153,16 +149,17 @@ All community-owned systems include a `financing_status` parameter that indicate
 ### Pricing configuration
 
 **Water pricing:**
-- municipal_source: [seawater_desalination, piped_nile, piped_groundwater]
+- municipal_source: [seawater_desalination, piped_groundwater]
 - pricing_regime: [subsidized, unsubsidized]
 - subsidized.use_tier: [1, 2, 3]
 - unsubsidized.base_price_usd_m3
 - unsubsidized.annual_escalation_pct
 
 **Energy pricing:**
-- grid.pricing_regime: [subsidized, unsubsidized]
-- renewable.lcoe_pv_usd_kwh
-- renewable.lcoe_wind_usd_kwh
+- pricing_regime: [subsidized, unsubsidized]
+- subsidized.use_peak_offpeak: [true, false]
+- unsubsidized.base_price_usd_kwh
+- unsubsidized.annual_escalation_pct
 
 ## 3. Policies
 
@@ -197,7 +194,7 @@ All policy modules follow the same pattern: a context dataclass (input), a decis
 
 Each farm selects a water source allocation strategy. The policy is instantiated during scenario loading and called daily in the simulation loop via `execute_water_policy()`.
 
-> **Detailed documentation:** See `mvp-policies.md` Section 2 for complete implementation details including context/output dataclass fields, helper methods, pseudocode, and usage examples.
+> **Detailed documentation:** See `policies.md` Section 2 for complete implementation details including context/output dataclass fields, helper methods, pseudocode, and usage examples.
 
 **Options:** [always_groundwater, always_municipal, cheapest_source, conserve_groundwater, quota_enforced]
 
@@ -236,7 +233,7 @@ Three dispatch strategies are defined. Currently, `dispatch_energy()` in `simula
 
 **Context → Decision:** `EnergyPolicyContext` → `EnergyAllocation`
 
-> See **`mvp-policies.md` Section 3** for complete policy specifications, dataclass definitions, pseudocode, implementation status, and integration requirements.
+> See **`policies.md` Section 3** for complete policy specifications, dataclass definitions, pseudocode, implementation status, and integration requirements.
 
 ### Crop (irrigation) policies — implemented, not yet integrated
 
@@ -244,7 +241,7 @@ Three dispatch strategies are defined. Currently, `dispatch_energy()` in `simula
 
 **Context → Decision:** `CropPolicyContext` → `CropDecision`
 
-See `mvp-policies.md` Section 5 for full policy specifications, pseudocode, and integration requirements.
+See `policies.md` Section 5 for full policy specifications, pseudocode, and integration requirements.
 
 ### Economic policies — implemented, not yet integrated
 
@@ -252,7 +249,7 @@ See `mvp-policies.md` Section 5 for full policy specifications, pseudocode, and 
 
 **Context → Decision:** `EconomicPolicyContext` → `EconomicDecision`
 
-> See **`mvp-policies.md` Section 6** for complete policy specifications, dataclass definitions, pseudocode, and integration requirements.
+> See **`policies.md` Section 6** for complete policy specifications, dataclass definitions, pseudocode, and integration requirements.
 
 ### Market (sales) policies — implemented, not yet integrated
 
@@ -262,7 +259,7 @@ Four sale timing strategies are defined. Currently, crops are sold immediately a
 
 **Context → Decision:** `MarketPolicyContext` → `MarketDecision` (sell_fraction, store_fraction, process_fraction, target_price_per_kg)
 
-> See **`mvp-policies.md` Section 7** for complete policy specifications, dataclass definitions, pseudocode, and integration requirements.
+> See **`policies.md` Section 7** for complete policy specifications, dataclass definitions, pseudocode, and integration requirements.
 
 ### Not yet implemented
 
@@ -277,7 +274,7 @@ The following policy-related features from the model plan have no code:
 
 ## 4. Metrics
 
-Metrics are computed at daily, monthly, and yearly granularity. Farm-level and community-level aggregations are provided separately. Units shown in brackets. Metrics tagged *(resilience)* are also used as inputs to the resilience and survivability analysis suite (see Resilience metrics). See `mvp-calculations.md` for formulas.
+Metrics are computed at daily, monthly, and yearly granularity. Farm-level and community-level aggregations are provided separately. Units shown in brackets. Metrics tagged *(resilience)* are also used as inputs to the resilience and survivability analysis suite (see Resilience metrics). See `calculations.md` for formulas.
 
 ### Water metrics
 

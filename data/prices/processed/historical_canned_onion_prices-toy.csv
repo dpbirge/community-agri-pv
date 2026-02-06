@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data derived from raw onion prices
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Monthly wholesale canned onion prices (USD/kg)
 # UNITS: usd_per_kg (USD per kilogram, wholesale)
 # LOGIC: Base crop price x value-add multiplier (1.5-2.0x) with stochastic spread

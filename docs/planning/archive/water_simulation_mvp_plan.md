@@ -78,7 +78,7 @@ The `cheapest_source` policy dynamically selects based on this daily comparison.
 ```yaml
 # Water pricing configuration
 water_pricing:
-  municipal_source: seawater_desalination  # seawater_desalination or piped_nile
+  municipal_source: seawater_desalination  # seawater_desalination or piped_groundwater
   pricing_regime: unsubsidized  # subsidized or unsubsidized
   subsidized:
     use_tier: 3  # Tier 1/2/3 from research data

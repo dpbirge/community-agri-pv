@@ -1,0 +1,43 @@
+# SOURCE: Egyptian Ministry of Agriculture crop calendars; FAO Crop Calendar Platform
+#   - FAO Crop Calendar: https://cropcalendar.apps.fao.org/
+#   - FAO Crop Water Requirements: https://www.fao.org/4/s2022e/s2022e07.htm
+#   - FAO Crop Information (tomato, potato): https://www.fao.org/land-water/databases-and-software/crop-information/
+#   - Gaara Seeds Egypt (tomato seasons): https://gaaraseeds.com/en/blog/tomato-varieties-in-egypt/
+#   - PotatoPro Egypt: https://www.potatopro.com/potato-markets/egypt
+#   - Tridge Egypt (onion): https://www.tridge.com/intelligences/onion/EG/season
+#   - Middle East J. Agriculture Research (onion): https://www.curresweb.com/index.php/MEJAR1/article/view/584/563
+#   - HEIA Egypt Crop Calendar: https://heiaegypt.org/egypt-crop-calendar/
+# DATE: 2026-02-06
+# DESCRIPTION: Planting windows for 5 crops in Sinai Peninsula hot arid climate (~28N, 34E).
+#   Dates are transplanting/field dates (not nursery sowing dates). Multiple windows per crop
+#   reflect year-round irrigation capability and Egyptian three-season agriculture
+#   (winter/shitawi, summer/seifi, nili). Agri-PV shading noted where it extends viability.
+# UNITS:
+#   - planting_date_mmdd: Planting date in MM-DD format (year set by simulation)
+#   - expected_season_length_days: Days from planting to final harvest
+# LOGIC: Windows selected from Egyptian agricultural practice for warm arid regions (Upper Egypt,
+#   Sinai). Summer plantings (Jun-Aug) excluded for heat-sensitive crops. Potato excluded from
+#   Apr-Jun due to tuber inhibition above 30C. Onion aligned with Egyptian short-day variety
+#   production calendar (Oct nursery -> Dec transplant). Kale spring window requires agri-PV shade.
+# DEPENDENCIES: crop_coefficients-research.csv (season lengths should be consistent)
+# ASSUMPTIONS: Drip irrigation available year-round; brackish groundwater desalination; agri-PV
+#   fixed-tilt 28 degrees provides partial shading for secondary windows
+crop,planting_date_mmdd,season_label,window_type,expected_season_length_days,notes
+tomato,02-15,winter-spring,primary,135,Early-maturing varieties; highest quality window; warm region timing
+tomato,04-01,spring,primary,135,Main national production season; optimal temperatures for fruit set
+tomato,08-01,nili,secondary,120,Heat-resistant varieties required; reduced yields 10-15%; ensures winter supply
+tomato,11-01,fall-winter,primary,135,Warm arid regions; cold-tolerant varieties needed for late-season growth
+potato,09-15,fall,primary,120,Export-quality nili season; tuber formation in cooling temps; Sep-Jan harvest
+potato,11-15,winter,primary,120,Second winter planting wave; harvest Mar-Apr; reliable yields
+potato,01-15,winter-spring,secondary,110,Domestic market; good yields; risk of late-season heat stress on tubers
+onion,12-01,fall-winter,primary,150,Main Egyptian season; transplanted from Oct nursery; short-day Giza 20/Beheri varieties
+onion,01-15,winter,primary,150,Second transplanting wave from Nov nursery; harvest Jun; reliable yields
+onion,04-01,spring,secondary,130,Green/spring onions primarily; heat stress reduces dry bulb quality
+kale,10-01,fall,primary,85,Cool season onset; good growth; harvest Dec-Jan
+kale,12-01,winter,primary,85,Peak quality; mild Sinai winter temps 17-21C; harvest Feb-Mar
+kale,02-01,winter-spring,primary,85,Good quality before heat onset; harvest Apr-May
+kale,03-15,spring,secondary,75,Only recommended under agri-PV shading; heat-tolerant variety required
+cucumber,02-15,winter-spring,primary,95,Best quality; moderate temps during fruit set; Feb-May harvest
+cucumber,04-01,spring,secondary,85,Good yields but heat stress risk late in season; may produce bitter fruit above 35C
+cucumber,09-01,fall,primary,95,Excellent window; declining temps through season; good fruit quality
+cucumber,10-15,fall-winter,secondary,95,Good quality; risk of cool nights slowing growth in late season

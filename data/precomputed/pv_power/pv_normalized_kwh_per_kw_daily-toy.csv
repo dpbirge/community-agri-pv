@@ -1,5 +1,5 @@
 # SOURCE: Computed from weather data using simplified PV model
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Normalized daily PV power output per kW of installed capacity for three agri-PV density variants (low/medium/high ground coverage)
 # UNITS: date=YYYY-MM-DD, density_variant=text, kwh_per_kw_per_day=kWh/kW/day, capacity_factor=dimensionless(0-1)
 # LOGIC: PV output = solar_irradiance * tilt_factor(1.05) * temp_factor * (1-system_losses). Temp factor uses cell temp model: T_cell = T_avg + 25C + density_adjustment. Temperature coefficient = -0.4%/C from 25C reference. System losses = 15%.

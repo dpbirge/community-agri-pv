@@ -51,7 +51,6 @@ water_system:
 energy_system:
   pv:
     sys_capacity_kw: 500
-    type: fixed_tilt
     tilt_angle: 28
     percent_over_crops: 0.50
     density: medium
@@ -61,7 +60,6 @@ energy_system:
   wind:
     sys_capacity_kw: 100
     type: small
-    hub_height_m: 15
     financing_status: grant_full
 
   battery:
@@ -74,9 +72,6 @@ energy_system:
     capacity_kw: 50
     type: diesel
     financing_status: purchased_cash
-
-  grid:
-    pricing_regime: subsidized
 
 # ============================================================================
 # FOOD PROCESSING SYSTEM
@@ -145,24 +140,24 @@ community_structure:
       
       crops:
         - name: tomato
-          area_fraction: 0.30
-          planting_date: "02-15"
+          area_fraction: 0.20
+          planting_dates: ["02-15", "04-01"]
           percent_planted: 0.90
         - name: potato
-          area_fraction: 0.25
-          planting_date: "01-15"
+          area_fraction: 0.20
+          planting_dates: ["09-15", "11-15"]
           percent_planted: 0.85
         - name: onion
           area_fraction: 0.20
-          planting_date: "09-15"
+          planting_dates: ["12-01", "01-15"]
           percent_planted: 0.90
         - name: kale
-          area_fraction: 0.15
-          planting_date: "10-01"
+          area_fraction: 0.20
+          planting_dates: ["10-01", "12-01"]
           percent_planted: 0.85
         - name: cucumber
-          area_fraction: 0.10
-          planting_date: "03-01"
+          area_fraction: 0.20
+          planting_dates: ["02-15", "09-01"]
           percent_planted: 0.80
 
 # ============================================================================
@@ -225,7 +220,12 @@ water_pricing:
 energy_pricing:
   grid:
     pricing_regime: subsidized
-  
+    subsidized:
+      use_peak_offpeak: false
+    unsubsidized:
+      base_price_usd_kwh: 0.15
+      annual_escalation_pct: 3.0
+
   renewable:
     lcoe_pv_usd_kwh: 0.08
     lcoe_wind_usd_kwh: 0.10

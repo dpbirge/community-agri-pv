@@ -1,8 +1,8 @@
-# Code Review: mvp-calculations.md vs src/ Implementation
+# Code Review: calculations.md vs src/ Implementation
 
 **Reviewer:** claude (AI assistant)
 **Date:** 2026-02-05
-**Scope:** `docs/architecture/mvp-calculations.md` (doc) vs `src/` codebase (code)
+**Scope:** `docs/architecture/calculations.md` (doc) vs `src/` codebase (code)
 **Methodology:** Section-by-section comparison of documented formulas against implementation
 
 ## Status
@@ -11,7 +11,7 @@ The initial review identified items across three categories: doc updates needed,
 
 ### Completed
 
-- Doc updates: pumping energy constants, treatment energy lookup, irrigation efficiency note, K_y values, tiered pricing, QuotaEnforced policy, revenue concentration metric, sensitivity analysis, crop diversity basis — all applied to `mvp-calculations.md`
+- Doc updates: pumping energy constants, treatment energy lookup, irrigation efficiency note, K_y values, tiered pricing, QuotaEnforced policy, revenue concentration metric, sensitivity analysis, crop diversity basis — all applied to `calculations.md`
 - Code fixes: PV degradation multiplier (`simulation.py`), processing availability factor (`calculations.py`) — applied and lint-clean
 
 ---
@@ -20,7 +20,7 @@ The initial review identified items across three categories: doc updates needed,
 
 ### 1. Aquifer Drawdown Feedback — Medium priority, Medium effort
 
-**Section:** mvp-calculations.md Section 2.9
+**Section:** calculations.md Section 2.9
 **Status:** Documented but not implemented
 
 The doc specifies a linearized drawdown model where cumulative extraction increases effective pumping head over time, creating a feedback loop to pumping energy cost:
@@ -47,7 +47,7 @@ E_pump(year) = Effective_head(year) / (367.0 × η_pump)
 
 ### 2. Crop Diversity Index Weighting — Low priority, Low effort
 
-**Section:** mvp-calculations.md Section 4.5
+**Section:** calculations.md Section 4.5
 **Status:** Code uses area-based proportions; doc suggests yield or revenue weighting is more meaningful
 
 Currently the Shannon diversity index is computed on planted area. The doc notes "revenue-weighted is more meaningful for economic resilience."

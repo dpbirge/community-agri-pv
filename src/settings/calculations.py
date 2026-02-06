@@ -145,7 +145,7 @@ def calculate_wind_config(scenario: Scenario) -> Dict[str, Any]:
         "turbine_count": turbine_count,
         "turbine_capacity_kw": rated_capacity_kw,
         "actual_capacity_kw": actual_capacity_kw,
-        "hub_height_m": wind_config.hub_height_m,
+        "hub_height_m": turbine_data["hub_height_m"],
         "rotor_diameter_m": turbine_data["rotor_diameter_m"],
         "cut_in_speed_ms": turbine_data["cut_in_speed_ms"],
         "rated_speed_ms": turbine_data["rated_speed_ms"],
@@ -488,7 +488,7 @@ def calculate_processing_category_specs(category_config, expected_category: str)
     equipment_specs = _load_equipment_specs()
 
     # Standard industrial availability factor: accounts for maintenance downtime,
-    # cleaning, and unplanned outages. Per mvp-calculations.md §6.1.
+    # cleaning, and unplanned outages. Per calculations.md §6.1.
     EQUIPMENT_AVAILABILITY = 0.90  # 90% uptime
 
     total_capacity = 0.0
@@ -575,6 +575,51 @@ def calculate_household_demand(community_config, housing_data_path: str = None) 
     }
 
 
+def calculate_community_building_demand(community_config, building_data_path: str = None) -> Dict[str, float]:
+    """Calculate community building energy and water demand.
+
+    Community buildings include offices, storage/warehouse, meeting halls, and workshops.
+
+    Args:
+        community_config: Community configuration with building square footage
+        building_data_path: Path to building specs CSV (uses default if None)
+
+    Returns:
+        Dict with total_energy_kwh_day, total_water_m3_day, breakdown by building type
+    """
+    community_buildings_m2 = community_config.community_buildings_m2
+
+    # If no community buildings specified, return zero demand
+    if community_buildings_m2 <= 0:
+        return {
+            "total_area_m2": 0.0,
+            "total_energy_kwh_day": 0.0,
+            "total_water_m3_day": 0.0,
+        }
+
+    # Load building specifications
+    if building_data_path is None:
+        building_data_path = _get_data_path("community", "buildings")
+
+    building_data = _load_csv_with_metadata(building_data_path)
+
+    # Calculate weighted average energy and water per m² across all building types
+    # Using equal weighting across building types for simplicity
+    avg_energy_per_m2 = building_data["kwh_per_m2_per_day"].mean()
+    avg_water_per_m2 = building_data["m3_per_m2_per_day"].mean()
+
+    total_energy = community_buildings_m2 * avg_energy_per_m2
+    total_water = community_buildings_m2 * avg_water_per_m2
+
+    return {
+        "total_area_m2": community_buildings_m2,
+        "total_energy_kwh_day": total_energy,
+        "total_water_m3_day": total_water,
+        "energy_per_m2_kwh_day": avg_energy_per_m2,
+        "water_per_m2_m3_day": avg_water_per_m2,
+    }
+
+
 def calculate_infrastructure(scenario: Scenario) -> Dict[str, Any]:
     """Main function to calculate all infrastructure parameters.
     
@@ -645,7 +690,10 @@ def calculate_infrastructure(scenario: Scenario) -> Dict[str, Any]:
         ),
     }
 
-    results["community"] = calculate_household_demand(scenario.community)
+    results["community"] = {
+        "household": calculate_household_demand(scenario.community),
+        "buildings": calculate_community_building_demand(scenario.community),
+    }
 
     return results
 

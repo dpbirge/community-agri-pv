@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data based on Egyptian water authority pricing trends
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Monthly municipal water prices for agricultural bulk users in Egypt
 # UNITS: usd_per_m3 (USD per cubic meter), egp_per_m3_original (Egyptian Pounds)
 # LOGIC: Base rates increase with water scarcity management policy, slight seasonal variation (summer premium)

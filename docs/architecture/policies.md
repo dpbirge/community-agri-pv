@@ -4,8 +4,8 @@
 
 This document defines the **policy decision rules** implemented in `src/policies/`. Policies are Layer 2 configuration components that determine how the simulation makes decisions about resource allocation, infrastructure use, and operational strategies.
 
-For **calculation methodologies** (formulas, parameters, dependencies), see `mvp-calculations.md`.  
-For **configuration structure** (what parameters exist and their valid options), see `mvp-structure.md`.
+For **calculation methodologies** (formulas, parameters, dependencies), see `calculations.md`.
+For **configuration structure** (what parameters exist and their valid options), see `structure.md`.
 
 **Policy Pattern:**
 - Each policy domain has a base class (`BaseWaterPolicy`, `BaseEnergyPolicy`, etc.)
@@ -766,7 +766,7 @@ END FUNCTION
 
 **Policy Name:** `balanced`
 
-**Purpose:** Balanced mix of fresh and processed per mvp-calculations.md specifications. Provides a moderate level of value-add processing while keeping half the harvest for immediate fresh sale.
+**Purpose:** Balanced mix of fresh and processed per calculations.md specifications. Provides a moderate level of value-add processing while keeping half the harvest for immediate fresh sale.
 
 **Pseudocode:**
 ```
@@ -1596,8 +1596,8 @@ This metadata enables:
 - `src/policies/market_policies.py` - Market timing (4 policies)
 
 **Related Documentation:**
-- `mvp-structure.md` - Configuration schema and policy structure
-- `mvp-calculations.md` - Calculation methodologies (formulas, parameters)
-- `community-model-plan.md` - Complete model domain specifications
+- `structure.md` - Configuration schema and policy structure
+- `calculations.md` - Calculation methodologies (formulas, parameters)
+- `overview.md` - Complete model domain specifications
 
 **Total Policies:** 23 policies across 6 domains

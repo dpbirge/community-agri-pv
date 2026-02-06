@@ -13,9 +13,9 @@ Improve the realism of the Community Agri-PV simulation datasets by researching 
 
 ## Reference Documents
 Read these files before starting:
-1. `docs/planning/data-realism-research-plan.md` - Full research task specifications
-2. `docs/validation/data_generation_validation_report.md` - Identified research gaps
-3. `docs/planning/data-organization.md` - File format specifications
+1. `docs/planning/archive/data-realism-research-plan.md` - Full research task specifications
+2. `docs/validation/_archive/data_generation_validation_report.md` - Identified research gaps
+3. `docs/architecture/data.md` - File format specifications
 
 ## Research Tasks (Launch in Parallel)
 

@@ -1,0 +1,14 @@
+# SOURCE: NREL Cost of Wind Energy Review 2024, Bergey Windpower field data (Wisconsin Power & Light 5-year study), PNNL Distributed Wind Market Report 2024
+# DATE: 2026-02-06
+# DESCRIPTION: Research-grade annual operating and maintenance costs for wind turbines matched to wind_turbines-research.csv models
+# UNITS: USD per unit as specified in cost_metric column
+# LOGIC: NREL benchmark O&M for all distributed wind is $39/kW/yr (2024). Bergey measured O&M dramatically lower ($3.60/kW/yr) due to 4 moving parts and no gearbox. Eocycle direct-drive design expected similar to Bergey. Larger turbines with gearboxes trend toward the benchmark.
+# DEPENDENCIES: wind_turbines-research.csv, capital_costs-research.csv
+# ASSUMPTIONS: (1) All costs in 2024 USD, (2) Desert environment adds 10-20% to baseline for dust/heat, (3) Bergey measured data from Wisconsin (moderate climate) — Sinai conditions may increase slightly, (4) NREL $39/kW includes insurance and monitoring overhead that may not apply to all installations
+# DATA_QUALITY: HIGH for Bergey (5-year measured field study). MEDIUM for Eocycle/50kW class (estimated from NREL benchmarks).
+# COMPARISON_TO_TOY: Toy values ($45/$38/$32 per kW/yr) are in the right range for the NREL benchmark ($39/kW/yr) but don't reflect the wide variation between simple direct-drive (Bergey ~$4/kW/yr) and geared machines (~$40/kW/yr).
+#
+equipment_type,cost_metric,usd_per_unit,description,source
+wind_turbine_bergey_excel_10,per_kw_per_year,5,Measured: $0.0026/kWh from WPL 5-year study (~$36/yr for 10kW). No gearbox — 4 moving parts. Biannual inspection + blade tape every 4-5yr. Desert adj +40%,Bergey Windpower / Wisconsin Power & Light field study
+wind_turbine_eocycle_eo25,per_kw_per_year,12,Estimated: direct-drive permanent magnet (no gearbox) like Bergey but larger — more bearing/electrical maintenance. 30-year design life suggests low O&M,NREL benchmark adjusted for gearless design
+wind_turbine_50kw_class,per_kw_per_year,35,NREL distributed wind benchmark $39/kW/yr. 50kW machines typically have gearboxes — higher mechanical maintenance. Includes scheduled preventive maintenance and vibration monitoring,NREL Cost of Wind Energy Review 2024

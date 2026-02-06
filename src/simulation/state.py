@@ -76,7 +76,7 @@ class AquiferState:
     The max_drawdown_m field enables pumping energy feedback: as the aquifer
     depletes, the effective pumping head increases linearly with the fraction
     depleted, making pumping progressively more expensive over multi-year
-    simulations. See mvp-calculations.md Section 2 "Aquifer Drawdown Feedback".
+    simulations. See calculations.md Section 2 "Aquifer Drawdown Feedback".
     """
     exploitable_volume_m3: float
     recharge_rate_m3_yr: float
@@ -108,7 +108,7 @@ class AquiferState:
     def get_effective_head_m(self, base_well_depth_m: float) -> float:
         """Calculate effective pumping head including drawdown.
 
-        Uses linearized drawdown model from mvp-calculations.md:
+        Uses linearized drawdown model from calculations.md:
             Fraction_depleted = cumulative_extraction / exploitable_volume
             Drawdown_m = max_drawdown_m * Fraction_depleted
             Effective_head = well_depth_m + Drawdown_m
@@ -146,7 +146,7 @@ class WaterStorageState:
     """Tracks water storage level between treatment and irrigation.
 
     Community-level shared infrastructure: one treatment plant serves all farms.
-    Per architecture spec (mvp-calculations.md section 2.5):
+    Per architecture spec (calculations.md section 2.5):
         Storage(t+1) = Storage(t) + Inflow(t) - Outflow(t)
         Constraints: 0 <= Storage(t) <= capacity_m3
 
@@ -179,13 +179,24 @@ class WaterStorageState:
         self.current_level_m3 -= actual_drawn
         return actual_drawn
 
-    def record_daily(self, current_date, inflow_m3, outflow_m3):
-        """Record daily storage state for metrics tracking."""
+    def record_daily(self, current_date, inflow_m3, outflow_m3, household_m3=0.0, community_building_m3=0.0):
+        """Record daily storage state for metrics tracking.
+
+        Args:
+            current_date: Simulation date
+            inflow_m3: Water treated and added to storage (irrigation + community needs)
+            outflow_m3: Water distributed from storage (irrigation + community needs)
+            household_m3: Household water consumption (subset of outflow)
+            community_building_m3: Community building water consumption (subset of outflow)
+        """
         self.daily_levels.append({
             "date": current_date,
             "storage_level_m3": self.current_level_m3,
             "inflow_m3": inflow_m3,
             "outflow_m3": outflow_m3,
+            "irrigation_m3": outflow_m3 - household_m3 - community_building_m3,
+            "household_m3": household_m3,
+            "community_building_m3": community_building_m3,
             "utilization_pct": (
                 self.current_level_m3 / self.capacity_m3 * 100
                 if self.capacity_m3 > 0 else 0.0
@@ -533,6 +544,33 @@ def initialize_crop_state(farm_crop_config, farm_area_ha, simulation_year, data_
     return crop_state
 
 
+def _check_planting_overlap(crops, farm_id):
+    """Check that no two plantings of the same crop overlap in time.
+
+    Two plantings overlap if one's growing season [planting_date, harvest_date]
+    intersects another's. This would mean the same land is double-booked.
+
+    Raises:
+        ValueError: If overlapping plantings are found.
+    """
+    from collections import defaultdict
+    by_name = defaultdict(list)
+    for crop in crops:
+        by_name[crop.crop_name].append(crop)
+
+    for crop_name, plantings in by_name.items():
+        sorted_plantings = sorted(plantings, key=lambda c: c.planting_date)
+        for i in range(len(sorted_plantings) - 1):
+            current = sorted_plantings[i]
+            next_planting = sorted_plantings[i + 1]
+            if current.harvest_date >= next_planting.planting_date:
+                raise ValueError(
+                    f"Farm {farm_id}: overlapping {crop_name} plantings — "
+                    f"{current.planting_date} harvests {current.harvest_date}, "
+                    f"but next planting starts {next_planting.planting_date}"
+                )
+
+
 def initialize_farm_state(farm_config, simulation_year, data_loader):
     """Initialize FarmState from scenario farm configuration.
 
@@ -552,6 +590,8 @@ def initialize_farm_state(farm_config, simulation_year, data_loader):
         )
         if crop_state is not None:
             crops.append(crop_state)
+
+    _check_planting_overlap(crops, farm_config.id)
 
     return FarmState(
         farm_id=farm_config.id,

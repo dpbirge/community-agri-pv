@@ -12,7 +12,7 @@ This document defines the data folder structure for the community agri-PV model.
 
 1. **Layer-aligned structure**: Data organization mirrors the computational layers
 2. **Time-series vs parameters**: Fundamentally different data types in separate locations
-3. **Filename suffixes**: Use `-toy` or `-real` to indicate data source/quality
+3. **Filename suffixes**: Use `-toy`, `-research`, or `-real` to indicate data source/quality
 4. **Embedded metadata**: All data files include header comments with source, units, dependencies, logic
 5. **Human-readable formats**: CSV for all data files
 6. **Iterative improvement**: Start with toy data, progressively replace with researched estimates, then empirical/simulated data
@@ -99,7 +99,7 @@ precomputed/
 # SOURCE: Synthetic weather generator based on hot arid climate assumptions
 # DATE: 2026-02-02
 # DESCRIPTION: Daily weather data for scenario 001 - baseline hot arid year
-# LOCATION: Generic hot arid region (future: Saudi Arabia, UAE, or US Southwest)
+# LOCATION: Sinai Peninsula, Egypt (~28°N, 34°E)
 # UNITS: temp_max_c (Celsius), temp_min_c (Celsius), solar_irradiance_kwh_m2 (kWh/m²/day), wind_speed_ms (m/s), precip_mm (mm/day)
 # LOGIC: Synthetic generation with seasonal patterns - low rainfall, high temps, high solar
 # DEPENDENCIES: None (base input)
@@ -165,6 +165,7 @@ parameters/
 │   ├── pv_systems-toy.csv                     # Module efficiency, temp coefficient, degradation, lifespan
 │   ├── batteries-toy.csv                      # Capacity, charge/discharge efficiency, cycle life, DOD limits
 │   ├── wind_turbines-toy.csv                  # Power curve parameters, cut-in/cut-out speeds, capacity
+│   ├── wind_turbines-research.csv             # Research-grade specs: Bergey Excel 10, Eocycle EO25, Endurance E-3120
 │   ├── water_treatment-toy.csv                # Desalination energy per m³, capacity, capex, opex
 │   ├── water_treatment-research.csv           # Research-grade BWRO treatment parameters
 │   ├── wells-toy.csv                          # Well depth, flow rate, pump efficiency
@@ -195,8 +196,9 @@ parameters/
 │
 └── costs/
     ├── capital_costs-toy.csv                  # Capex by equipment type ($/kW, $/kWh, $/m³/day, etc.)
-    ├── capital_costs-research.csv             # Research-grade capital costs
-    └── operating_costs-toy.csv                # Opex rates by equipment type ($/kW/year, etc.)
+    ├── capital_costs-research.csv             # Research-grade capital costs (model-specific wind turbine pricing)
+    ├── operating_costs-toy.csv                # Opex rates by equipment type ($/kW/year, etc.)
+    └── operating_costs-research.csv           # Research-grade O&M costs (wind: Bergey measured, NREL benchmarks)
 ```
 
 #### Crop Coefficients File Format Example
@@ -351,7 +353,7 @@ The settings folder contains the scenario YAML file and the central data registr
 
 **Current scenario file**: `settings/mvp-settings.yaml`
 
-The scenario YAML structure uses `_system` suffixes for infrastructure sections (`water_system`, `energy_system`, `food_processing_system`) and references policies by name. See `mvp-structure.md` for the full schema.
+The scenario YAML structure uses `_system` suffixes for infrastructure sections (`water_system`, `energy_system`, `food_processing_system`) and references policies by name. See `structure.md` for the full schema.
 
 **Data registry**: `settings/data_registry.yaml` maps logical data keys (e.g., `weather.scenario_001`) to file paths. The `SimulationDataLoader` uses this registry to resolve data at runtime.
 
@@ -370,7 +372,7 @@ src/policies/
 └── market_policies.py        # 4 sale timing policies (not yet integrated)
 ```
 
-Policies are selected by name in the scenario YAML and instantiated during scenario loading. See `mvp-structure.md` Section 3 for the full policy catalog and integration status.
+Policies are selected by name in the scenario YAML and instantiated during scenario loading. See `structure.md` Section 3 for the full policy catalog and integration status.
 
 ---
 
@@ -646,6 +648,6 @@ Model includes:
 
 ## References
 
-- Community Farm Model Specifications: `docs/planning/community-model-plan.md`
+- Community Farm Model Specifications: `docs/architecture/overview.md`
 - FAO Irrigation and Drainage Paper 56: http://www.fao.org/3/x0490e/x0490e00.htm
 - NREL PV Performance Data: https://www.nrel.gov/grid/solar-resource/

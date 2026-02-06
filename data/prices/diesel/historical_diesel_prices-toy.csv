@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data based on Egyptian petroleum authority and global oil prices
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Monthly diesel fuel prices in Egypt
 # UNITS: usd_per_liter (USD per liter), egp_per_liter_original (Egyptian Pounds)
 # LOGIC: Base EGP rates follow subsidy removal program, modulated by global Brent crude price trends

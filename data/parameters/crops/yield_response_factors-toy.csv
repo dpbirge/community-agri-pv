@@ -1,0 +1,13 @@
+# SOURCE: Simplified from FAO Irrigation and Drainage Paper No. 33
+# DATE: 2026-02-06
+# DESCRIPTION: FAO yield response factors (Ky) for water stress calculations (toy dataset)
+# UNITS: ky_whole_season (dimensionless) — yield sensitivity to water deficit
+# LOGIC: Y_actual = Y_potential × (1 - Ky × (1 - ET_actual / ET_crop))
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS: Simplified values for testing and development
+crop_name,ky_whole_season,source,notes
+tomato,1.05,FAO Paper 33,
+potato,1.10,FAO Paper 33,
+onion,1.10,FAO Paper 33,
+kale,0.95,FAO Paper 33 cabbage proxy,
+cucumber,0.90,Estimated,Simplified for toy dataset

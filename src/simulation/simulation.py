@@ -137,7 +137,7 @@ def build_water_policy_context(
         aquifer_state: Optional AquiferState for dynamic pumping head calculation.
             When provided and max_drawdown_m > 0, the effective pumping depth increases
             with cumulative extraction per the linearized drawdown model
-            (mvp-calculations.md Section 2).
+            (calculations.md Section 2).
 
     Returns:
         WaterPolicyContext
@@ -321,63 +321,42 @@ def process_harvests(farm_state, current_date, data_loader, farm_config=None):
     Applies the farm's food processing policy to determine how harvested crop
     is split across fresh/packaged/canned/dried pathways. Each pathway has
     different weight loss, post-harvest loss, and value multiplier characteristics
-    per mvp-calculations.md Section 4 and Section 6.
+    loaded from CSV data files via data_loader.
+
+    All crop-specific coefficients are loaded from CSV files:
+    - Ky (yield response factors): yield_response_factors CSV
+    - Weight loss by pathway: processing_specs CSV
+    - Value-add multipliers: processing_specs CSV
+    - Post-harvest loss by pathway: post_harvest_losses CSV
 
     When farm_config is None or has no food_policy, defaults to AllFresh behavior
-    (100% fresh sale), which is identical to the pre-food-processing code path.
+    (100% fresh sale).
 
     Args:
         farm_state: FarmState to check
         current_date: Current simulation date
-        data_loader: SimulationDataLoader for price lookup
+        data_loader: SimulationDataLoader for price and parameter lookup
         farm_config: Optional Farm config with food_policy attribute
 
     Returns:
         list: Harvested CropState objects
     """
-    # FAO yield response factors (Ky) — crop sensitivity to water deficit.
-    # From FAO Irrigation and Drainage Paper No. 33 (Doorenbos & Kassam, 1979).
-    # Higher Ky means greater yield loss per unit of water deficit.
-    KY_VALUES = {
-        "tomato": 1.05,
-        "potato": 1.10,
-        "onion": 1.10,
-        "kale": 0.95,   # approximate, leafy greens
-        "cucumber": 0.90,
-    }
-
-    # Weight loss by processing type (from mvp-calculations.md Section 4).
-    # Fresh has 0% weight loss; dried loses most water weight.
-    WEIGHT_LOSS = {
-        "tomato":   {"fresh": 0.00, "packaged": 0.03, "canned": 0.15, "dried": 0.88},
-        "potato":   {"fresh": 0.00, "packaged": 0.03, "canned": 0.15, "dried": 0.78},
-        "onion":    {"fresh": 0.00, "packaged": 0.03, "canned": 0.15, "dried": 0.80},
-        "kale":     {"fresh": 0.00, "packaged": 0.03, "canned": 0.15, "dried": 0.82},
-        "cucumber": {"fresh": 0.00, "packaged": 0.03, "canned": 0.15, "dried": 0.92},
-    }
-
-    # Value-add multiplier: processed price = fresh price × multiplier
-    VALUE_MULTIPLIER = {"fresh": 1.0, "packaged": 1.25, "canned": 1.80, "dried": 3.50}
-
     harvested = []
     for crop in farm_state.crops:
         if not crop.is_harvested and crop.harvest_date <= current_date:
-            # Harvest this crop
             crop.is_harvested = True
 
-            # Apply FAO water production function for water stress (C3 fix).
-            # Formula: Y_actual = Y_potential × (1 - Ky × (1 - ET_actual / ET_crop))
-            # where ET_actual/ET_crop ≈ cumulative_water_m3 / expected_total_water_m3
+            # Apply FAO water production function for water stress.
+            # Y_actual = Y_potential × (1 - Ky × (1 - ET_actual / ET_crop))
             if crop.expected_total_water_m3 > 0:
                 water_ratio = min(1.0, crop.cumulative_water_m3 / crop.expected_total_water_m3)
             else:
-                water_ratio = 1.0  # No water needed → no stress
+                water_ratio = 1.0
 
-            ky = KY_VALUES.get(crop.crop_name, 1.0)
+            ky = data_loader.get_ky_value(crop.crop_name)
             stress_factor = 1.0 - ky * (1.0 - water_ratio)
-            stress_factor = max(0.0, min(1.0, stress_factor))  # Clamp to [0, 1]
+            stress_factor = max(0.0, min(1.0, stress_factor))
 
-            # expected_total_yield_kg already incorporates yield_factor from farm config
             crop.harvest_yield_kg = crop.expected_total_yield_kg * stress_factor
 
             # Get fresh farmgate price for revenue calculation
@@ -394,7 +373,6 @@ def process_harvests(farm_state, current_date, data_loader, farm_config=None):
                 )
                 allocation = farm_config.food_policy.allocate(ctx)
             else:
-                # Default: all fresh (backward compatible)
                 allocation = ProcessingAllocation(fresh_fraction=1.0, policy_name="all_fresh")
 
             # Record allocation on crop state
@@ -404,9 +382,6 @@ def process_harvests(farm_state, current_date, data_loader, farm_config=None):
                 "canned": allocation.canned_fraction,
                 "dried": allocation.dried_fraction,
             }
-
-            # Get crop-specific weight loss factors (fallback to tomato if unknown)
-            crop_weight_loss = WEIGHT_LOSS.get(crop.crop_name, WEIGHT_LOSS["tomato"])
 
             # Calculate revenue and losses by processing pathway
             total_revenue = 0.0
@@ -425,16 +400,18 @@ def process_harvests(farm_state, current_date, data_loader, farm_config=None):
                     continue
 
                 raw_kg = crop.harvest_yield_kg * fraction
-                weight_loss_frac = crop_weight_loss.get(pathway, 0.0)
+
+                # Weight loss from processing (dehydration, trimming) — from processing_specs CSV
+                weight_loss_frac = data_loader.get_weight_loss_fraction(crop.crop_name, pathway)
                 output_kg = raw_kg * (1 - weight_loss_frac)
 
-                # Post-harvest loss: 10% for fresh, 4% for processed pathways
-                loss_factor = 0.90 if pathway == "fresh" else 0.96
-                sellable_kg = output_kg * loss_factor
+                # Post-harvest loss (spoilage, damage, rejection) — from post_harvest_losses CSV
+                loss_frac = data_loader.get_post_harvest_loss_fraction(crop.crop_name, pathway)
+                sellable_kg = output_kg * (1.0 - loss_frac)
 
-                # Revenue: sellable weight × (fresh price × value multiplier)
-                price = price_per_kg * VALUE_MULTIPLIER.get(pathway, 1.0)
-                revenue = sellable_kg * price
+                # Revenue: sellable weight × (fresh price × value-add multiplier from CSV)
+                multiplier = data_loader.get_value_multiplier(crop.crop_name, pathway)
+                revenue = sellable_kg * price_per_kg * multiplier
 
                 total_revenue += revenue
                 total_post_harvest_loss_kg += raw_kg - sellable_kg
@@ -578,7 +555,7 @@ def reset_energy_for_new_year(energy_state):
 def dispatch_energy(energy_state, total_demand_kwh, current_date, data_loader, scenario):
     """Dispatch energy using merit-order: renewables -> battery -> grid -> generator.
 
-    Implements the energy dispatch algorithm from mvp-calculations.md Section 3.
+    Implements the energy dispatch algorithm from calculations.md Section 3.
 
     Merit order (lowest marginal cost first):
       1. PV + wind generation (marginal cost ~ 0)
@@ -617,7 +594,7 @@ def dispatch_energy(energy_state, total_demand_kwh, current_date, data_loader, s
         years_since_start = (current_date - scenario.metadata.start_date).days / 365.25
         degradation_factor = (1 - 0.005) ** years_since_start
 
-        # Shading factor by agri-PV density (annual average, from mvp-calculations.md)
+        # Shading factor by agri-PV density (annual average, from calculations.md)
         shading_factors = {"low": 0.95, "medium": 0.90, "high": 0.85}
         shading_factor = shading_factors.get(scenario.infrastructure.pv.density, 0.90)
 
@@ -698,7 +675,7 @@ def dispatch_energy(energy_state, total_demand_kwh, current_date, data_loader, s
             generator_kwh = min(deficit, max_gen_kwh)
 
             # Willans line fuel model: run at full rated load for shortest time
-            # (most fuel-efficient operating point per mvp-calculations.md Section 3)
+            # (most fuel-efficient operating point per calculations.md Section 3)
             # fuel_L = (a * P_rated + b * P_gen) * hours
             # At full load: P_gen = P_rated, hours = gen_kwh / P_rated
             P_gen = P_rated
@@ -763,7 +740,11 @@ def run_simulation(scenario, data_loader=None, verbose=False):
         SimulationState with all results
     """
     if data_loader is None:
-        data_loader = SimulationDataLoader()
+        # Get electricity pricing regime from scenario, default to subsidized
+        electricity_pricing_regime = "subsidized"
+        if scenario.energy_pricing:
+            electricity_pricing_regime = scenario.energy_pricing.pricing_regime
+        data_loader = SimulationDataLoader(electricity_pricing_regime=electricity_pricing_regime)
 
     # Get treatment energy from scenario water system
     salinity_level = scenario.infrastructure.water_treatment.salinity_level
@@ -808,7 +789,7 @@ def run_simulation(scenario, data_loader=None, verbose=False):
     )
 
     # M1 fix: Initialize community water storage between treatment and irrigation.
-    # Storage starts at 50% capacity per architecture spec (mvp-calculations.md §2.5).
+    # Storage starts at 50% capacity per architecture spec (calculations.md §2.5).
     storage_capacity = scenario.infrastructure.irrigation_storage.capacity_m3
     state.water_storage = WaterStorageState(
         capacity_m3=storage_capacity,
@@ -818,14 +799,6 @@ def run_simulation(scenario, data_loader=None, verbose=False):
     # Initialize community energy system state from scenario config
     state.energy = initialize_energy_state(scenario)
 
-    # Compute daily household energy demand (constant, computed once before loop).
-    # calculate_household_demand loads housing data from CSV; may fail if file missing.
-    try:
-        household_demand = calculate_household_demand(scenario.community)
-        daily_household_kwh = household_demand["total_energy_kwh_day"]
-    except Exception:
-        daily_household_kwh = 0.0
-
     if verbose:
         print(f"Starting simulation: {state.start_date} to {state.end_date}")
         print(f"Farms: {len(state.farms)}, Treatment energy: {treatment_kwh_per_m3:.2f} kWh/m3")
@@ -833,7 +806,7 @@ def run_simulation(scenario, data_loader=None, verbose=False):
               f"Wind {state.energy.wind_capacity_kw:.0f} kW, "
               f"Battery {state.energy.battery_capacity_kwh:.0f} kWh, "
               f"Generator {state.energy.generator_capacity_kw:.0f} kW")
-        print(f"Household demand: {daily_household_kwh:.1f} kWh/day")
+        # Note: Household and community building demands vary daily with weather, shown during simulation
         print("System constraints (area-proportional sharing):")
         for farm_id, fc in constraints.items():
             print(f"  {farm_id}: GW max {fc['max_groundwater_m3']:.0f} m3/day, "
@@ -893,6 +866,33 @@ def run_simulation(scenario, data_loader=None, verbose=False):
         day_gw_treated_m3 = 0.0
         # Track daily water treatment energy for energy dispatch
         day_total_water_energy_kwh = 0.0
+
+        # Get daily household and community building demands (vary with temperature)
+        # These are essential community needs independent of farming decisions
+        daily_household_energy_kwh = data_loader.get_household_energy_kwh(current_date)
+        daily_household_water_m3 = data_loader.get_household_water_m3(current_date)
+        daily_community_building_energy_kwh = data_loader.get_community_building_energy_kwh(current_date)
+        daily_community_building_water_m3 = data_loader.get_community_building_water_m3(current_date)
+
+        # Community water (household + buildings) must be treated through desalination system.
+        # Calculate treatment/pumping energy for community water demand.
+        total_community_water_m3 = daily_household_water_m3 + daily_community_building_water_m3
+        community_water_treatment_energy_kwh = total_community_water_m3 * treatment_kwh_per_m3
+
+        # Add community water to storage system and aquifer tracking
+        if total_community_water_m3 > 0:
+            # Record groundwater extraction for community needs in aquifer depletion tracking
+            if state.aquifer is not None:
+                state.aquifer.record_extraction(total_community_water_m3)
+
+            # Community water goes through same treatment/storage as irrigation water
+            day_gw_treated_m3 += total_community_water_m3
+            day_total_water_energy_kwh += community_water_treatment_energy_kwh
+
+            # Add to water storage (treated water enters storage, then distributed)
+            if state.water_storage is not None:
+                state.water_storage.add_inflow(total_community_water_m3)
+                state.water_storage.draw_outflow(total_community_water_m3)
 
         # Process each farm
         for i, farm_state in enumerate(state.farms):
@@ -987,21 +987,30 @@ def run_simulation(scenario, data_loader=None, verbose=False):
             harvested = process_harvests(farm_state, current_date, data_loader, farm_config=farm_config)
 
         # M1: Update community water storage dynamics.
-        # Inflow = groundwater treated today (enters storage from treatment plant).
-        # Outflow = groundwater delivered today (drawn from storage to irrigation).
+        # Inflow = groundwater treated today (irrigation + household + building water).
+        # Outflow = water delivered today (irrigation + household + building water).
         # In MVP, inflow == outflow (same-day allocation), so net storage change is
         # zero. The tracking records daily throughput for capacity utilization metrics
         # and prepares the infrastructure for future temporal buffering.
+        # Note: day_gw_treated_m3 now includes community water added above.
         if state.water_storage is not None:
-            state.water_storage.add_inflow(day_gw_treated_m3)
-            state.water_storage.draw_outflow(day_gw_treated_m3)
-            state.water_storage.record_daily(current_date, day_gw_treated_m3, day_gw_treated_m3)
+            state.water_storage.record_daily(
+                current_date,
+                day_gw_treated_m3,
+                day_gw_treated_m3,
+                household_m3=daily_household_water_m3,
+                community_building_m3=daily_community_building_water_m3
+            )
 
         # Energy dispatch: sum all demand components and run merit-order dispatch.
-        # Total demand = water treatment/pumping energy + household energy.
+        # Total demand = irrigation water treatment energy + community water treatment energy +
+        # household energy + community building energy.
+        # Note: community_water_treatment_energy_kwh already added to day_total_water_energy_kwh above
         # (Food processing energy is skipped for MVP — will be added in Gap 4.)
         if state.energy is not None:
-            total_energy_demand_kwh = day_total_water_energy_kwh + daily_household_kwh
+            total_energy_demand_kwh = (day_total_water_energy_kwh +
+                                       daily_household_energy_kwh +
+                                       daily_community_building_energy_kwh)
             dispatch_energy(
                 state.energy, total_energy_demand_kwh, current_date, data_loader, scenario
             )
@@ -1038,10 +1047,19 @@ def run_simulation(scenario, data_loader=None, verbose=False):
         # Report water storage summary
         if state.water_storage is not None:
             ws = state.water_storage
+            total_irrigation = sum(r.get("irrigation_m3", 0) for r in ws.daily_levels)
+            total_household = sum(r.get("household_m3", 0) for r in ws.daily_levels)
+            total_buildings = sum(r.get("community_building_m3", 0) for r in ws.daily_levels)
+            total_water = total_irrigation + total_household + total_buildings
             print(f"Water storage: capacity {ws.capacity_m3:,.0f} m3, "
                   f"final level {ws.current_level_m3:,.0f} m3 "
                   f"({ws.current_level_m3 / ws.capacity_m3 * 100:.1f}% full), "
                   f"{len(ws.daily_levels)} daily records")
+            if total_water > 0:
+                print(f"  Total water treated: {total_water:,.0f} m3 "
+                      f"(irrigation {total_irrigation:,.0f}, "
+                      f"household {total_household:,.0f}, "
+                      f"buildings {total_buildings:,.0f})")
         # Report energy system summary
         if state.energy is not None and state.energy.daily_energy_records:
             es = state.energy

@@ -1,0 +1,33 @@
+# SOURCE: EgyptERA (egyptera.org/en/TarrifAug2024.aspx, egyptera.org/en/Tarrif2024N.aspx), CEIC Data (ceicdata.com/en/egypt/electricity-price), Egypt Today, Egypt Independent, World Bank, Central Bank of Egypt exchange rates, Egyptian Initiative for Personal Rights (eipr.org)
+# DATE: 2026-02-06
+# DESCRIPTION: Historical electricity tariffs for commercial/industrial users in Egypt (2015-2024), derived from agricultural rates with 16.5% markup to reflect full-cost commercial pricing
+# UNITS: date (YYYY-MM-DD), usd_per_kwh_offpeak (USD), usd_per_kwh_peak (USD), usd_per_kwh_avg_daily (USD), rate_schedule (standard), egp_per_kwh_original (Egyptian Pounds), usd_egp_exchange_rate (EGP per USD)
+# SEASONAL_NOTE: Egyptian commercial/industrial electricity tariffs do NOT have seasonal (summer/winter) rate variations per EgyptERA official tariff schedules.
+# LOGIC: Agricultural/irrigation tariffs (200 pt/kWh Aug 2024) increased by 16.5% to match industrial flat rate (233 pt/kWh Aug 2024). Peak/off-peak differentials maintained from agricultural schedule. Represents unsubsidized full-cost-recovery pricing for communities without agricultural electricity access.
+# DEPENDENCIES: Derived from historical_grid_electricity_prices-research.csv (subsidized agricultural rates)
+# ASSUMPTIONS: (1) Commercial/industrial rates are consistently 16.5% higher than agricultural across all years; (2) Peak/off-peak ratio structure remains the same as agricultural; (3) Exchange rates identical to agricultural dataset
+# DATA_QUALITY: MODERATE - Based on verified Aug 2024 differential between agricultural (200 pt) and industrial (233 pt) rates; historical markup ratio assumed constant
+# COMPARISON_TO_SUBSIDIZED: Unsubsidized rates are 1.165x subsidized agricultural rates, reflecting removal of agricultural electricity subsidy
+# TARIFF_REFORM_TIMELINE: Same as agricultural tariffs - PM Decree 1257/2014 began subsidy removal; extended to 2024-2025 due to COVID-19; Aug 2024 increases implemented
+# KEY_2024_TARIFFS_VERIFIED: Industrial flat rate 233 pt/kWh (Aug 2024) = 1.165x agricultural 200 pt/kWh
+date,usd_per_kwh_offpeak,usd_per_kwh_peak,usd_per_kwh_avg_daily,rate_schedule,egp_per_kwh_original,usd_egp_exchange_rate
+2015-07-01,0.0469,0.0764,0.0563,standard,0.44,7.88
+2016-01-01,0.0502,0.0818,0.0602,standard,0.49,8.13
+2016-07-01,0.0488,0.0796,0.0585,standard,0.58,9.96
+2016-11-03,0.0387,0.0631,0.0465,standard,0.64,13.8
+2017-01-01,0.0456,0.0742,0.0546,standard,0.82,15.25
+2017-07-01,0.0483,0.0789,0.058,standard,1.03,17.68
+2018-01-01,0.0556,0.0906,0.0666,standard,0.99,17.83
+2018-07-01,0.0655,0.1067,0.0785,standard,1.16,17.83
+2019-01-01,0.0698,0.1138,0.0838,standard,1.15,16.52
+2019-07-01,0.0819,0.1335,0.0982,standard,1.34,16.35
+2020-01-01,0.0764,0.1247,0.0917,standard,1.4,15.76
+2020-07-01,0.0718,0.117,0.0861,standard,1.36,15.86
+2021-01-01,0.0779,0.1271,0.0935,standard,1.22,15.7
+2021-07-01,0.0779,0.1271,0.0935,standard,1.22,15.7
+2022-01-01,0.0669,0.109,0.0803,standard,1.28,19.16
+2022-07-01,0.0669,0.109,0.0803,standard,1.28,19.16
+2023-01-01,0.0453,0.0739,0.0544,standard,1.4,30.85
+2023-07-01,0.0566,0.0924,0.068,standard,1.75,30.85
+2024-01-01,0.0284,0.0426,0.033,standard,1.49,48.5
+2024-08-01,0.0442,0.0662,0.0509,standard,2.33,48.5

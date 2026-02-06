@@ -1,0 +1,28 @@
+# SOURCE: Simplified estimates for testing
+# DATE: 2026-02-06
+# DESCRIPTION: Post-harvest loss percentages by crop and processing pathway (toy dataset)
+# UNITS: loss_pct (percentage of input weight lost to waste/spoilage)
+# LOGIC: Flat rates per pathway for simplified testing. Fresh = 10%, processed = 4%.
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS: Simplified uniform values for testing and development
+crop_name,pathway,loss_pct,source,notes
+tomato,fresh,10.0,Simplified,
+tomato,packaged,4.0,Simplified,
+tomato,canned,4.0,Simplified,
+tomato,dried,4.0,Simplified,
+potato,fresh,10.0,Simplified,
+potato,packaged,4.0,Simplified,
+potato,canned,4.0,Simplified,
+potato,dried,4.0,Simplified,
+onion,fresh,10.0,Simplified,
+onion,packaged,4.0,Simplified,
+onion,canned,4.0,Simplified,
+onion,dried,4.0,Simplified,
+kale,fresh,10.0,Simplified,
+kale,packaged,4.0,Simplified,
+kale,canned,4.0,Simplified,
+kale,dried,4.0,Simplified,
+cucumber,fresh,10.0,Simplified,
+cucumber,packaged,4.0,Simplified,
+cucumber,canned,4.0,Simplified,
+cucumber,dried,4.0,Simplified,

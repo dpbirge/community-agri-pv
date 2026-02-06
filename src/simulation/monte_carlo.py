@@ -5,7 +5,7 @@ to evaluate community resilience under uncertainty. Extends the sensitivity
 analysis (sensitivity.py) from one-at-a-time perturbation to simultaneous
 random sampling across all parameters.
 
-Phase 10-11 of the development plan (mvp-calculations.md Section 8).
+Phase 10-11 of the development plan (calculations.md Section 8).
 """
 
 import random

@@ -9,7 +9,7 @@
 # COMPARISON_TO_TOY: (1) PV system costs align well - toy $850/kW vs research $1150-1560/kW (toy may reflect module-only or non-US market pricing), (2) Battery LFP toy $280/kWh vs research $283/kWh (excellent match for residential benchmark), (3) Wind turbine costs comparable, (4) BWRO costs in toy are lower than research range (toy may represent simplified systems)
 #
 equipment_type,cost_metric,usd_per_unit,installation_cost_pct,source,year_basis
-pv_system_utility_scale,per_kw_ac,1150,0,NREL Q1 2024 Solar Cost Benchmark - 100MW one-axis tracking,2024
+pv_system_utility_scale,per_kw_ac,1150,0,NREL Q1 2024 Solar Cost Benchmark - 100MW fixed-tilt reference,2024
 pv_system_commercial,per_kw_dc,1840,0,NREL Q1 2023 Benchmark - Commercial systems,2023
 pv_system_residential,per_kw_dc,2680,0,NREL ATB 2024 - Residential benchmark,2023
 pv_system_mena_optimized,per_kw_dc,770,25,NREL ATB lower bound adjusted for MENA high irradiation advantage,2024
@@ -18,9 +18,9 @@ battery_storage_lfp_residential,per_kwh_capacity,283,15,NREL ATB 2024 - Resident
 battery_storage_lfp_china,per_kwh_capacity,101,20,BNEF 2024 - China average BESS cost,2024
 battery_storage_lfp_pack_only,per_kwh_capacity,70,35,BNEF 2025 - Stationary storage pack price (lowest segment),2025
 battery_storage_lead_acid,per_kwh_capacity,150,15,Industry estimate - lead acid premium over LFP eliminated,2024
-wind_turbine_small_10kw,per_kw_rated,4000,30,NREL Distributed Wind - residential class single turbine,2024
-wind_turbine_medium_100kw,per_kw_rated,3000,28,NREL Distributed Wind - commercial class single turbine,2024
-wind_turbine_large_1500kw,per_kw_rated,1800,25,NREL Distributed Wind - large class single turbine,2024
+wind_turbine_bergey_excel_10,per_kw_rated,4850,55,Bergey Windpower dealer pricing - grid-connect model $48500/10kW; install includes 30m SSL tower ($20k) + foundation + wiring + labor,2025
+wind_turbine_eocycle_eo25,per_kw_rated,5500,45,Estimated from NREL ATB 2024 residential benchmark ($8665/kW total); Eocycle does not publish prices; crane-less tilt-up tower reduces install vs benchmark,2024
+wind_turbine_50kw_class,per_kw_rated,5000,40,PNNL Distributed Wind benchmark for commercial class (>20kW); Endurance E-3120 discontinued (2016); nearest alternatives XZERES Wind 50 and Aeolos-H 50kW,2024
 wind_turbine_utility_onshore,per_kw_rated,1041,20,IRENA 2024 - Global weighted average onshore wind TIC,2024
 inverter_string,per_kw,80,15,NREL Solar Cost Benchmark 2024 - Commercial string inverter,2024
 inverter_central,per_kw,50,18,NREL Solar Cost Benchmark 2024 - Utility central inverter,2024
@@ -44,6 +44,5 @@ irrigation_pump_solar_small,per_unit,2000,20,RPS Solar Pumps - complete kit basi
 irrigation_pump_solar_medium,per_unit,4500,20,Industry average - 1HP system with panels and controller,2024
 irrigation_pump_solar_large,per_unit,12000,25,Industry estimate - 3-5HP deep well system,2024
 mounting_structure_fixed_tilt,per_kw,90,0,NREL ATB 2024 - Fixed tilt racking included in system,2024
-mounting_structure_single_axis,per_kw,140,0,NREL ATB 2024 - Single axis tracker structure,2024
 electrical_bos,per_kw,85,0,NREL ATB 2024 - Wiring combiner boxes conduit,2024
 grid_connection,per_kw,150,0,NREL ATB 2024 - Interconnection and transformer,2024

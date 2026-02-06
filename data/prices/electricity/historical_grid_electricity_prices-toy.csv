@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data based on Egyptian Electricity Holding Company tariff trends
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Monthly electricity prices for agricultural users in Egypt
 # UNITS: usd_per_kwh (USD per kilowatt-hour), egp_per_kwh_original (Egyptian Pounds)
 # LOGIC: Base rates follow Egyptian subsidy removal program 2015-2024, peak/off-peak differential 1.25/0.75

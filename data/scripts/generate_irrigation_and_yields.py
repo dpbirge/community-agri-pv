@@ -33,13 +33,15 @@ BASELINE_YIELDS = {
     "cucumber": 50000,
 }
 
-# Planting dates to model (3-4 per crop spread throughout year)
+# Planting dates to model (all viable windows per crop from planting_windows-research.csv)
+# Dates aligned with Egyptian agricultural calendar for Sinai hot arid climate.
+# Summer plantings (Jun-Aug) excluded for heat-sensitive crops.
 PLANTING_DATES = {
-    "tomato": ["2010-02-15", "2010-05-01", "2010-08-15", "2010-11-01"],
-    "potato": ["2010-01-15", "2010-04-15", "2010-09-01", "2010-11-15"],
-    "onion": ["2010-02-01", "2010-06-01", "2010-09-15"],
-    "kale": ["2010-01-01", "2010-03-15", "2010-07-01", "2010-10-01"],
-    "cucumber": ["2010-03-01", "2010-06-15", "2010-09-01", "2010-11-15"],
+    "tomato": ["2010-02-15", "2010-04-01", "2010-08-01", "2010-11-01"],
+    "potato": ["2010-01-15", "2010-09-15", "2010-11-15"],
+    "onion": ["2010-01-15", "2010-04-01", "2010-12-01"],
+    "kale": ["2010-02-01", "2010-03-15", "2010-10-01", "2010-12-01"],
+    "cucumber": ["2010-02-15", "2010-04-01", "2010-09-01", "2010-10-15"],
 }
 
 

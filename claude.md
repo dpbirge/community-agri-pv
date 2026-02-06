@@ -86,15 +86,16 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 
 **Visualization:**
 
-- [notebook_plotting.py](src/notebook_plotting.py) - Interactive plotting and tables for Jupyter notebooks
+- [notebook_plotting.py](src/plotting/notebook_plotting.py) - Interactive plotting and tables for Jupyter notebooks
 - [run_simulation.ipynb](notebooks/run_simulation.ipynb) - Primary simulation notebook with widget-based plot selection
 
 **Architecture & Planning:**
 
-- [community-model-plan.md](docs/architecture/community-model-plan.md) - Complete model domain specifications
-- [mvp-structure.md](docs/architecture/mvp-structure.md) - Configuration schema and policy structure
-- [mvp-calculations.md](docs/architecture/mvp-calculations.md) - Calculation methodologies and formulas
-- [data-organization.md](docs/architecture/data-organization.md) - Data structure and format specifications
+- [overview.md](docs/architecture/overview.md) - Complete model domain specifications
+- [structure.md](docs/architecture/structure.md) - Configuration schema and policy structure
+- [calculations.md](docs/architecture/calculations.md) - Calculation methodologies and formulas
+- [policies.md](docs/architecture/policies.md) - Policy decision rules and pseudocode
+- [data.md](docs/architecture/data.md) - Data structure and format specifications
 
 ## Key Functions
 

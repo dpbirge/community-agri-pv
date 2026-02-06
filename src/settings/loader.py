@@ -28,9 +28,8 @@ class ScenarioMetadata:
 
 @dataclass
 class PVConfig:
-    """Photovoltaic system configuration."""
+    """Photovoltaic system configuration (fixed-tilt only)."""
     sys_capacity_kw: float
-    type: str
     tilt_angle: float
     percent_over_crops: float
     density: str
@@ -43,7 +42,6 @@ class WindConfig:
     """Wind turbine configuration."""
     sys_capacity_kw: float
     type: str
-    hub_height_m: float
     financing_status: str = "existing_owned"
 
 
@@ -234,16 +232,31 @@ class UnsubsidizedPricingConfig:
 @dataclass
 class WaterPricingConfig:
     """Water pricing configuration for municipal water."""
-    municipal_source: str  # seawater_desalination or piped_nile
+    municipal_source: str  # seawater_desalination or piped_groundwater
     pricing_regime: str  # subsidized or unsubsidized
     subsidized: SubsidizedPricingConfig
     unsubsidized: UnsubsidizedPricingConfig
 
 
 @dataclass
-class GridConfig:
-    """Grid electricity configuration."""
+class GridSubsidizedConfig:
+    """Subsidized grid electricity pricing (agricultural rates)."""
+    use_peak_offpeak: bool = False  # If True, use peak/offpeak rates; if False, use average daily
+
+
+@dataclass
+class GridUnsubsidizedConfig:
+    """Unsubsidized grid electricity pricing (commercial/industrial rates)."""
+    base_price_usd_kwh: float
+    annual_escalation_pct: float
+
+
+@dataclass
+class GridPricingConfig:
+    """Grid electricity pricing configuration."""
     pricing_regime: str  # subsidized or unsubsidized
+    subsidized: GridSubsidizedConfig
+    unsubsidized: GridUnsubsidizedConfig
 
 
 @dataclass
@@ -268,6 +281,8 @@ class CommunityConfig:
     total_area_ha: float
     population: int
     crops: list = None  # Optional for backward compatibility (per-farm crops preferred)
+    industrial_buildings_m2: float = 0.0  # Square meters of industrial/processing facilities
+    community_buildings_m2: float = 0.0  # Square meters of community buildings (offices, halls, etc.)
 
 
 @dataclass
@@ -295,7 +310,7 @@ class Scenario:
     community: CommunityConfig
     economics: EconomicsConfig
     water_pricing: WaterPricingConfig = None
-    grid: GridConfig = None
+    energy_pricing: GridPricingConfig = None
     policy_parameters: dict = None
 
 
@@ -398,7 +413,6 @@ def _load_infrastructure(data):
     return InfrastructureConfig(
         pv=PVConfig(
             sys_capacity_kw=pv.get("sys_capacity_kw", 0.0),
-            type=pv.get("type", "fixed_tilt"),
             tilt_angle=pv.get("tilt_angle", 28.0),
             percent_over_crops=percent_over_crops,
             density=density,
@@ -407,8 +421,7 @@ def _load_infrastructure(data):
         ),
         wind=WindConfig(
             sys_capacity_kw=wind.get("sys_capacity_kw", 0.0),
-            type=wind.get("type", "horizontal_axis"),
-            hub_height_m=wind.get("hub_height_m", 40.0),
+            type=wind.get("type", "small"),
             financing_status=wind.get("financing_status", "existing_owned"),
         ),
         battery=BatteryConfig(
@@ -457,16 +470,29 @@ def _load_infrastructure(data):
 
 
 def _load_farm_crops(crops_data, farm_id):
-    """Parse per-farm crop configuration list."""
+    """Parse per-farm crop configuration list.
+
+    Each crop entry has a `planting_dates` list (MM-DD strings). One FarmCropConfig
+    is created per planting date, all sharing the same area_fraction and percent_planted.
+    """
     crops = []
     for crop in crops_data:
         context = f"farm {farm_id} crops"
-        crops.append(FarmCropConfig(
-            name=_require(crop, "name", context),
-            area_fraction=_require(crop, "area_fraction", context),
-            planting_date=_require(crop, "planting_date", context),
-            percent_planted=_require(crop, "percent_planted", context),
-        ))
+        name = _require(crop, "name", context)
+        area_fraction = _require(crop, "area_fraction", context)
+        planting_dates = _require(crop, "planting_dates", context)
+        percent_planted = _require(crop, "percent_planted", context)
+
+        if not isinstance(planting_dates, list) or len(planting_dates) == 0:
+            raise ValueError(f"{context}: planting_dates must be a non-empty list for crop '{name}'")
+
+        for pd in planting_dates:
+            crops.append(FarmCropConfig(
+                name=name,
+                area_fraction=area_fraction,
+                planting_date=pd,
+                percent_planted=percent_planted,
+            ))
     return crops
 
 
@@ -615,16 +641,37 @@ def _load_water_pricing(data):
     )
 
 
-def _load_grid_config(data):
-    """Parse grid configuration from energy_system if present."""
-    energy_infra = data.get("energy_system", {})
-    grid_data = energy_infra.get("grid", {})
+def _load_energy_pricing(data):
+    """Parse energy pricing configuration if present.
+
+    Args:
+        data: Parsed YAML data
+
+    Returns:
+        GridPricingConfig or None
+    """
+    ep = data.get("energy_pricing", {})
+    if not ep:
+        return None
+
+    context = "energy_pricing"
+    grid_data = ep.get("grid", {})
 
     if not grid_data:
         return None
 
-    return GridConfig(
+    subsidized_data = grid_data.get("subsidized", {})
+    unsubsidized_data = grid_data.get("unsubsidized", {})
+
+    return GridPricingConfig(
         pricing_regime=grid_data.get("pricing_regime", "subsidized"),
+        subsidized=GridSubsidizedConfig(
+            use_peak_offpeak=subsidized_data.get("use_peak_offpeak", False),
+        ),
+        unsubsidized=GridUnsubsidizedConfig(
+            base_price_usd_kwh=unsubsidized_data.get("base_price_usd_kwh", 0.15),
+            annual_escalation_pct=unsubsidized_data.get("annual_escalation_pct", 3.0),
+        ),
     )
 
 
@@ -686,6 +733,8 @@ def load_scenario(path):
         total_area_ha=total_area,
         population=_require(community_data, "community_population", "community_structure"),
         crops=_load_crops(crops_data) if crops_data else None,
+        industrial_buildings_m2=community_data.get("industrial_buildings_m2", 0.0),
+        community_buildings_m2=community_data.get("community_buildings_m2", 0.0),
     )
 
     # Build economics
@@ -694,8 +743,8 @@ def load_scenario(path):
     # Build water pricing config (optional)
     water_pricing = _load_water_pricing(data)
 
-    # Build grid config (optional)
-    grid = _load_grid_config(data)
+    # Build energy pricing config (optional)
+    energy_pricing = _load_energy_pricing(data)
 
     return Scenario(
         metadata=metadata,
@@ -704,6 +753,6 @@ def load_scenario(path):
         community=community,
         economics=economics,
         water_pricing=water_pricing,
-        grid=grid,
+        energy_pricing=energy_pricing,
         policy_parameters=policy_parameters,
     )

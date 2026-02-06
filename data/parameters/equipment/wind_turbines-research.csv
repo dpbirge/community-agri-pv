@@ -1,0 +1,13 @@
+# SOURCE: Bergey Windpower (Excel 10), Eocycle Technologies (EO25/EOX S-16), Endurance Wind Power (E-3120 - DISCONTINUED); SWCC certified specs; NREL ATB 2024; PNNL Distributed Wind Market Report 2024
+# DATE: 2026-02-06
+# DESCRIPTION: Research-grade wind turbine specifications for 3 distributed-scale turbines based on real products and certified performance data
+# UNITS: rated_capacity_kw (kW), cut_in_speed_ms (m/s), rated_speed_ms (m/s), cut_out_speed_ms (m/s), hub_height_m (meters), rotor_diameter_m (meters), capacity_factor_typical (decimal), lifespan_years (years)
+# LOGIC: Specifications from manufacturer datasheets and SWCC/IEC certifications. Rated speeds are 10-11 m/s (industry standard for this size class). Capacity factors are conservative estimates for Sinai coastal site (5-7 m/s annual avg at hub height), accounting for dust and heat derating.
+# DEPENDENCIES: None
+# ASSUMPTIONS: (1) Bergey Excel 10 has no traditional cut-out (uses autofurl at 15.6 m/s); 25 m/s used as modeling simplification. (2) Eocycle IEC-certified CF of 44% at 6 m/s derated to 25% for hot dusty conditions. (3) Endurance E-3120 rated at 50kW (50Hz version at 10 m/s) — DISCONTINUED (bankruptcy Nov 2016). Specs retained as physical reference for the 50kW class. Closest current alternatives: XZERES Wind 50 (51kW, 16.5m rotor), Aeolos-H 50kW. (4) Hub heights reflect typical installations for each model.
+# DATA_QUALITY: HIGH for Bergey/Eocycle (active products with current certifications). MEDIUM for Endurance (certified specs but product no longer manufactured).
+# COMPARISON_TO_TOY: Toy rated speeds (6-7 m/s) are ~60% too low vs real products (10-11 m/s). Toy rotor diameters and cut-in speeds are reasonable. Toy hub heights slightly high for medium/large.
+turbine_name,product_name,rated_capacity_kw,cut_in_speed_ms,rated_speed_ms,cut_out_speed_ms,hub_height_m,rotor_diameter_m,capacity_factor_typical,lifespan_years
+small,bergey_excel_10,10,2.5,11.0,25.0,30,7.0,0.18,20
+medium,eocycle_eo25,25,3.2,11.0,25.0,30,12.6,0.25,25
+large,endurance_e3120,50,3.5,10.0,25.0,37,19.2,0.25,20

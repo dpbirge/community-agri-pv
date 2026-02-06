@@ -15,7 +15,10 @@ weather:
 crops:
   coefficients: data/parameters/crops/crop_coefficients-toy.csv
   growth_stages: data/parameters/crops/growth_stages-toy.csv
-  processing_specs: data/parameters/crops/processing_specs-toy.csv
+  processing_specs: data/parameters/crops/processing_specs-research.csv
+  yield_response_factors: data/parameters/crops/yield_response_factors-research.csv
+  post_harvest_losses: data/parameters/crops/post_harvest_losses-research.csv
+  planting_windows: data/parameters/crops/planting_windows-research.csv
   spoilage_rates: data/parameters/crops/spoilage_rates-toy.csv
 
 # Irrigation demand (m³/ha/day by crop)
@@ -51,7 +54,8 @@ microclimate:
 # Equipment parameters
 equipment:
   pv_systems: data/parameters/equipment/pv_systems-toy.csv
-  wind_turbines: data/parameters/equipment/wind_turbines-toy.csv
+  wind_turbines: data/parameters/equipment/wind_turbines-research.csv
+  # alt: data/parameters/equipment/wind_turbines-toy.csv  (synthetic small/medium/large — rated speeds 6-7 m/s)
   batteries: data/parameters/equipment/batteries-toy.csv
   processing: data/parameters/equipment/processing_equipment-toy.csv
   failure_rates: data/parameters/equipment/equipment_failure_rates-toy.csv
@@ -85,14 +89,17 @@ prices_processed:
 
 # Prices - utilities
 prices_utilities:
-  electricity: data/prices/electricity/historical_grid_electricity_prices-toy.csv
+  electricity_subsidized: data/prices/electricity/historical_grid_electricity_prices-toy.csv
+  electricity_unsubsidized: data/prices/electricity/historical_grid_electricity_prices_unsubsidized-toy.csv
   municipal_water: data/prices/water/historical_municipal_water_prices-toy.csv
   diesel: data/prices/diesel/historical_diesel_prices-toy.csv
 
 # Costs
 costs:
-  capital: data/parameters/costs/capital_costs-toy.csv
+  capital: data/parameters/costs/capital_costs-research.csv
+  # alt: data/parameters/costs/capital_costs-toy.csv  (synthetic cost estimates)
   operating: data/parameters/costs/operating_costs-toy.csv
+  # alt: data/parameters/costs/operating_costs-research.csv  (wind O&M from Bergey field study + NREL benchmarks)
 
 # Economic parameters
 economic:
@@ -108,8 +115,14 @@ community:
   farm_profiles: data/parameters/community/farm_profiles-toy.csv
   land_allocation: data/parameters/community/land_allocation-toy.csv
   housing: data/parameters/community/housing_energy_water-toy.csv
+  buildings: data/parameters/community/community_buildings_energy_water-toy.csv
 
 # Household demand (precomputed with seasonal variation)
 household:
   energy: data/precomputed/household/household_energy_kwh_per_day-toy.csv
   water: data/precomputed/household/household_water_m3_per_day-toy.csv
+
+# Community building demand (precomputed with seasonal variation)
+community_buildings:
+  energy: data/precomputed/community_buildings/community_buildings_energy_kwh_per_day-toy.csv
+  water: data/precomputed/community_buildings/community_buildings_water_m3_per_day-toy.csv

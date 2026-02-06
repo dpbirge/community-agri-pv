@@ -45,12 +45,12 @@ class ComputedYearlyMetrics:
     # Per-crop metrics
     crop_water_per_yield: dict = field(default_factory=dict)  # {crop: m3/kg}
 
-    # Resilience metrics (mvp-structure.md Section 4)
+    # Resilience metrics (structure.md Section 4)
     aquifer_depletion_rate_m3_yr: float = 0.0
     aquifer_years_remaining: float = float('inf')
     days_without_municipal_water: int = 0
 
-    # Aquifer drawdown feedback metrics (mvp-calculations.md Section 2)
+    # Aquifer drawdown feedback metrics (calculations.md Section 2)
     effective_pumping_head_m: float = 0.0  # Current effective head including drawdown
     drawdown_m: float = 0.0  # Additional head from depletion
 
@@ -413,7 +413,7 @@ def aggregate_community_metrics(yearly_farm_metrics_list, year):
 def _compute_spec_metrics(farm_metrics_list, simulation_state, scenario=None):
     """Enhance ComputedYearlyMetrics with spec-defined resilience/efficiency metrics.
 
-    Computes metrics from mvp-structure.md Section 4 that depend on daily
+    Computes metrics from structure.md Section 4 that depend on daily
     records, aquifer state, water storage, and crop configuration.  Mutates
     farm_metrics_list in place.
 

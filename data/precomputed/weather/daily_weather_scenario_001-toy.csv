@@ -1,5 +1,5 @@
 # SOURCE: Synthetic data generated for Community Agri-PV project
-# DATE: 2026-02-02
+# DATE: 2026-02-06
 # DESCRIPTION: Daily weather data for Sinai Peninsula, Red Sea coast (~28N, 34E)
 # UNITS: date=YYYY-MM-DD, temp_max_c=Celsius, temp_min_c=Celsius, solar_irradiance_kwh_m2=kWh/m2/day, wind_speed_ms=m/s, precip_mm=mm/day
 # LOGIC: Temperature uses sinusoidal annual cycle + AR(1) year anomaly + daily noise. Solar uses latitude-based seasonal variation. Wind uses spring-peak seasonal pattern with gamma-distributed noise. Precipitation uses rare events (exponential) concentrated Nov-Feb.

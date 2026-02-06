@@ -1,61 +1,13 @@
 **Last Updated:** February 5, 2026
 
-## Status Summary
+## TODO
 
-Water simulation MVP complete. Core functionality working with 4 water policies, multi-farm comparison, and comprehensive visualization.
+- Fix issues with inflation: need to use historic prices for food, etc. but match current OPEX/CAPEX prices properly. We should use the variation but start at today's prices: See docs/codereview/inflation-analysis...
+- Add cool storage (not cold/refrigerated) to the processing chain for products that benefit from it — fresh produce and dried foods in particular. Evaporative cooling or shaded ventilated storage would extend shelf life in the Sinai heat with minimal energy cost.
 
----
-
-## Completed Items ✅
-
-- ✅ Move water data and metadata notes from YAML to data folder
-  - Created `data/parameters/water/water_source_metadata.yaml`
-  - Created `docs/research/egyptian_water_pricing.md`
-- ✅ Visual policy tracking implemented
-  - Decision reason tracking in daily records
-  - Box plots for cost distributions
-  - Stacked bar charts for decision reasons
-- ✅ Seasonal pricing research completed
-  - Confirmed: No seasonal variation in Egyptian utility tariffs
-  - See `docs/research/egyptian_utility_pricing.md`
-
----
-
-## Active Development
-
-### Water Policy Enhancements
-
-- [ ] Add physical and legal constraints
-  - Max water per day draw limits
-  - Treatment plant throughput limits  
-  - Groundwater quotas
-- [ ] Implement tier pricing (if applicable)
-  - Water demand-based tiers
-  - Energy consumption tiers
-- [ ] Create advanced hybrid policies
-  - Multiple decision triggers
-  - Risk-aware allocation
-  - Price-responsive strategies
-- [ ] Add sensitivity analysis framework
-  - Parameter sweeps
-  - Tornado plots
-  - Monte Carlo preparation
-
----
-
-## Future Enhancements
-
-### Next Phase: Energy Integration
-- Track PV/wind generation alongside water treatment
-- Add energy constraints to water allocation
-- Battery storage integration
-- Grid import/export policies
-
-### Testing Infrastructure
-- Unit tests for water policies
-- Integration tests for simulation
-- Validation tests for scenarios
-
-### Research Data Completion
-- Complete remaining `-research` datasets (see `docs/planning/data-realism-research-plan.md`)
-- Validate against real-world measurements
+See... docs/planning/food_processing_fixes.md
+-Add processing energy cost tracking to process_harvests() using energy_kwh_per_kg from processing_specs CSV
+- Add processing labor cost deduction in process_harvests() using labor_hours_per_kg from processing_specs CSV
+- Split post_harvest_loss_kg into actual waste vs processing weight loss (water removal) — separate metrics
+- Replace hardcoded REFERENCE_PRICES in MarketResponsive with CSV-derived or configurable thresholds
+- Add fraction sum validation to ProcessingAllocation (enforce fractions sum to 1.0)

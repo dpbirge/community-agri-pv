@@ -74,4 +74,4 @@ python data/scripts/generate_power_data.py
 python data/scripts/generate_household_demand.py
 ```
 
-See [docs/architecture/data-organization.md](../docs/architecture/data-organization.md) for complete specifications.
+See [docs/architecture/data.md](../docs/architecture/data.md) for complete specifications.

@@ -4,7 +4,7 @@
 # Four policies for comparative testing:
 # - AllFresh: 100% to fresh sale (current behavior, backward compatible)
 # - MaximizeStorage: Maximize shelf life by processing most of harvest
-# - Balanced: Mix of fresh and processed per mvp-calculations.md
+# - Balanced: Mix of fresh and processed per calculations.md
 # - MarketResponsive: More processing when fresh prices are low
 
 from dataclasses import dataclass
@@ -114,7 +114,7 @@ class MaximizeStorage(BaseFoodPolicy):
 
 
 class Balanced(BaseFoodPolicy):
-    """Balanced mix of fresh and processed per mvp-calculations.md.
+    """Balanced mix of fresh and processed per calculations.md.
 
     50% fresh, 20% packaged, 15% canned, 15% dried. Provides a moderate
     level of value-add processing while keeping half the harvest for

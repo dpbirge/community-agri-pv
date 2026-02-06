@@ -184,12 +184,13 @@ def get_municipal_price(prices_df, year, tier=3, pricing_regime="subsidized"):
         return None
 
 
-def load_electricity_prices(registry, use_research=True, project_root=None):
+def load_electricity_prices(registry, use_research=True, pricing_regime="subsidized", project_root=None):
     """Load electricity prices, return DataFrame indexed by date.
 
     Args:
         registry: Data registry dict with file paths
         use_research: If True, use research data file; if False, use toy data
+        pricing_regime: "subsidized" (agricultural rates) or "unsubsidized" (commercial/industrial rates)
         project_root: Optional path to project root (for resolving relative paths)
 
     Returns:
@@ -197,10 +198,18 @@ def load_electricity_prices(registry, use_research=True, project_root=None):
         Indexed by date
     """
     if use_research:
-        filepath = "data/prices/electricity/historical_grid_electricity_prices-research.csv"
+        # Research data files
+        if pricing_regime == "subsidized":
+            filepath = "data/prices/electricity/historical_grid_electricity_prices-research.csv"
+        else:  # unsubsidized
+            filepath = "data/prices/electricity/historical_grid_electricity_prices_unsubsidized-research.csv"
     else:
-        filepath = registry["prices_utilities"]["electricity"]
-    
+        # Toy data files from registry
+        if pricing_regime == "subsidized":
+            filepath = registry["prices_utilities"]["electricity_subsidized"]
+        else:  # unsubsidized
+            filepath = registry["prices_utilities"]["electricity_unsubsidized"]
+
     if project_root:
         filepath = Path(project_root) / filepath
 
@@ -376,6 +385,65 @@ def get_fertilizer_cost(costs_df, target_date):
     return row["usd_per_ha"]
 
 
+def load_processing_specs(registry, project_root=None):
+    """Load processing specifications (weight loss, value multipliers) for all crops.
+
+    Args:
+        registry: Data registry dict with file paths
+        project_root: Optional path to project root
+
+    Returns:
+        DataFrame multi-indexed by (crop_name, processing_type) with columns:
+        energy_kwh_per_kg, labor_hours_per_kg, weight_loss_pct,
+        value_add_multiplier, processing_time_hours
+    """
+    filepath = registry["crops"]["processing_specs"]
+    if project_root:
+        filepath = Path(project_root) / filepath
+    skip_rows = _skip_metadata_rows(filepath)
+    df = pd.read_csv(filepath, skiprows=skip_rows)
+    df = df.set_index(["crop_name", "processing_type"])
+    return df
+
+
+def load_yield_response_factors(registry, project_root=None):
+    """Load FAO yield response factors (Ky) for water stress calculations.
+
+    Args:
+        registry: Data registry dict with file paths
+        project_root: Optional path to project root
+
+    Returns:
+        DataFrame indexed by crop_name with column: ky_whole_season
+    """
+    filepath = registry["crops"]["yield_response_factors"]
+    if project_root:
+        filepath = Path(project_root) / filepath
+    skip_rows = _skip_metadata_rows(filepath)
+    df = pd.read_csv(filepath, skiprows=skip_rows)
+    df = df.set_index("crop_name")
+    return df
+
+
+def load_post_harvest_losses(registry, project_root=None):
+    """Load post-harvest loss percentages by crop and processing pathway.
+
+    Args:
+        registry: Data registry dict with file paths
+        project_root: Optional path to project root
+
+    Returns:
+        DataFrame multi-indexed by (crop_name, pathway) with column: loss_pct
+    """
+    filepath = registry["crops"]["post_harvest_losses"]
+    if project_root:
+        filepath = Path(project_root) / filepath
+    skip_rows = _skip_metadata_rows(filepath)
+    df = pd.read_csv(filepath, skiprows=skip_rows)
+    df = df.set_index(["crop_name", "pathway"])
+    return df
+
+
 def load_pv_power_data(registry, project_root=None):
     """Load normalized daily PV power output data.
 
@@ -441,6 +509,70 @@ def load_wind_power_data(registry, project_root=None):
     df["date"] = pd.to_datetime(df["date"])
     df = df.set_index(["date", "turbine_variant"])
     return df
+
+
+def load_household_demand_data(registry, project_root=None):
+    """Load daily household energy and water demand data.
+
+    Args:
+        registry: Data registry dict with file paths
+        project_root: Optional path to project root
+
+    Returns:
+        Dict with 'energy' and 'water' DataFrames, indexed by date
+    """
+    energy_filepath = registry["household"]["energy"]
+    water_filepath = registry["household"]["water"]
+
+    if project_root:
+        energy_filepath = Path(project_root) / energy_filepath
+        water_filepath = Path(project_root) / water_filepath
+
+    energy_skip = _skip_metadata_rows(energy_filepath)
+    water_skip = _skip_metadata_rows(water_filepath)
+
+    energy_df = pd.read_csv(energy_filepath, skiprows=energy_skip)
+    water_df = pd.read_csv(water_filepath, skiprows=water_skip)
+
+    energy_df["date"] = pd.to_datetime(energy_df["date"])
+    water_df["date"] = pd.to_datetime(water_df["date"])
+
+    energy_df = energy_df.set_index("date")
+    water_df = water_df.set_index("date")
+
+    return {"energy": energy_df, "water": water_df}
+
+
+def load_community_building_demand_data(registry, project_root=None):
+    """Load daily community building energy and water demand data.
+
+    Args:
+        registry: Data registry dict with file paths
+        project_root: Optional path to project root
+
+    Returns:
+        Dict with 'energy' and 'water' DataFrames, indexed by date
+    """
+    energy_filepath = registry["community_buildings"]["energy"]
+    water_filepath = registry["community_buildings"]["water"]
+
+    if project_root:
+        energy_filepath = Path(project_root) / energy_filepath
+        water_filepath = Path(project_root) / water_filepath
+
+    energy_skip = _skip_metadata_rows(energy_filepath)
+    water_skip = _skip_metadata_rows(water_filepath)
+
+    energy_df = pd.read_csv(energy_filepath, skiprows=energy_skip)
+    water_df = pd.read_csv(water_filepath, skiprows=water_skip)
+
+    energy_df["date"] = pd.to_datetime(energy_df["date"])
+    water_df["date"] = pd.to_datetime(water_df["date"])
+
+    energy_df = energy_df.set_index("date")
+    water_df = water_df.set_index("date")
+
+    return {"energy": energy_df, "water": water_df}
 
 
 def get_wind_kwh_per_kw(wind_df, target_date, turbine_variant="medium"):
@@ -653,12 +785,13 @@ class SimulationDataLoader:
     """
 
     def __init__(self, registry_path="settings/data_registry.yaml", use_research_prices=True,
-                 project_root=None, price_multipliers=None):
+                 electricity_pricing_regime="subsidized", project_root=None, price_multipliers=None):
         """Initialize data loader and load all required data.
 
         Args:
             registry_path: Path to data registry YAML
             use_research_prices: If True, use research price data instead of toy data
+            electricity_pricing_regime: "subsidized" or "unsubsidized" for grid electricity pricing
             project_root: Optional path to project root (for resolving relative paths from registry)
             price_multipliers: Optional dict mapping parameter names to multipliers.
                 E.g. {"municipal_water": 1.2, "electricity": 0.8, "crop_tomato": 1.1}
@@ -666,6 +799,7 @@ class SimulationDataLoader:
         self.price_multipliers = price_multipliers or {}
         self.registry = load_data_registry(registry_path)
         self.use_research_prices = use_research_prices
+        self.electricity_pricing_regime = electricity_pricing_regime
         self.project_root = Path(project_root) if project_root else Path.cwd()
 
         # Load irrigation demand for all crops
@@ -680,7 +814,9 @@ class SimulationDataLoader:
 
         # Load price data
         self.municipal_prices = load_municipal_water_prices(self.registry, use_research_prices, self.project_root)
-        self.electricity_prices = load_electricity_prices(self.registry, use_research_prices, self.project_root)
+        self.electricity_prices = load_electricity_prices(
+            self.registry, use_research_prices, self.electricity_pricing_regime, self.project_root
+        )
 
         # Load water treatment energy
         self.treatment_energy = load_water_treatment_energy(self.registry, self.project_root)
@@ -699,6 +835,15 @@ class SimulationDataLoader:
         # Load precomputed power generation data
         self.pv_power = load_pv_power_data(self.registry, self.project_root)
         self.wind_power = load_wind_power_data(self.registry, self.project_root)
+
+        # Load household and community building demand data
+        self.household_demand = load_household_demand_data(self.registry, self.project_root)
+        self.community_building_demand = load_community_building_demand_data(self.registry, self.project_root)
+
+        # Load processing parameters (weight loss, value multipliers, Ky, post-harvest loss)
+        self.processing_specs = load_processing_specs(self.registry, self.project_root)
+        self.yield_response_factors = load_yield_response_factors(self.registry, self.project_root)
+        self.post_harvest_losses = load_post_harvest_losses(self.registry, self.project_root)
 
         # Load labor costs
         self._load_labor_costs()
@@ -811,6 +956,123 @@ class SimulationDataLoader:
             float: kWh per kW per day
         """
         return get_wind_kwh_per_kw(self.wind_power, target_date, turbine_variant)
+
+    def get_household_energy_kwh(self, target_date):
+        """Get total daily household energy demand.
+
+        Args:
+            target_date: Date to look up
+
+        Returns:
+            float: Total community household energy demand in kWh/day
+        """
+        if isinstance(target_date, date) and not isinstance(target_date, datetime):
+            target_date = datetime.combine(target_date, datetime.min.time())
+
+        try:
+            return float(self.household_demand["energy"].loc[target_date, "total_community_kwh"])
+        except KeyError:
+            return 0.0
+
+    def get_household_water_m3(self, target_date):
+        """Get total daily household water demand.
+
+        Args:
+            target_date: Date to look up
+
+        Returns:
+            float: Total community household water demand in m³/day
+        """
+        if isinstance(target_date, date) and not isinstance(target_date, datetime):
+            target_date = datetime.combine(target_date, datetime.min.time())
+
+        try:
+            return float(self.household_demand["water"].loc[target_date, "total_community_m3"])
+        except KeyError:
+            return 0.0
+
+    def get_community_building_energy_kwh(self, target_date):
+        """Get total daily community building energy demand.
+
+        Args:
+            target_date: Date to look up
+
+        Returns:
+            float: Total community building energy demand in kWh/day
+        """
+        if isinstance(target_date, date) and not isinstance(target_date, datetime):
+            target_date = datetime.combine(target_date, datetime.min.time())
+
+        try:
+            return float(self.community_building_demand["energy"].loc[target_date, "total_community_buildings_kwh"])
+        except KeyError:
+            return 0.0
+
+    def get_community_building_water_m3(self, target_date):
+        """Get total daily community building water demand.
+
+        Args:
+            target_date: Date to look up
+
+        Returns:
+            float: Total community building water demand in m³/day
+        """
+        if isinstance(target_date, date) and not isinstance(target_date, datetime):
+            target_date = datetime.combine(target_date, datetime.min.time())
+
+        try:
+            return float(self.community_building_demand["water"].loc[target_date, "total_community_buildings_m3"])
+        except KeyError:
+            return 0.0
+
+    def get_ky_value(self, crop_name):
+        """Get FAO yield response factor (Ky) for water stress calculation.
+
+        Args:
+            crop_name: Name of crop (tomato, potato, onion, kale, cucumber)
+
+        Returns:
+            float: Ky value (dimensionless)
+        """
+        return float(self.yield_response_factors.loc[crop_name, "ky_whole_season"])
+
+    def get_weight_loss_fraction(self, crop_name, processing_type):
+        """Get weight loss fraction for a crop/processing combination.
+
+        Args:
+            crop_name: Name of crop
+            processing_type: Processing pathway (fresh, packaged, canned, dried)
+
+        Returns:
+            float: Weight loss as fraction (0-1), e.g. 0.88 for 88% loss
+        """
+        pct = self.processing_specs.loc[(crop_name, processing_type), "weight_loss_pct"]
+        return float(pct) / 100.0
+
+    def get_value_multiplier(self, crop_name, processing_type):
+        """Get value-add price multiplier for a crop/processing combination.
+
+        Args:
+            crop_name: Name of crop
+            processing_type: Processing pathway (fresh, packaged, canned, dried)
+
+        Returns:
+            float: Price multiplier vs fresh (e.g. 1.8 means 1.8x fresh price per kg)
+        """
+        return float(self.processing_specs.loc[(crop_name, processing_type), "value_add_multiplier"])
+
+    def get_post_harvest_loss_fraction(self, crop_name, pathway):
+        """Get post-harvest loss fraction for a crop/pathway combination.
+
+        Args:
+            crop_name: Name of crop
+            pathway: Processing pathway (fresh, packaged, canned, dried)
+
+        Returns:
+            float: Loss fraction (0-1), e.g. 0.28 for 28% loss
+        """
+        pct = self.post_harvest_losses.loc[(crop_name, pathway), "loss_pct"]
+        return float(pct) / 100.0
 
     def get_labor_cost_usd_ha_month(self):
         """Get monthly labor cost per hectare (annual ÷ 12)."""

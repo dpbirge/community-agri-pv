@@ -9,6 +9,7 @@ Reads weather data and computes normalized power output for:
 
 import pandas as pd
 import numpy as np
+import yaml
 from datetime import datetime
 from pathlib import Path
 
@@ -45,38 +46,24 @@ PV_DENSITY_ADJUSTMENTS = {
     },
 }
 
-# Wind Turbine Specs
-# Designed for low-to-moderate wind resource (mean ~4.7 m/s at 10m) typical of Sinai inland areas
-# These specs reflect small-scale turbines optimized for distributed/microgrid applications
-# in low-moderate wind regimes (IEC Class III/IV sites) with lower rated speeds
-# Note: Turbines designed for light-wind sites achieve better capacity factors
-# by having lower rated speeds and larger rotors relative to capacity
-WIND_TURBINES = {
-    'small': {
-        'rated_kw': 10,
-        'cut_in_ms': 2.5,    # low cut-in for light winds
-        'rated_ms': 7.0,     # optimized for ~20% CF at site wind resource
-        'cut_out_ms': 25,
-        'typical_cf_range': (0.15, 0.25),
-        'hub_height_m': 30,
-    },
-    'medium': {
-        'rated_kw': 30,
-        'cut_in_ms': 3.0,
-        'rated_ms': 6.5,     # lower rated speed for better CF at low-wind site
-        'cut_out_ms': 25,
-        'typical_cf_range': (0.20, 0.30),
-        'hub_height_m': 40,
-    },
-    'large': {
-        'rated_kw': 60,
-        'cut_in_ms': 2.5,    # very low cut-in, purpose-built for low-wind sites
-        'rated_ms': 6.0,     # low rated speed with larger rotor for high CF
-        'cut_out_ms': 25,
-        'typical_cf_range': (0.25, 0.35),
-        'hub_height_m': 50,  # tallest hub captures best wind
-    },
-}
+def _load_wind_turbine_specs(base_path):
+    """Load wind turbine specs from data_registry.yaml (single source of truth)."""
+    reg_file = base_path / 'settings/data_registry.yaml'
+    with open(reg_file) as f:
+        registry = yaml.safe_load(f)
+    csv_path = base_path / registry['equipment']['wind_turbines']
+    df = pd.read_csv(csv_path, comment='#')
+    specs = {}
+    for _, row in df.iterrows():
+        specs[row['turbine_name']] = {
+            'rated_kw': row['rated_capacity_kw'],
+            'cut_in_ms': row['cut_in_speed_ms'],
+            'rated_ms': row['rated_speed_ms'],
+            'cut_out_ms': row['cut_out_speed_ms'],
+            'hub_height_m': row['hub_height_m'],
+            'capacity_factor_typical': row['capacity_factor_typical'],
+        }
+    return specs
 
 
 def calculate_pv_output(solar_irradiance, temp_max, temp_min, density_variant):
@@ -131,7 +118,7 @@ def calculate_pv_output(solar_irradiance, temp_max, temp_min, density_variant):
     return kwh_per_kw, capacity_factor
 
 
-def calculate_wind_output(wind_speed, turbine_variant):
+def calculate_wind_output(wind_speed, turbine_specs):
     """
     Calculate normalized wind output (kWh/kW/day) using Weibull-integrated power curve model.
 
@@ -150,12 +137,12 @@ def calculate_wind_output(wind_speed, turbine_variant):
 
     Args:
         wind_speed: Daily average wind speed in m/s (assumed at 10m height)
-        turbine_variant: 'small', 'medium', or 'large'
+        turbine_specs: Dict with keys cut_in_ms, rated_ms, cut_out_ms, hub_height_m
 
     Returns:
         tuple: (kwh_per_kw_per_day, capacity_factor)
     """
-    specs = WIND_TURBINES[turbine_variant]
+    specs = turbine_specs
     v_in = specs['cut_in_ms']
     v_rated = specs['rated_ms']
     v_out = specs['cut_out_ms']
@@ -232,15 +219,15 @@ def generate_pv_power_data(weather_df):
     return pd.DataFrame(records)
 
 
-def generate_wind_power_data(weather_df):
+def generate_wind_power_data(weather_df, wind_turbines):
     """Generate wind power dataset for all turbine variants."""
     records = []
 
     for _, row in weather_df.iterrows():
-        for turbine in ['small', 'medium', 'large']:
+        for turbine in wind_turbines:
             kwh, cf = calculate_wind_output(
                 row['wind_speed_ms'],
-                turbine
+                wind_turbines[turbine]
             )
             records.append({
                 'weather_scenario_id': row['weather_scenario_id'],
@@ -265,15 +252,26 @@ def create_pv_metadata():
 """
 
 
-def create_wind_metadata():
+def create_wind_metadata(wind_turbines):
     """Generate metadata header for wind power file."""
+    turbine_descs = []
+    for name, s in wind_turbines.items():
+        turbine_descs.append(
+            f"{name.capitalize()} turbine ({s['rated_kw']:.0f}kW): "
+            f"cut-in {s['cut_in_ms']} m/s, rated {s['rated_ms']} m/s, "
+            f"cut-out {s['cut_out_ms']} m/s, hub {s['hub_height_m']:.0f}m"
+        )
+    desc_str = ". ".join(turbine_descs)
+    variant_summary = ", ".join(
+        f"{name} {s['rated_kw']:.0f}kW" for name, s in wind_turbines.items()
+    )
     return f"""# SOURCE: Computed from weather data using Weibull-integrated power curve model
 # DATE: {datetime.now().strftime('%Y-%m-%d')}
-# DESCRIPTION: Normalized daily wind power output per kW of rated capacity for three turbine variants (small 10kW, medium 30kW, large 60kW)
+# DESCRIPTION: Normalized daily wind power output per kW of rated capacity for turbine variants ({variant_summary})
 # UNITS: date=YYYY-MM-DD, turbine_variant=text, kwh_per_kw_per_day=kWh/kW/day, capacity_factor=dimensionless(0-1)
 # LOGIC: Power curve model with cut-in/rated/cut-out speeds integrated over Weibull (Rayleigh, k=2) wind speed distribution. Below cut-in: 0. Cut-in to rated: cubic relationship. Rated to cut-out: full power. Above cut-out: 0. Wind shear correction applied (alpha=0.17) to scale from 10m measurement height to hub height. Weibull scale parameter derived from hub-height daily average wind speed.
-# DEPENDENCIES: data/precomputed/weather/daily_weather_scenario_001-toy.csv
-# ASSUMPTIONS: Turbines designed for low-wind sites (IEC Class III/IV). Small turbine (10kW): cut-in 2.5 m/s, rated 7.0 m/s, cut-out 25 m/s, hub 30m. Medium turbine (30kW): cut-in 3.0 m/s, rated 6.5 m/s, cut-out 25 m/s, hub 40m. Large turbine (60kW): cut-in 2.5 m/s, rated 6.0 m/s, cut-out 25 m/s, hub 50m. Wind at measurement height (10m) scaled to hub height using power law (alpha=0.17). Hourly wind speeds follow Rayleigh distribution (Weibull k=2).
+# DEPENDENCIES: data/precomputed/weather/daily_weather_scenario_001-toy.csv, settings/data_registry.yaml (equipment.wind_turbines)
+# ASSUMPTIONS: Turbines designed for low-wind sites (IEC Class III/IV). {desc_str}. Wind at measurement height (10m) scaled to hub height using power law (alpha=0.17). Hourly wind speeds follow Rayleigh distribution (Weibull k=2).
 """
 
 
@@ -303,37 +301,34 @@ def validate_pv_data(df):
     return issues
 
 
-def validate_wind_data(df):
+def validate_wind_data(df, wind_turbines):
     """Validate wind power data against expected ranges."""
     issues = []
 
-    # Check for missing values
     if df.isnull().any().any():
         issues.append("Missing values found in wind data")
 
-    # Check capacity factor range
     if (df['capacity_factor'] < 0).any() or (df['capacity_factor'] > 1).any():
         issues.append("Capacity factor outside 0-1 range")
 
-    # Check kwh_per_kw range
     if (df['kwh_per_kw_per_day'] < 0).any():
         issues.append("Negative kWh/kW values found")
     if (df['kwh_per_kw_per_day'] > 24).any():
         issues.append("Unrealistically high kWh/kW values (>24)")
 
-    # Check turbine variant completeness
-    for t in ['small', 'medium', 'large']:
+    for t in wind_turbines:
         if t not in df['turbine_variant'].values:
             issues.append(f"Missing turbine variant: {t}")
 
-    # Check typical capacity factors by turbine type
-    for turbine, specs in WIND_TURBINES.items():
+    for turbine, specs in wind_turbines.items():
         subset = df[df['turbine_variant'] == turbine]
         mean_cf = subset['capacity_factor'].mean()
-        cf_min, cf_max = specs['typical_cf_range']
-        # Allow some tolerance
-        if mean_cf < cf_min * 0.5 or mean_cf > cf_max * 1.5:
-            issues.append(f"Mean capacity factor for {turbine} ({mean_cf:.3f}) outside expected range ({cf_min}-{cf_max})")
+        cf_typical = specs['capacity_factor_typical']
+        if mean_cf < cf_typical * 0.5 or mean_cf > cf_typical * 2.0:
+            issues.append(
+                f"Mean capacity factor for {turbine} ({mean_cf:.3f}) "
+                f"far from typical ({cf_typical})"
+            )
 
     return issues
 
@@ -373,6 +368,10 @@ def main():
     """Main execution function."""
     base_path = Path('/Users/dpbirge/GITHUB/community-agri-pv')
 
+    # Load wind turbine specs from parameter CSV
+    wind_turbines = _load_wind_turbine_specs(base_path)
+    print(f"Loaded wind turbine specs: {list(wind_turbines.keys())}")
+
     # Load weather data (skip metadata header lines starting with #)
     weather_path = base_path / 'data/precomputed/weather/daily_weather_scenario_001-toy.csv'
     print(f"Loading weather data from: {weather_path}")
@@ -386,13 +385,13 @@ def main():
 
     # Generate wind power data
     print("\nGenerating wind power data...")
-    wind_df = generate_wind_power_data(weather_df)
+    wind_df = generate_wind_power_data(weather_df, wind_turbines)
     print(f"Generated {len(wind_df)} wind power records")
 
     # Validate data
     print("\nValidating data...")
     pv_issues = validate_pv_data(pv_df)
-    wind_issues = validate_wind_data(wind_df)
+    wind_issues = validate_wind_data(wind_df, wind_turbines)
 
     if pv_issues:
         print("PV validation issues:")
@@ -448,7 +447,7 @@ def main():
     # Write wind file with metadata header
     print(f"Writing wind data to: {wind_output_path}")
     with open(wind_output_path, 'w') as f:
-        f.write(create_wind_metadata())
+        f.write(create_wind_metadata(wind_turbines))
         wind_df.to_csv(f, index=False)
 
     # Report file sizes

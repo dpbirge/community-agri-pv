@@ -2,9 +2,11 @@
 
 ## 1. Overview
 
-This document defines HOW configuration parameters from `mvp-structure.md` are used in calculations throughout the simulation. It provides formulas, data sources, units, and references to scientific literature. Sections marked **TBD** have conceptual formulas but require further research or design decisions before implementation.
+This document defines HOW configuration parameters from `structure.md` are used in calculations throughout the simulation. It provides formulas, data sources, units, and references to scientific literature. Sections marked **TBD** have conceptual formulas but require further research or design decisions before implementation.
 
-For WHAT parameters exist and their valid options, see `mvp-structure.md`. For the full list of output metrics these calculations feed into, see Section 4 (Metrics) of `mvp-structure.md`.
+For WHAT parameters exist and their valid options, see `structure.md`. For the full list of output metrics these calculations feed into, see Section 4 (Metrics) of `structure.md`.
+
+> **Implementation status:** Most sections are fully implemented. Two documented features are pending code implementation: **Section 2.9 (Aquifer Drawdown Feedback)** and **Section 4.5 (Crop Diversity Index — revenue weighting)**. See `docs/codereview/calculations-vs-code-review-2026-02-05.md` for the active tracker.
 
 For implementation code, see `src/settings/calculations.py` and respective policy modules.
 
@@ -775,7 +777,7 @@ P_gen(t) = max(P_rated × 0.30, deficit)   otherwise
 
 ### Energy Dispatch (Load Balance)
 
-> **Status: Implemented** — `src/simulation/simulation.py:dispatch_energy()` (lines 578–751). Uses a hardcoded renewable-first merit-order dispatch. Energy policy objects exist in `src/policies/energy_policies.py` but are not yet consumed by the dispatch function (see `mvp-structure.md` Section 3 for integration notes).
+> **Status: Implemented** — `src/simulation/simulation.py:dispatch_energy()` (lines 578–751). Uses a hardcoded renewable-first merit-order dispatch. Energy policy objects exist in `src/policies/energy_policies.py` but are not yet consumed by the dispatch function (see `structure.md` Section 3 for integration notes).
 
 **Purpose:** Determine how generation sources meet demand at each time step, including battery charge/discharge decisions, grid import/export, and curtailment
 
@@ -996,12 +998,45 @@ LCOE_renewable = (annual_infrastructure_cost_pv + annual_infrastructure_cost_win
                / E_renewable_yr
 ```
 
+**Grid Electricity Pricing Regimes:**
+
+The simulation supports two grid electricity pricing regimes configured in `energy_pricing.grid.pricing_regime`:
+
+1. **Subsidized** (agricultural rates):
+   - Uses preferential agricultural/irrigation electricity tariffs
+   - Based on Egyptian agricultural rates (~15% discount vs commercial)
+   - Data: `historical_grid_electricity_prices-research.csv` (200 pt/kWh Aug 2024)
+   - Appropriate for communities with agricultural electricity access
+
+2. **Unsubsidized** (commercial/industrial rates):
+   - Uses full-cost commercial/industrial tariffs without subsidy
+   - Approximately 16.5% higher than subsidized agricultural rates
+   - Data: `historical_grid_electricity_prices_unsubsidized-research.csv` (233 pt/kWh Aug 2024)
+   - Appropriate for communities without agricultural electricity classification
+
+The pricing regime is specified in scenario configuration and determines which price dataset is loaded during simulation initialization.
+
+**Configuration:**
+
+- `energy_pricing.grid.pricing_regime`: [subsidized, unsubsidized]
+- `energy_pricing.grid.subsidized.use_peak_offpeak`: Optional flag for peak/offpeak rates
+- `energy_pricing.grid.unsubsidized.base_price_usd_kwh`: Base price for unsubsidized flat-rate scenarios
+- `energy_pricing.grid.unsubsidized.annual_escalation_pct`: Annual price escalation rate
+
+**Dependencies:**
+
+- Price data (subsidized): `data/prices/electricity/historical_grid_electricity_prices-research.csv`
+- Price data (unsubsidized): `data/prices/electricity/historical_grid_electricity_prices_unsubsidized-research.csv`
+- Configuration: `energy_pricing.grid.pricing_regime`
+
 **Output:** $/kWh blended cost
 
 **Notes:**
 
 - Infrastructure costs use the financing cost model (see Section 5: Infrastructure Financing Costs)
 - LCOE for renewables is an internal accounting cost, not a market price
+- Grid electricity pricing follows Egyptian tariff structures (see `docs/research/egyptian_utility_pricing.md`)
+- Commercial/industrial differential of 16.5% verified from EgyptERA Aug 2024 tariff schedules
 
 ## 4. Crop Growth and Yield Calculations
 
@@ -2113,7 +2148,7 @@ Peak_labor_month = max(monthly_labor)  across all months
 
 ### Community vs External Labor
 
-> **Status: Not yet implemented** — Tracked as a metric category in `mvp-structure.md` but no calculation exists.
+> **Status: Not yet implemented** — Tracked as a metric category in `structure.md` but no calculation exists.
 
 **Purpose:** Measure local employment benefit
 
@@ -2325,7 +2360,7 @@ Drawdown = max(Peak_cash - Trough_cash)  over all peak-to-trough sequences
 | `crop_kale` | Kale Price |
 | `crop_cucumber` | Cucumber Price |
 
-**Output:** Dict with `base_income` and per-parameter `{label, low_income, high_income, low_delta, high_delta, total_swing}`. Results visualized as a tornado chart (Plot 6 in Section 5 of `mvp-structure.md`).
+**Output:** Dict with `base_income` and per-parameter `{label, low_income, high_income, low_delta, high_delta, total_swing}`. Results visualized as a tornado chart (Plot 6 in Section 5 of `structure.md`).
 
 **Implementation detail:** Price perturbation is applied via the `SimulationDataLoader(price_multipliers={param: multiplier})` mechanism, which scales the relevant price series before the simulation consumes them. Each perturbation requires a full simulation run (21 total: 1 base + 2 × 10 parameters).
 
