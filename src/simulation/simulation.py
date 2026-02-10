@@ -10,11 +10,7 @@ from pathlib import Path
 from src.policies import WaterPolicyContext, WaterAllocation
 from src.policies.food_policies import FoodProcessingContext, ProcessingAllocation
 from src.settings.calculations import calculate_pumping_energy, estimate_infrastructure_costs, calculate_household_demand
-from src.simulation.data_loader import (
-    SimulationDataLoader,
-    calculate_tiered_cost,
-    get_marginal_tier_price,
-)
+from src.simulation.data_loader import SimulationDataLoader
 from src.simulation.state import (
     SimulationState,
     FarmState,
@@ -104,7 +100,7 @@ def calculate_farm_demand(farm_state, current_date, data_loader):
         )
         # Scale by crop area
         crop_demand = irr_per_ha * crop.area_ha
-        crop_demands[crop.crop_name] = crop_demand
+        crop_demands[crop.crop_name] = crop_demands.get(crop.crop_name, 0.0) + crop_demand
         total_demand += crop_demand
 
     return total_demand, crop_demands
@@ -117,7 +113,6 @@ def build_water_policy_context(
     data_loader,
     treatment_kwh_per_m3,
     constraints,
-    cumulative_monthly_water_m3=0.0,
     cumulative_gw_year_m3=0.0,
     cumulative_gw_month_m3=0.0,
     aquifer_state=None,
@@ -131,7 +126,6 @@ def build_water_policy_context(
         data_loader: SimulationDataLoader for price lookup
         treatment_kwh_per_m3: Energy for groundwater treatment
         constraints: dict with max_groundwater_m3 and max_treatment_m3
-        cumulative_monthly_water_m3: Cumulative water used this month (for tier pricing)
         cumulative_gw_year_m3: Cumulative groundwater used this year (for quota policies)
         cumulative_gw_month_m3: Cumulative groundwater used this month (for quota policies)
         aquifer_state: Optional AquiferState for dynamic pumping head calculation.
@@ -144,33 +138,24 @@ def build_water_policy_context(
     """
     year = current_date.year
 
-    # Get electricity price
-    energy_price = data_loader.get_electricity_price_usd_kwh(current_date)
+    # Get agricultural electricity price (for water pumping and treatment)
+    energy_pricing = scenario.energy_pricing
+    ag_energy = energy_pricing.agricultural
+    if ag_energy.pricing_regime == "subsidized":
+        energy_price = ag_energy.subsidized_price_usd_kwh
+    else:
+        energy_price = ag_energy.unsubsidized_price_usd_kwh
 
-    # Get municipal water price based on pricing regime
+    # Get agricultural water price based on pricing regime
     water_pricing = scenario.water_pricing
-    if water_pricing.pricing_regime == "subsidized":
-        # Check for full tier pricing configuration
-        tier_config = water_pricing.subsidized.tier_pricing
-        if tier_config and tier_config.enabled:
-            # Use marginal tier price for policy decisions
-            municipal_price = get_marginal_tier_price(
-                cumulative_monthly_water_m3, tier_config
-            )
-            if municipal_price is None:
-                # Fallback to simple tier lookup
-                municipal_price = data_loader.get_municipal_price_usd_m3(
-                    year, tier=water_pricing.subsidized.use_tier
-                )
-        else:
-            # Use simple tier lookup (legacy behavior)
-            municipal_price = data_loader.get_municipal_price_usd_m3(
-                year, tier=water_pricing.subsidized.use_tier
-            )
+    ag_pricing = water_pricing.agricultural
+
+    if ag_pricing.pricing_regime == "subsidized":
+        municipal_price = ag_pricing.subsidized_price_usd_m3
     else:
         # Unsubsidized: use base price with annual escalation
-        base_price = water_pricing.unsubsidized.base_price_usd_m3
-        escalation = water_pricing.unsubsidized.annual_escalation_pct / 100
+        base_price = ag_pricing.unsubsidized_base_price_usd_m3
+        escalation = ag_pricing.annual_escalation_pct / 100
         years_from_start = year - scenario.metadata.start_date.year
         municipal_price = base_price * ((1 + escalation) ** years_from_start)
 
@@ -247,7 +232,82 @@ def execute_water_policy(farm_config, context):
     return farm_config.water_policy.allocate_water(context)
 
 
-def update_farm_state(farm_state, allocation, crop_demands, current_date, tier_info=None, energy_cost_usd=0.0):
+def calculate_domestic_water_cost(
+    household_m3: float,
+    community_building_m3: float,
+    current_date: date,
+    scenario,
+) -> float:
+    """Calculate daily cost for domestic water consumption.
+
+    Domestic water includes household and community building consumption.
+    Costs are tracked at community level as operating expenses (not allocated
+    to individual farms).
+
+    Args:
+        household_m3: Daily household water consumption
+        community_building_m3: Daily community building water consumption
+        current_date: Current simulation date
+        scenario: Loaded scenario with pricing config
+
+    Returns:
+        float: Total domestic water cost (USD)
+    """
+    total_domestic_m3 = household_m3 + community_building_m3
+    if total_domestic_m3 <= 0:
+        return 0.0
+
+    year = current_date.year
+    water_pricing = scenario.water_pricing
+    domestic_pricing = water_pricing.domestic
+
+    if domestic_pricing.pricing_regime == "subsidized":
+        price = domestic_pricing.subsidized_price_usd_m3
+    else:
+        # Unsubsidized: use base price with annual escalation
+        base_price = domestic_pricing.unsubsidized_base_price_usd_m3
+        escalation = domestic_pricing.annual_escalation_pct / 100
+        years_from_start = year - scenario.metadata.start_date.year
+        price = base_price * ((1 + escalation) ** years_from_start)
+
+    return total_domestic_m3 * price
+
+
+def calculate_domestic_electricity_cost(
+    household_kwh: float,
+    community_building_kwh: float,
+    scenario,
+) -> float:
+    """Calculate daily cost for domestic electricity consumption.
+
+    Domestic electricity includes household and community building consumption.
+    Costs are tracked at community level as operating expenses (not allocated
+    to individual farms).
+
+    Args:
+        household_kwh: Daily household electricity consumption
+        community_building_kwh: Daily community building electricity consumption
+        scenario: Loaded scenario with pricing config
+
+    Returns:
+        float: Total domestic electricity cost (USD)
+    """
+    total_domestic_kwh = household_kwh + community_building_kwh
+    if total_domestic_kwh <= 0:
+        return 0.0
+
+    energy_pricing = scenario.energy_pricing
+    domestic_pricing = energy_pricing.domestic
+
+    if domestic_pricing.pricing_regime == "subsidized":
+        price = domestic_pricing.subsidized_price_usd_kwh
+    else:
+        price = domestic_pricing.unsubsidized_price_usd_kwh
+
+    return total_domestic_kwh * price
+
+
+def update_farm_state(farm_state, allocation, crop_demands, current_date, energy_cost_usd=0.0):
     """Update farm state after water allocation.
 
     Args:
@@ -255,32 +315,19 @@ def update_farm_state(farm_state, allocation, crop_demands, current_date, tier_i
         allocation: WaterAllocation from policy
         crop_demands: dict {crop_name: demand_m3} for distributing water to crops
         current_date: Current simulation date
-        tier_info: Optional dict with tier pricing calculation results
         energy_cost_usd: Energy cost for water treatment this day (USD)
     """
-    # Get cumulative monthly water BEFORE adding today's allocation
-    cumulative_before = farm_state.get_monthly_water_m3(current_date)
-
     # Update cumulative water usage
     farm_state.cumulative_groundwater_m3 += allocation.groundwater_m3
     farm_state.cumulative_municipal_m3 += allocation.municipal_m3
     farm_state.cumulative_water_cost_usd += allocation.cost_usd
 
     # Update monthly consumption tracker
-    total_water_today = allocation.groundwater_m3 + allocation.municipal_m3
     farm_state.update_monthly_consumption(
         current_date,
-        water_m3=total_water_today,
         groundwater_m3=allocation.groundwater_m3,
         electricity_kwh=allocation.energy_used_kwh,
     )
-
-    # Extract tier information if available
-    water_tier = None
-    tier_effective_rate = None
-    if tier_info:
-        water_tier = tier_info.get("marginal_tier")
-        tier_effective_rate = tier_info.get("cost_per_unit")
 
     # Record daily water allocation with decision metadata
     metadata = allocation.metadata
@@ -296,9 +343,6 @@ def update_farm_state(farm_state, allocation, crop_demands, current_date, tier_i
         gw_cost_per_m3=metadata.gw_cost_per_m3 if metadata else None,
         muni_cost_per_m3=metadata.muni_cost_per_m3 if metadata else None,
         constraint_hit=metadata.constraint_hit if metadata else None,
-        cumulative_monthly_water_m3=cumulative_before,
-        water_tier=water_tier,
-        tier_effective_rate=tier_effective_rate,
     )
     farm_state.daily_water_records.append(record)
 
@@ -740,11 +784,8 @@ def run_simulation(scenario, data_loader=None, verbose=False):
         SimulationState with all results
     """
     if data_loader is None:
-        # Get electricity pricing regime from scenario, default to subsidized
-        electricity_pricing_regime = "subsidized"
-        if scenario.energy_pricing:
-            electricity_pricing_regime = scenario.energy_pricing.pricing_regime
-        data_loader = SimulationDataLoader(electricity_pricing_regime=electricity_pricing_regime)
+        # Initialize data loader (electricity pricing now comes from scenario config, not CSV files)
+        data_loader = SimulationDataLoader(electricity_pricing_regime="subsidized")
 
     # Get treatment energy from scenario water system
     salinity_level = scenario.infrastructure.water_treatment.salinity_level
@@ -879,6 +920,26 @@ def run_simulation(scenario, data_loader=None, verbose=False):
         total_community_water_m3 = daily_household_water_m3 + daily_community_building_water_m3
         community_water_treatment_energy_kwh = total_community_water_m3 * treatment_kwh_per_m3
 
+        # Calculate domestic water cost (community-level operating expense)
+        domestic_water_cost_usd = calculate_domestic_water_cost(
+            daily_household_water_m3,
+            daily_community_building_water_m3,
+            current_date,
+            scenario
+        )
+
+        # Calculate domestic electricity cost (community-level operating expense)
+        domestic_electricity_cost_usd = calculate_domestic_electricity_cost(
+            daily_household_energy_kwh,
+            daily_community_building_energy_kwh,
+            scenario
+        )
+
+        # Track domestic costs in economic state
+        if state.economic is not None:
+            state.economic.cumulative_operating_cost_usd += domestic_water_cost_usd
+            state.economic.cumulative_operating_cost_usd += domestic_electricity_cost_usd
+
         # Add community water to storage system and aquifer tracking
         if total_community_water_m3 > 0:
             # Record groundwater extraction for community needs in aquifer depletion tracking
@@ -904,9 +965,6 @@ def run_simulation(scenario, data_loader=None, verbose=False):
             )
 
             if demand_m3 > 0:
-                # Get cumulative monthly water for tier pricing
-                cumulative_monthly = farm_state.get_monthly_water_m3(current_date)
-
                 # Get cumulative groundwater for quota policies
                 cumulative_gw_year = farm_state.cumulative_groundwater_m3
                 cumulative_gw_month = farm_state.get_monthly_groundwater_m3(current_date)
@@ -914,12 +972,11 @@ def run_simulation(scenario, data_loader=None, verbose=False):
                 # Get per-farm constraints (area-proportional sharing)
                 farm_constraints = constraints[farm_config.id]
 
-                # Build policy context with per-farm constraints and tier info.
+                # Build policy context with per-farm constraints
                 # Pass aquifer state for dynamic pumping head (drawdown feedback).
                 context = build_water_policy_context(
                     demand_m3, current_date, scenario, data_loader, treatment_kwh_per_m3,
                     farm_constraints,
-                    cumulative_monthly_water_m3=cumulative_monthly,
                     cumulative_gw_year_m3=cumulative_gw_year,
                     cumulative_gw_month_m3=cumulative_gw_month,
                     aquifer_state=state.aquifer,
@@ -928,38 +985,16 @@ def run_simulation(scenario, data_loader=None, verbose=False):
                 # Execute water policy
                 allocation = execute_water_policy(farm_config, context)
 
-                # Compute energy cost for water treatment (separate tracking)
-                energy_price = data_loader.get_electricity_price_usd_kwh(current_date)
+                # Compute energy cost for water treatment (agricultural rate)
+                ag_energy = scenario.energy_pricing.agricultural
+                if ag_energy.pricing_regime == "subsidized":
+                    energy_price = ag_energy.subsidized_price_usd_kwh
+                else:
+                    energy_price = ag_energy.unsubsidized_price_usd_kwh
                 energy_cost_usd = allocation.energy_used_kwh * energy_price
 
-                # Calculate tier pricing info for municipal water if tier config exists
-                tier_info = None
-                water_pricing = scenario.water_pricing
-                if (water_pricing and
-                    water_pricing.pricing_regime == "subsidized" and
-                    water_pricing.subsidized.tier_pricing and
-                    water_pricing.subsidized.tier_pricing.enabled):
-
-                    tier_config = water_pricing.subsidized.tier_pricing
-                    tier_result = calculate_tiered_cost(
-                        allocation.municipal_m3,
-                        cumulative_monthly,
-                        tier_config
-                    )
-                    if tier_result:
-                        tier_info = tier_result
-
-                        # H2 fix: Replace allocation cost with proper tiered cost for
-                        # municipal water. The policy computed municipal cost as
-                        # marginal_price × volume (correct for optimization decisions
-                        # but not for actual billing). Swap in the progressive tiered
-                        # cost from calculate_tiered_cost().
-                        marginal_muni_cost = allocation.municipal_m3 * context.municipal_price_per_m3
-                        gw_cost_portion = allocation.cost_usd - marginal_muni_cost
-                        allocation.cost_usd = gw_cost_portion + tier_result["total_cost"]
-
-                # Update farm state with tier info and energy cost
-                update_farm_state(farm_state, allocation, crop_demands, current_date, tier_info, energy_cost_usd=energy_cost_usd)
+                # Update farm state with energy cost
+                update_farm_state(farm_state, allocation, crop_demands, current_date, energy_cost_usd=energy_cost_usd)
 
                 # Record groundwater extraction for aquifer depletion tracking
                 if state.aquifer is not None and allocation.groundwater_m3 > 0:

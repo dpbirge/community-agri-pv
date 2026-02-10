@@ -128,7 +128,7 @@ community_structure:
   farms:
     - id: farm_1
       name: "Demo Farm"
-      area_ha: 125
+      area_ha: 100
       yield_factor: 1.0
       starting_capital_usd: 50000
       
@@ -139,22 +139,27 @@ community_structure:
         food: all_fresh
       
       crops:
+        # Tomato: winter-spring + fall-winter (both primary, 124-day gap)
         - name: tomato
           area_fraction: 0.20
-          planting_dates: ["02-15", "04-01"]
+          planting_dates: ["02-15", "11-01"]
           percent_planted: 0.90
+        # Potato: fall + winter-spring (primary + secondary, 2-day gap)
         - name: potato
           area_fraction: 0.20
-          planting_dates: ["09-15", "11-15"]
+          planting_dates: ["09-15", "01-15"]
           percent_planted: 0.85
+        # Onion: winter + fall-winter (both primary, 170-day gap)
         - name: onion
           area_fraction: 0.20
-          planting_dates: ["12-01", "01-15"]
+          planting_dates: ["01-15", "12-01"]
           percent_planted: 0.90
+        # Kale: fall + winter-spring (both primary, 38-day gap)
         - name: kale
           area_fraction: 0.20
-          planting_dates: ["10-01", "12-01"]
+          planting_dates: ["10-01", "02-01"]
           percent_planted: 0.85
+        # Cucumber: winter-spring + fall (both primary, 103-day gap)
         - name: cucumber
           area_fraction: 0.20
           planting_dates: ["02-15", "09-01"]
@@ -189,43 +194,34 @@ economics:
 # ============================================================================
 water_pricing:
   municipal_source: seawater_desalination
-  pricing_regime: unsubsidized
-  
-  subsidized:
-    use_tier: 3
-    tier_pricing:
-      enabled: true
-      resource_type: water
-      reset_period: monthly
-      include_wastewater_surcharge: false
-      wastewater_surcharge_pct: 50
-      brackets:
-        - min_units: 0
-          max_units: 10
-          price_per_unit: 0.65
-        - min_units: 10
-          max_units: 20
-          price_per_unit: 1.60
-        - min_units: 20
-          max_units: 40
-          price_per_unit: 2.75
-        - min_units: 40
-          max_units: 999999
-          price_per_unit: 4.50
-  
-  unsubsidized:
-    base_price_usd_m3: 0.75
-    annual_escalation_pct: 3.0
 
-energy_pricing:
-  grid:
-    pricing_regime: subsidized
+  agricultural:
+    pricing_regime: unsubsidized
     subsidized:
-      use_peak_offpeak: false
+      price_usd_per_m3: 0.75
     unsubsidized:
-      base_price_usd_kwh: 0.15
+      base_price_usd_m3: 0.75
       annual_escalation_pct: 3.0
 
-  renewable:
-    lcoe_pv_usd_kwh: 0.08
-    lcoe_wind_usd_kwh: 0.10
+  domestic:
+    pricing_regime: subsidized
+    subsidized:
+      price_usd_per_m3: 0.45
+    unsubsidized:
+      base_price_usd_m3: 0.75
+      annual_escalation_pct: 3.0
+
+energy_pricing:
+  agricultural:
+    pricing_regime: subsidized
+    subsidized:
+      price_usd_per_kwh: 0.12
+    unsubsidized:
+      price_usd_per_kwh: 0.15
+
+  domestic:
+    pricing_regime: subsidized
+    subsidized:
+      price_usd_per_kwh: 0.10
+    unsubsidized:
+      price_usd_per_kwh: 0.15

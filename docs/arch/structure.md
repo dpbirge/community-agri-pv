@@ -12,6 +12,12 @@ There are two main sections: system configurations (static initial conditions) a
 
 System configurations are static settings that describe initial conditions for a given simulation.
 
+Configuration parameters are in the form:
+**Category**
+- parameter_name [list of options] (clarifying notes) TODO: Notes to guide refactoring or new functionality
+
+When units are obvious, they should be appended to the end of the parameter. E.g. community_area_km2
+
 ### System Financing
 
 All community-owned systems include a `financing_status` parameter that indicates the financial profile for capital costs (CAPEX) and operating costs (OPEX).
@@ -89,28 +95,28 @@ All community-owned systems include a `financing_status` parameter that indicate
 - equipment: list of {type, fraction}
   - type: [washing_sorting_line, simple_wash_station]
 - storage_capacity_kg_total
-- shelf_life_days
+- storage_life_days (e.g., 3-7 days; short duration accounting for on-farm storage + transit + retail shelf time)
 - financing_status: [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]
 
 **Drying:**
 - equipment: list of {type, fraction}
   - type: [solar_tunnel_dryer, simple_dehydrator, electric_dryer]
 - storage_capacity_kg_total
-- shelf_life_days
+- storage_life_days (e.g., 6-12 months; long duration for shelf-stable dried products)
 - financing_status: [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]
 
 **Canning:**
 - equipment: list of {type, fraction}
   - type: [simple_retort, pressure_canner, industrial_retort]
 - storage_capacity_kg_total
-- shelf_life_days
+- storage_life_days (e.g., 1-3 years; very long duration for shelf-stable canned products)
 - financing_status: [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]
 
 **Packaging:**
 - equipment: list of {type, fraction}
   - type: [packaged, vacuum_sealed, modified_atmosphere]
 - storage_capacity_kg_total
-- shelf_life_days
+- storage_life_days (e.g., 2-8 weeks; moderate duration depending on packaging technology)
 - financing_status: [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]
 
 ### Community structure
@@ -123,21 +129,21 @@ All community-owned systems include a `financing_status` parameter that indicate
 - industrial_buildings_m2
 - community_buildings_m2
 
-### Farm configuration
+### Farm configurations
 
 **Per farm:**
 - id
 - name
-- area_ha
-- yield_factor
+- plantable_area_ha TODO: Update code to match updated parameter name
+- yield_factor (relative to soil profile)
 - starting_capital_usd
+- current_capital_usd (tracked capital year-to-year)
 
 **Crops (per farm):**
 - name: [tomato, potato, onion, kale, cucumber]
 - area_fraction
-- planting_date
+- planting_dates: list of MM-DD strings (e.g., ["02-15", "11-01"])
 - percent_planted
-
 
 ### Economic configuration
 
@@ -150,126 +156,135 @@ All community-owned systems include a `financing_status` parameter that indicate
 
 **Water pricing:**
 - municipal_source: [seawater_desalination, piped_groundwater]
-- pricing_regime: [subsidized, unsubsidized]
-- subsidized.use_tier: [1, 2, 3]
-- unsubsidized.base_price_usd_m3
-- unsubsidized.annual_escalation_pct
+- agricultural:
+  - pricing_regime: [subsidized, unsubsidized] (independent from domestic pricing)
+  - subsidized.price_usd_per_m3 (flat rate for subsidized agricultural water)
+  - unsubsidized.base_price_usd_m3 (base price with annual escalation)
+  - unsubsidized.annual_escalation_pct
+- domestic:
+  - pricing_regime: [subsidized, unsubsidized] (independent from agricultural pricing)
+  - subsidized.price_usd_per_m3 (flat rate for domestic water)
+  - unsubsidized.base_price_usd_m3 (base price with annual escalation)
+  - unsubsidized.annual_escalation_pct
 
 **Energy pricing:**
-- pricing_regime: [subsidized, unsubsidized]
-- subsidized.use_peak_offpeak: [true, false]
-- unsubsidized.base_price_usd_kwh
-- unsubsidized.annual_escalation_pct
+- agricultural:
+  - pricing_regime: [subsidized, unsubsidized] (independent from domestic pricing)
+  - subsidized.price_usd_per_kwh (flat rate for agricultural electricity - water pumping, processing)
+  - unsubsidized.price_usd_per_kwh (flat rate for unsubsidized agricultural electricity)
+- domestic:
+  - pricing_regime: [subsidized, unsubsidized] (independent from agricultural pricing)
+  - subsidized.price_usd_per_kwh (flat rate for domestic electricity - households, community buildings)
+  - unsubsidized.price_usd_per_kwh (flat rate for unsubsidized domestic electricity)
 
 ## 3. Policies
 
-Policies are rule-sets that govern actions within the simulation. Policies can be set by the community or by each farm individually. Community policies override or limit farm policies.
+See `policies.md` Section 2 for complete implementation details including context/output dataclass fields, helper methods, pseudocode, and usage examples.
 
-All policy modules follow the same pattern: a context dataclass (input), a decision/allocation dataclass (output), a base class with a `decide()` or `allocate()` method, concrete policy classes, and a registry with a `get_*_policy(name)` factory function. Policy source code is in `src/policies/`.
+Policy source code is in `src/policies/`
 
-### Implementation status
+### Policy scope and hierarchy
 
-| Policy Domain | Policies Defined | Integrated in Simulation | Code Location |
-|---|---|---|---|
-| Water | 5 | **Yes** — active in daily loop | `src/policies/water_policies.py` |
-| Food processing | 4 | **Yes** — active in `process_harvests()` | `src/policies/food_policies.py` |
-| Energy | 3 | **No** — dispatch is hardcoded merit-order | `src/policies/energy_policies.py` |
-| Crop (irrigation) | 3 | **No** — demand used directly from precomputed | `src/policies/crop_policies.py` |
-| Economic | 4 | **No** — cash update is simple aggregate | `src/policies/economic_policies.py` |
-| Market (sales) | 4 | **No** — crops sold immediately at harvest | `src/policies/market_policies.py` |
+Policies operate at three levels:
 
-> **Integration note:** Energy, crop, economic, and market policies are fully coded with decision logic and registered in `src/policies/__init__.py`, but the simulation loop in `src/simulation/simulation.py` does not call them. Integrating each requires: (1) instantiate the policy object during scenario loading, (2) build the appropriate context in the simulation loop, (3) use the policy's decision output to drive behavior. The water and food processing policies demonstrate this pattern.
+1. **Farm-level policies** (default) — Each farm independently selects its own policy for each domain (water, energy, irrigation, food processing, market, economic). Policies are set via the `scenarios/` YAML configuration file under each farm's entry.
 
-### Community policies
+2. **Community-override policies** (optional) — If all farms agree to a universal policy, a community-level override can be set in the scenario YAML. When set, the community policy automatically applies to all farms, overriding individual farm selections. Useful for shared infrastructure decisions that require uniform behavior.
 
-**Water conservation policies:**
-- conserve_groundwater:
-  - price_threshold_multiplier
-  - max_gw_ratio
-- quota_enforced:
-  - annual_quota_m3
-  - monthly_variance_pct
+3. **Household and shared facility policies** — Non-farm operations (residential households and shared community buildings) use a subset of water and energy policies to govern their water allocation and energy dispatch. These policies apply only to the water and energy demands of non-farm operations, not to food production or processing. Household/shared facility policies are configured separately from farm policies.
 
-### Water policies — integrated
+### Policy characteristics
+
+Policies are rule-sets that govern actions within the simulation. All policy modules follow the same pattern:
+- a context dataclass (input)
+- a decision/allocation dataclass (output)
+- a base class with a `decide()` or `allocate()` method, concrete policy classes
+- a registry with a `get_*_policy(name)` factory function. 
+
+### Water policies
 
 Each farm selects a water source allocation strategy. The policy is instantiated during scenario loading and called daily in the simulation loop via `execute_water_policy()`.
 
-> **Detailed documentation:** See `policies.md` Section 2 for complete implementation details including context/output dataclass fields, helper methods, pseudocode, and usage examples.
-
-**Options:** [always_groundwater, always_municipal, cheapest_source, conserve_groundwater, quota_enforced]
-
-| Policy | Behavior |
+| Policy name | Behavior |
 |---|---|
-| `always_groundwater` | 100% groundwater with onsite desalination; municipal fallback if physically constrained |
-| `always_municipal` | 100% municipal water; no treatment energy needed |
+| `max_groundwater` | Maximize groundwater extraction up to available capacity (storage + daily treatment throughput, or quota if enforced); municipal fallback if physically constrained |
+| `max_municipal` | Maximize municipal water allocation up to farm-level quota (if set); groundwater used when municipal quota exhausted or unavailable |
+| `min_water_quality` | Mix raw groundwater and municipal water to achieve target salinity/TDS level that all crops can tolerate |
 | `cheapest_source` | Daily cost comparison: groundwater (pumping + treatment energy cost) vs municipal (marginal tier price) |
 | `conserve_groundwater` | Prefers municipal; uses groundwater only when municipal price exceeds a configurable threshold multiplier |
 | `quota_enforced` | Hard annual groundwater limit with monthly variance controls; forces 100% municipal when quota exhausted |
 
 **Context → Decision:** `WaterPolicyContext` → `WaterAllocation` (groundwater_m3, municipal_m3, cost_usd, energy_used_kwh)
 
-### Food processing policies — integrated
+### Food processing policies
 
-Determines how harvested crop is split across processing pathways. Called in `process_harvests()` during the simulation loop.
+Each farm selects a food processing policy strategy. Determines how harvested crop is split across processing pathways. Called in `process_harvests()` during the simulation loop.
 
-**Options:** [all_fresh, maximize_storage, balanced, market_responsive]
+| Policy | Fresh | Packaged | Canned | Dried | Behavior |
+|---|---|---|---|---|---|
+| `all_fresh` | 100% | 0% | 0% | 0% | Fixed split according to table |
+| `maximize_storage` | 20% | 10% | 35% | 35% | Fixed split according to table |
+| `balanced` | 50% | 20% | 15% | 15% | Fixed split according to table |
+| `market_responsive` | 30-65% | 15-20% | 10-25% | 10-25% | Shifts toward processing when fresh prices fall below 80% of reference farmgate prices |
 
-| Policy | Fresh | Packaged | Canned | Dried |
-|---|---|---|---|---|
-| `all_fresh` | 100% | 0% | 0% | 0% |
-| `maximize_storage` | 20% | 10% | 35% | 35% |
-| `balanced` | 50% | 20% | 15% | 15% |
-| `market_responsive` | 30-65% | 15-20% | 10-25% | 10-25% |
-
-`market_responsive` shifts toward processing when fresh prices fall below 80% of reference farmgate prices.
+**Note**: All policies have an umbrella policy that forces the sale of food if storage becomes full OR food has reached its storage-life limit. Each harvest must be tracked as a discrete unit to know first-in, first-out tranches and to ensure no food stays past its storage-life deadline. When storage becomes full, the oldest tranche is sold first, then the next oldest, until enough space is made.
 
 **Context → Decision:** `FoodProcessingContext` → `ProcessingAllocation` (fresh_fraction, packaged_fraction, canned_fraction, dried_fraction)
 
-### Energy policies — implemented, not yet integrated
+### Market policies (selling)
 
-Three dispatch strategies are defined. Currently, `dispatch_energy()` in `simulation.py` uses a hardcoded renewable-first merit-order. These policies return `EnergyAllocation` flags that could parameterize the dispatch function.
+Each farm selects a sales policy. Food processing policies entirely determine how food is processed (even when based on food prices). Market policies entirely determine when food is sold. The only exception is when food storage runs out and older stored food must be sold to make room for new food.
 
-**Options:** [all_renewable, hybrid, all_grid, cost_minimize]
+| Policy name | Behavior |
+|---|---|
+| `sell_all_immediately` | Once crops are processed into their final state (fresh, canned, etc.) they are immediately sold to market. Storage is only used to hold products before they are sold to market. This allows minimal storage space |
+| `hold_for_peak` | Crops are processed according to food processing policy and the max amount is stored until prices are above a certain threshold |
+| `adaptive` | Use sigmoid (within range) to determine portion of processed food based on current price relative to historic prices |
 
-**Context → Decision:** `EnergyPolicyContext` → `EnergyAllocation`
-
-> See **`policies.md` Section 3** for complete policy specifications, dataclass definitions, pseudocode, implementation status, and integration requirements.
-
-### Crop (irrigation) policies — implemented, not yet integrated
-
-**Options:** [fixed_schedule, deficit_irrigation, weather_adaptive]
-
-**Context → Decision:** `CropPolicyContext` → `CropDecision`
-
-See `policies.md` Section 5 for full policy specifications, pseudocode, and integration requirements.
-
-### Economic policies — implemented, not yet integrated
-
-**Options:** [balanced, aggressive_growth, conservative, risk_averse]
-
-**Context → Decision:** `EconomicPolicyContext` → `EconomicDecision`
-
-> See **`policies.md` Section 6** for complete policy specifications, dataclass definitions, pseudocode, and integration requirements.
-
-### Market (sales) policies — implemented, not yet integrated
-
-Four sale timing strategies are defined. Currently, crops are sold immediately at harvest within `process_harvests()`.
-
-**Options:** [sell_immediately, hold_for_peak, process_when_low, adaptive_marketing]
+TODOS:
+- Determine the threshold for `hold_for_peak` that triggers sales
+- Determine the sigmoid and min-max band
 
 **Context → Decision:** `MarketPolicyContext` → `MarketDecision` (sell_fraction, store_fraction, process_fraction, target_price_per_kg)
 
-> See **`policies.md` Section 7** for complete policy specifications, dataclass definitions, pseudocode, and integration requirements.
+### Energy policies
 
-### Not yet implemented
+Each farm selects a energy source allocation strategy. The policy is instantiated during scenario loading and called daily in the simulation loop via `execute_energy_policy()`.
 
-The following policy-related features from the model plan have no code:
+| Policy name | Behavior |
+|---|---| 
+| `microgrid` | Uses wind and solar sources first with battery buffering, then uses generator. Behaves as if no grid connection. |
+| `renewable_first` | Uses wind and solar sources first with battery buffering, then uses grid. Generator only used if grid goes down. |
+| `all_grid` | All energy from grid. If renewable sources specified in configuration, solar or wind energy is sold directly to the grid (net metering) |
 
-- **Community pooling mechanism** — configurable pooling percentages, distribution rules, mutual aid fund
-- **Per-farm cost allocation** — rules for splitting shared infrastructure costs (proportional to area, equal, usage-based)
-- **Working capital advances** — pre-harvest cash advances to farmers, recouped at sale
-- **Insurance options** — crop insurance, equipment insurance, comparison with self-insurance reserves
-- **Price correlation structure** — correlated stochastic shocks across crop prices, energy prices, and weather
+**Context → Decision:** `EnergyPolicyContext` → `EnergyAllocation`
+
+NOTE: Three dispatch strategies are defined. Currently, `dispatch_energy()` in `simulation.py` uses a hardcoded renewable-first merit-order. These policies return `EnergyAllocation` flags that could parameterize the dispatch function.
+
+### Irrigation policies
+
+Each farm selects an irrigation management strategy. The policy is instantiated during scenario loading and called daily in the simulation loop via `execute_crop_policy()`. Controls how much water is requested based on crop conditions and environmental factors.
+
+| Policy name | Behavior |
+|---|---|
+| `fixed_schedule` | Apply 100% of standard irrigation demand every day regardless of weather, crop stage, or water availability |
+| `deficit_irrigation` | Controlled deficit strategy: full irrigation during initial/development stages, 80% during mid-season, 72% during late-season to conserve water while managing yield impacts |
+| `weather_adaptive` | Temperature-responsive irrigation: +15% water on extreme heat days (>40°C), +5% on hot days (>35°C), -15% on cool days (<20°C) |
+
+**Context → Decision:** `CropPolicyContext` → `CropDecision` (adjusted_demand_m3, demand_multiplier, priority, decision_reason)
+
+### Economic policies
+
+Each farm selects a financial management strategy. The policy is instantiated during scenario loading and governs cash reserve targets, spending limits, and investment decisions. Called monthly or when financial decisions are triggered.
+
+| Policy name | Reserve target | Investment threshold | Spending behavior |
+|---|---|---|---|
+| `balanced` | 3 months | Invest when reserves >3 months | Adaptive: survival mode <1 month, maintenance 1-3 months, growth mode >3 months |
+| `aggressive_growth` | 1 month | Invest when reserves >0.5 months | Minimize cash reserves, sell inventory immediately, maximize reinvestment into operations |
+| `conservative` | 6 months | Invest when reserves >9 months | Cap spending at 50% of revenue when under target, maintain high safety buffer |
+| `risk_averse` | 6+ months | Invest only with >12 months reserves | Maximize reserves, sell inventory immediately to lock in revenue, survival priority if <3 months |
+
+**Context → Decision:** `EconomicPolicyContext` → `EconomicDecision` (max_spending_usd, reserve_target_months, investment_allowed, sell_inventory, spending_priority)
 
 
 ## 4. Metrics

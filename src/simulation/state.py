@@ -45,21 +45,19 @@ class CropState:
 
 @dataclass
 class MonthlyConsumptionTracker:
-    """Tracks monthly consumption for tiered pricing calculations.
+    """Tracks monthly consumption for quota policies and future analysis.
 
-    Resets at the beginning of each month to enable tier-based cost
-    calculations that depend on cumulative monthly consumption.
+    Resets at the beginning of each month to enable quota enforcement
+    and periodic consumption tracking.
 
     Args:
         current_month: Month being tracked (1-12)
         current_year: Year being tracked
-        water_m3: Cumulative water consumption this month
         groundwater_m3: Cumulative groundwater consumption this month (for quota policies)
         electricity_kwh: Cumulative electricity consumption this month
     """
     current_month: int
     current_year: int
-    water_m3: float = 0.0
     groundwater_m3: float = 0.0
     electricity_kwh: float = 0.0
 
@@ -243,18 +241,6 @@ class FarmState:
         """Total water used by this farm."""
         return self.cumulative_groundwater_m3 + self.cumulative_municipal_m3
 
-    def get_monthly_water_m3(self, current_date):
-        """Get cumulative water consumption for the current month.
-
-        Returns 0.0 if tracker not initialized or month has changed.
-        """
-        if self.monthly_consumption is None:
-            return 0.0
-        if (self.monthly_consumption.current_month != current_date.month or
-            self.monthly_consumption.current_year != current_date.year):
-            return 0.0
-        return self.monthly_consumption.water_m3
-
     def get_monthly_electricity_kwh(self, current_date):
         """Get cumulative electricity consumption for the current month.
 
@@ -280,12 +266,11 @@ class FarmState:
             return 0.0
         return self.monthly_consumption.groundwater_m3
 
-    def update_monthly_consumption(self, current_date, water_m3=0.0, groundwater_m3=0.0, electricity_kwh=0.0):
+    def update_monthly_consumption(self, current_date, groundwater_m3=0.0, electricity_kwh=0.0):
         """Update monthly consumption tracker, resetting if month changed.
 
         Args:
             current_date: Current simulation date
-            water_m3: Total water consumed today
             groundwater_m3: Groundwater consumed today (for quota tracking)
             electricity_kwh: Electricity consumed today
         """
@@ -304,7 +289,6 @@ class FarmState:
             )
 
         # Add today's consumption
-        self.monthly_consumption.water_m3 += water_m3
         self.monthly_consumption.groundwater_m3 += groundwater_m3
         self.monthly_consumption.electricity_kwh += electricity_kwh
 
@@ -327,10 +311,6 @@ class DailyWaterRecord:
     gw_cost_per_m3: Optional[float] = None
     muni_cost_per_m3: Optional[float] = None
     constraint_hit: Optional[str] = None
-    # Tier pricing metadata
-    cumulative_monthly_water_m3: Optional[float] = None
-    water_tier: Optional[int] = None
-    tier_effective_rate: Optional[float] = None
 
 
 @dataclass
@@ -647,6 +627,8 @@ def reinitialize_farm_crops_for_year(farm_state, farm_config, year, data_loader)
         )
         if crop_state is not None:
             new_crops.append(crop_state)
+
+    _check_planting_overlap(new_crops, farm_config.id)
 
     # Append new crops to preserve historical crop data
     farm_state.crops.extend(new_crops)

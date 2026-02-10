@@ -159,104 +159,91 @@ class FarmCropConfig:
 
 
 @dataclass
-class TierBracket:
-    """Single tier bracket for consumption-based pricing.
+class AgriculturalPricingConfig:
+    """Agricultural water pricing (for crop irrigation).
 
-    Defines a consumption range and its associated price. Used for both
-    water (m3/month) and electricity (kWh/month) tier structures.
-
-    Args:
-        min_units: Lower bound of tier (inclusive)
-        max_units: Upper bound of tier (exclusive), None for unlimited
-        price_per_unit: Price per unit (USD/m3 or USD/kWh)
-    """
-    min_units: float
-    max_units: float  # None indicates unlimited (final tier)
-    price_per_unit: float
-
-
-@dataclass
-class TierPricingConfig:
-    """Configuration for consumption-based tiered pricing.
-
-    Supports Egyptian-style progressive tier pricing where higher consumption
-    levels pay higher per-unit rates. Tiers are applied based on cumulative
-    monthly consumption.
+    Supports both subsidized (flat rate) and unsubsidized (escalating base price)
+    regimes. Agricultural water is allocated among farms based on crop irrigation
+    demand and water policy decisions.
 
     Args:
-        enabled: Whether tier pricing is active
-        resource_type: "water" or "electricity"
-        reset_period: Period for consumption tracking ("monthly" or "annual")
-        brackets: List of TierBracket defining consumption tiers
-        include_wastewater_surcharge: For water, add wastewater fee as % of tariff
-        wastewater_surcharge_pct: Wastewater surcharge percentage (default 75%)
-
-    Egyptian Water Tiers (2018 reference):
-        - Tier 1: 0-10 m3/month @ 0.65 EGP/m3
-        - Tier 2: 11-20 m3/month @ 1.60 EGP/m3
-        - Tier 3: 21-30 m3/month @ 2.25 EGP/m3
-        - Tier 4: 31-40 m3/month @ 2.75 EGP/m3
-        - Tier 5: >40 m3/month @ 3.15 EGP/m3
-
-    Egyptian Residential Electricity Tiers (Aug 2024 reference):
-        - Tier 1: 0-50 kWh/month @ 0.68 EGP/kWh
-        - Tier 2: 51-100 kWh/month @ 0.78 EGP/kWh
-        - Tier 3: 101-200 kWh/month @ 0.95 EGP/kWh
-        - Tier 4: 201-350 kWh/month @ 1.55 EGP/kWh
-        - Tier 5: 351-650 kWh/month @ 1.95 EGP/kWh
-        - Tier 6: 651-1000 kWh/month @ 2.10 EGP/kWh
-        - Tier 7: >1000 kWh/month @ 1.65 EGP/kWh
+        pricing_regime: "subsidized" or "unsubsidized"
+        subsidized_price_usd_m3: Flat rate for subsidized pricing
+        unsubsidized_base_price_usd_m3: Base price for unsubsidized (year 0)
+        annual_escalation_pct: Annual escalation rate for unsubsidized (e.g., 3.0 for 3%)
     """
-    enabled: bool
-    resource_type: str  # "water" or "electricity"
-    reset_period: str  # "monthly" or "annual"
-    brackets: list  # List of TierBracket
-    include_wastewater_surcharge: bool = False
-    wastewater_surcharge_pct: float = 75.0
+    pricing_regime: str
+    subsidized_price_usd_m3: float
+    unsubsidized_base_price_usd_m3: float
+    annual_escalation_pct: float
 
 
 @dataclass
-class SubsidizedPricingConfig:
-    """Subsidized municipal water pricing (tiered rates)."""
-    use_tier: int  # 1, 2, or 3 (legacy simple tier selection)
-    tier_pricing: TierPricingConfig = None  # Optional full tier configuration
+class DomesticPricingConfig:
+    """Domestic water pricing (for households and community buildings).
 
+    Domestic water includes household consumption and community building water use.
+    Costs are tracked at community level as operating expenses.
 
-@dataclass
-class UnsubsidizedPricingConfig:
-    """Unsubsidized municipal water pricing (SWRO full cost)."""
-    base_price_usd_m3: float
+    Args:
+        pricing_regime: "subsidized" or "unsubsidized"
+        subsidized_price_usd_m3: Flat rate for subsidized pricing
+        unsubsidized_base_price_usd_m3: Base price for unsubsidized (year 0)
+        annual_escalation_pct: Annual escalation rate for unsubsidized (e.g., 3.0 for 3%)
+    """
+    pricing_regime: str
+    subsidized_price_usd_m3: float
+    unsubsidized_base_price_usd_m3: float
     annual_escalation_pct: float
 
 
 @dataclass
 class WaterPricingConfig:
-    """Water pricing configuration for municipal water."""
-    municipal_source: str  # seawater_desalination or piped_groundwater
+    """Water pricing configuration.
+
+    Distinguishes between agricultural water (irrigation) and domestic water
+    (households and community buildings). Each can have independent pricing regimes.
+
+    Args:
+        municipal_source: "seawater_desalination" or "piped_groundwater"
+        agricultural: Agricultural water pricing configuration
+        domestic: Domestic water pricing configuration
+    """
+    municipal_source: str
+    agricultural: AgriculturalPricingConfig
+    domestic: DomesticPricingConfig
+
+
+@dataclass
+class AgriculturalEnergyPricingConfig:
+    """Agricultural electricity pricing (for water pumping and processing)."""
     pricing_regime: str  # subsidized or unsubsidized
-    subsidized: SubsidizedPricingConfig
-    unsubsidized: UnsubsidizedPricingConfig
+    subsidized_price_usd_kwh: float
+    unsubsidized_price_usd_kwh: float
 
 
 @dataclass
-class GridSubsidizedConfig:
-    """Subsidized grid electricity pricing (agricultural rates)."""
-    use_peak_offpeak: bool = False  # If True, use peak/offpeak rates; if False, use average daily
-
-
-@dataclass
-class GridUnsubsidizedConfig:
-    """Unsubsidized grid electricity pricing (commercial/industrial rates)."""
-    base_price_usd_kwh: float
-    annual_escalation_pct: float
-
-
-@dataclass
-class GridPricingConfig:
-    """Grid electricity pricing configuration."""
+class DomesticEnergyPricingConfig:
+    """Domestic electricity pricing (for households and community buildings)."""
     pricing_regime: str  # subsidized or unsubsidized
-    subsidized: GridSubsidizedConfig
-    unsubsidized: GridUnsubsidizedConfig
+    subsidized_price_usd_kwh: float
+    unsubsidized_price_usd_kwh: float
+
+
+@dataclass
+class EnergyPricingConfig:
+    """Energy pricing configuration.
+
+    Distinguishes between agricultural energy (water pumping, processing) and
+    domestic energy (households and community buildings). Each can have
+    independent pricing regimes.
+
+    Args:
+        agricultural: Agricultural electricity pricing configuration
+        domestic: Domestic electricity pricing configuration
+    """
+    agricultural: AgriculturalEnergyPricingConfig
+    domestic: DomesticEnergyPricingConfig
 
 
 @dataclass
@@ -310,7 +297,7 @@ class Scenario:
     community: CommunityConfig
     economics: EconomicsConfig
     water_pricing: WaterPricingConfig = None
-    energy_pricing: GridPricingConfig = None
+    energy_pricing: EnergyPricingConfig = None
     policy_parameters: dict = None
 
 
@@ -560,84 +547,67 @@ def _load_economics(econ_data):
     )
 
 
-def _load_tier_brackets(brackets_data, context):
-    """Parse tier bracket list from YAML.
-
-    Args:
-        brackets_data: List of bracket dicts from YAML
-        context: Context string for error messages
-
-    Returns:
-        List of TierBracket objects
-    """
-    brackets = []
-    for i, b in enumerate(brackets_data):
-        bracket_context = f"{context}.bracket[{i}]"
-        brackets.append(TierBracket(
-            min_units=_require(b, "min_units", bracket_context),
-            max_units=b.get("max_units"),  # None for final tier
-            price_per_unit=_require(b, "price_per_unit", bracket_context),
-        ))
-    return brackets
-
-
-def _load_tier_pricing(tier_data, context):
-    """Parse tier pricing configuration from YAML.
-
-    Args:
-        tier_data: Dict with tier pricing configuration
-        context: Context string for error messages
-
-    Returns:
-        TierPricingConfig or None if not present
-    """
-    if not tier_data:
-        return None
-
-    brackets_data = tier_data.get("brackets", [])
-    if not brackets_data:
-        return None
-
-    brackets = _load_tier_brackets(brackets_data, f"{context}.tier_pricing")
-
-    return TierPricingConfig(
-        enabled=tier_data.get("enabled", True),
-        resource_type=tier_data.get("resource_type", "water"),
-        reset_period=tier_data.get("reset_period", "monthly"),
-        brackets=brackets,
-        include_wastewater_surcharge=tier_data.get("include_wastewater_surcharge", False),
-        wastewater_surcharge_pct=tier_data.get("wastewater_surcharge_pct", 75.0),
-    )
-
-
 def _load_water_pricing(data):
-    """Parse water_pricing section if present."""
+    """Parse water_pricing section with agricultural and domestic pricing.
+
+    Args:
+        data: Parsed YAML data
+
+    Returns:
+        WaterPricingConfig or None if not present
+
+    Example YAML:
+        water_pricing:
+          municipal_source: seawater_desalination
+          agricultural:
+            pricing_regime: unsubsidized
+            subsidized:
+              price_usd_per_m3: 0.75
+            unsubsidized:
+              base_price_usd_m3: 1.20
+              annual_escalation_pct: 3.0
+          domestic:
+            pricing_regime: subsidized
+            subsidized:
+              price_usd_per_m3: 0.45
+            unsubsidized:
+              base_price_usd_m3: 0.75
+              annual_escalation_pct: 3.0
+    """
     if "water_pricing" not in data:
         return None
 
     wp = data["water_pricing"]
     context = "water_pricing"
 
-    subsidized_data = wp.get("subsidized", {})
-    unsubsidized_data = wp.get("unsubsidized", {})
+    # Parse agricultural water pricing
+    ag_data = wp.get("agricultural", {})
+    ag_subsidized = ag_data.get("subsidized", {})
+    ag_unsubsidized = ag_data.get("unsubsidized", {})
 
-    # Parse optional tier pricing configuration
-    tier_pricing = _load_tier_pricing(
-        subsidized_data.get("tier_pricing"),
-        f"{context}.subsidized"
+    agricultural = AgriculturalPricingConfig(
+        pricing_regime=ag_data.get("pricing_regime", "unsubsidized"),
+        subsidized_price_usd_m3=ag_subsidized.get("price_usd_per_m3", 0.75),
+        unsubsidized_base_price_usd_m3=ag_unsubsidized.get("base_price_usd_m3", 1.20),
+        annual_escalation_pct=ag_unsubsidized.get("annual_escalation_pct", 3.0),
+    )
+
+    # Parse domestic water pricing
+    dom_data = wp.get("domestic", {})
+    dom_subsidized = dom_data.get("subsidized", {})
+    dom_unsubsidized = dom_data.get("unsubsidized", {})
+
+    domestic = DomesticPricingConfig(
+        pricing_regime=dom_data.get("pricing_regime", "subsidized"),
+        subsidized_price_usd_m3=dom_subsidized.get("price_usd_per_m3", 0.45),
+        unsubsidized_base_price_usd_m3=dom_unsubsidized.get("base_price_usd_m3", 0.75),
+        annual_escalation_pct=dom_unsubsidized.get("annual_escalation_pct", 3.0),
     )
 
     return WaterPricingConfig(
-        municipal_source=_require(wp, "municipal_source", context),
-        pricing_regime=_require(wp, "pricing_regime", context),
-        subsidized=SubsidizedPricingConfig(
-            use_tier=subsidized_data.get("use_tier", 3),
-            tier_pricing=tier_pricing,
-        ),
-        unsubsidized=UnsubsidizedPricingConfig(
-            base_price_usd_m3=unsubsidized_data.get("base_price_usd_m3", 0.75),
-            annual_escalation_pct=unsubsidized_data.get("annual_escalation_pct", 3.0),
-        ),
+        municipal_source=wp.get("municipal_source", "seawater_desalination"),
+        agricultural=agricultural,
+        domestic=domestic,
     )
 
 
@@ -648,30 +618,31 @@ def _load_energy_pricing(data):
         data: Parsed YAML data
 
     Returns:
-        GridPricingConfig or None
+        EnergyPricingConfig or None
     """
     ep = data.get("energy_pricing", {})
     if not ep:
         return None
 
-    context = "energy_pricing"
-    grid_data = ep.get("grid", {})
+    # Parse agricultural pricing
+    ag_data = ep.get("agricultural", {})
+    agricultural = AgriculturalEnergyPricingConfig(
+        pricing_regime=ag_data.get("pricing_regime", "subsidized"),
+        subsidized_price_usd_kwh=ag_data.get("subsidized", {}).get("price_usd_per_kwh", 0.12),
+        unsubsidized_price_usd_kwh=ag_data.get("unsubsidized", {}).get("price_usd_per_kwh", 0.15),
+    )
 
-    if not grid_data:
-        return None
+    # Parse domestic pricing
+    dom_data = ep.get("domestic", {})
+    domestic = DomesticEnergyPricingConfig(
+        pricing_regime=dom_data.get("pricing_regime", "subsidized"),
+        subsidized_price_usd_kwh=dom_data.get("subsidized", {}).get("price_usd_per_kwh", 0.10),
+        unsubsidized_price_usd_kwh=dom_data.get("unsubsidized", {}).get("price_usd_per_kwh", 0.15),
+    )
 
-    subsidized_data = grid_data.get("subsidized", {})
-    unsubsidized_data = grid_data.get("unsubsidized", {})
-
-    return GridPricingConfig(
-        pricing_regime=grid_data.get("pricing_regime", "subsidized"),
-        subsidized=GridSubsidizedConfig(
-            use_peak_offpeak=subsidized_data.get("use_peak_offpeak", False),
-        ),
-        unsubsidized=GridUnsubsidizedConfig(
-            base_price_usd_kwh=unsubsidized_data.get("base_price_usd_kwh", 0.15),
-            annual_escalation_pct=unsubsidized_data.get("annual_escalation_pct", 3.0),
-        ),
+    return EnergyPricingConfig(
+        agricultural=agricultural,
+        domestic=domestic,
     )
 
 

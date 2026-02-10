@@ -873,21 +873,20 @@ def compute_counterfactual_water_cost(simulation_state, data_loader, scenario):
         }
     """
     water_pricing = scenario.water_pricing
+    ag_pricing = water_pricing.agricultural
     start_year = scenario.metadata.start_date.year
 
-    # Pre-compute municipal price for each year
+    # Pre-compute agricultural water price for each year
     years = sorted(set(m.year for m in simulation_state.yearly_metrics))
     yearly_prices = {}
     for year in years:
-        if water_pricing.pricing_regime == "unsubsidized":
-            base_price = water_pricing.unsubsidized.base_price_usd_m3
-            escalation = water_pricing.unsubsidized.annual_escalation_pct / 100
+        if ag_pricing.pricing_regime == "unsubsidized":
+            base_price = ag_pricing.unsubsidized_base_price_usd_m3
+            escalation = ag_pricing.annual_escalation_pct / 100
             yearly_prices[year] = base_price * ((1 + escalation) ** (year - start_year))
         else:
-            # Subsidized: look up from data_loader
-            yearly_prices[year] = data_loader.get_municipal_price_usd_m3(
-                year, tier=water_pricing.subsidized.use_tier
-            )
+            # Subsidized: use flat rate
+            yearly_prices[year] = ag_pricing.subsidized_price_usd_m3
 
     # Compute counterfactual costs from daily records
     yearly_costs = {year: {} for year in years}
@@ -945,21 +944,17 @@ def compute_market_water_price_per_m3(scenario, years, data_loader=None):
         dict: {year: price_per_m3}
     """
     water_pricing = scenario.water_pricing
+    ag_pricing = water_pricing.agricultural
     start_year = scenario.metadata.start_date.year
     result = {}
     for year in years:
-        if water_pricing.pricing_regime == "unsubsidized":
-            base_price = water_pricing.unsubsidized.base_price_usd_m3
-            escalation = water_pricing.unsubsidized.annual_escalation_pct / 100
+        if ag_pricing.pricing_regime == "unsubsidized":
+            base_price = ag_pricing.unsubsidized_base_price_usd_m3
+            escalation = ag_pricing.annual_escalation_pct / 100
             result[year] = base_price * ((1 + escalation) ** (year - start_year))
         else:
-            if data_loader is None:
-                raise ValueError(
-                    "data_loader is required for subsidized pricing regime"
-                )
-            result[year] = data_loader.get_municipal_price_usd_m3(
-                year, tier=water_pricing.subsidized.use_tier
-            )
+            # Subsidized: use flat rate
+            result[year] = ag_pricing.subsidized_price_usd_m3
     return result
 
 
