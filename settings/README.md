@@ -42,7 +42,7 @@ All six policy types are implemented in `src/policies/`:
 | **Food** | `all_fresh`, `maximize_storage`, `balanced`, `market_responsive` | `food_policies.py` |
 | **Crop** | `fixed_schedule`, `deficit_irrigation`, `weather_adaptive` | `crop_policies.py` |
 | **Economic** | `balanced`, `aggressive_growth`, `conservative`, `risk_averse` | `economic_policies.py` |
-| **Market** | `sell_immediately`, `hold_for_peak`, `process_when_low`, `adaptive_marketing` | `market_policies.py` |
+| **Market** | `sell_immediately`, `hold_for_peak`, `adaptive` | `market_policies.py` |
 
 ## Policy Usage
 

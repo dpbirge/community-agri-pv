@@ -2,18 +2,18 @@
 
 ## 1. Overview
 
-This document specifies the decision logic for all 22 simulation policies across 6 domains. Each policy is fully defined in plain English and pseudocode. The translation from this specification to code is left to the implementer.
+This document specifies the decision logic for all 23 simulation policies across 6 domains. Each policy is fully defined in plain English and pseudocode. The translation from this specification to code is left to the implementer.
 
 **Policy scope:** Policies operate at three distinct levels:
-- **Farm-level** (default): Each farm selects its own policy for each domain (water, energy, irrigation, food processing, market, economic)
+- **Farm-level** (default): Each farm selects its own policy for each domain (water, energy, crop, food processing, market, economic)
 - **Community-override** (optional): If all farms agree, a universal community policy can override individual farm selections
-- **Household and shared facilities**: Non-farm operations (residential households and community buildings) use a subset of water and energy policies for their operational needs only. These policies apply only to the water and energy demands of non-farm operations, not to crop production or food processing.
+- **Household and shared facilities**: Non-farm operations (residential households and community buildings) use water and energy policies for their operational needs only. These apply only to water and energy demands, not to crop production or food processing. Available household policies are limited to: water policy `max_groundwater` or `max_municipal`; energy policy `renewable_first` or `all_grid`. Configured in the scenario YAML under `household_policies`.
 
 For configuration schemas and parameter definitions, see `structure.md`. For calculation formulas, see `calculations.md`.
 
 ### How to read this document
 
-Each policy domain (water, food processing, market, energy, irrigation, economic) follows the same structure:
+Each policy domain (water, food processing, market, energy, crop, economic) follows the same structure:
 
 1. **Context (inputs)** — Named fields the simulation passes to the policy each time it is called. The simulation assembles these from current state.
 
@@ -37,12 +37,13 @@ All policy domains share these structural conventions:
 
 Policies execute in this order each simulation day:
 
-1. **Irrigation** — Adjusts water demand based on crop stage and weather
+1. **Crop** — Adjusts irrigation water demand based on crop stage and weather
 2. **Water** — Allocates water between groundwater and municipal sources
 3. **Energy** — Sets dispatch strategy for energy sources
-4. **Food processing** — Splits harvest across processing pathways
-5. **Market** — Determines when to sell or store processed food
-6. **Economic** — Sets spending limits and investment gates (monthly or at year boundaries)
+4. **Food processing** — Splits harvest across processing pathways and updates total storage (runs only on harvest days; skipped when no harvest occurs)
+4b. **Forced sales** — After storage is updated, checks all tranches for expiry and overflow; forced sales execute here before market policy runs
+5. **Market** — Determines when to sell or store remaining inventory (forced sales have already occurred, so market policy operates freely)
+6. **Economic** — Sets reserve targets and investment gates (monthly or at year boundaries)
 
 ### Operational independence
 
@@ -81,6 +82,12 @@ Resilience metrics (energy self-sufficiency %, water self-sufficiency %) are des
 | `cumulative_gw_year_m3` | Groundwater used so far this year (for quota policy) |
 | `cumulative_gw_month_m3` | Groundwater used so far this month (for quota policy) |
 | `current_month` | Current month 1-12 (for quota policy) |
+| `groundwater_tds_ppm` | Current measured salinity of available groundwater (for min_water_quality policy) |
+| `municipal_tds_ppm` | Salinity of municipal water supply (for min_water_quality policy) |
+
+**Note on `energy_price_per_kwh`:** The water policy executes before the energy policy (step 2 vs step 3 in the daily execution order). The energy price used here is the current grid tariff from pricing configuration — it represents the marginal cost of the next kWh regardless of dispatch strategy. This is consistent with the operational independence principle: energy availability never constrains water, but the grid tariff affects groundwater cost comparisons.
+
+**Note on `municipal_price_per_m3`:** The simulation resolves the applicable price upstream based on consumer type (agricultural or domestic) before passing it to the policy. Farm water demands use the agricultural pricing regime; household/shared facility demands use the domestic pricing regime. See pricing configuration in `structure.md`.
 
 ### Decision (outputs)
 
@@ -121,11 +128,7 @@ cost_usd    = (groundwater_m3 * gw_cost_per_m3) + (municipal_m3 * municipal_pric
 
 ### 2.1 `max_groundwater`
 
-Maximize groundwater extraction from available sources (either storage or daily treatment capacity limit, whichever is higher). Municipal water is used as fallback when groundwater is physically constrained.
-
-The limiter is either:
-1. A quota (if one is enforced), or
-2. Available water capacity: minimum of (current storage volume + daily treatment throughput)
+Maximize groundwater extraction up to physical limits (well capacity, treatment throughput, water storage buffer). Municipal water is used as fallback when groundwater is physically constrained. This policy does not enforce quotas — use `quota_enforced` for hard extraction limits.
 
 ```
 Request all demand as groundwater
@@ -142,59 +145,48 @@ ELSE:
 
 ### 2.2 `max_municipal`
 
-Maximize municipal water allocation up to a farm-level quota (if one exists). When municipal quota is exhausted or unavailable, water is sourced from groundwater. If no quota is set, behaves as 100% municipal with fallback to groundwater only if municipal supply is physically unavailable.
+Maximize municipal water. All demand is met from municipal supply. Groundwater is used only if municipal water is physically unavailable (the simulation currently does not model municipal supply interruption, so this policy is functionally 100% municipal).
 
 ```
-IF municipal_quota_exists:
-    available_municipal = MIN(demand, remaining_municipal_quota)
-    groundwater = demand - available_municipal
-ELSE:
-    groundwater = 0
-    available_municipal = demand
-
-energy_used = groundwater_m3 * (pumping_kwh_per_m3 + treatment_kwh_per_m3)
-cost = (groundwater_m3 * gw_cost_per_m3) + (available_municipal * municipal_price_per_m3)
+groundwater = 0
+municipal = demand
+energy_used = 0
+cost = municipal * municipal_price_per_m3
 reason = "muni_preferred"
 ```
 
 ### 2.3 `min_water_quality`
 
-Mixes raw groundwater and municipal water to achieve a target water quality (salinity/TDS) that all crops can tolerate. This policy is used when groundwater salinity varies and crop health requires constraining maximum salinity levels.
+Mixes groundwater and municipal water to achieve a target water quality (salinity/TDS) that all crops can tolerate. Municipal water is always the highest quality source. If groundwater constraints force a higher municipal fraction than the mixing formula requires, water quality improves (never degrades).
 
 **Parameters:**
-- `target_tds_ppm` (e.g., 1500) — maximum acceptable salinity/TDS for the mixed water that all crops can handle
-- `groundwater_tds_ppm` — current measured salinity of available groundwater
-- `municipal_tds_ppm` — salinity of municipal water supply
+- `target_tds_ppm` (e.g., 1500) — maximum acceptable salinity/TDS for the mixed water that all crops can handle (set at policy instantiation from scenario YAML)
 
 **Decision logic:**
 
-If groundwater salinity is acceptable (≤ target), use 100% groundwater. If groundwater is too salty, mix with municipal water to achieve the target salinity.
+First, calculate the required mixing ratio to achieve target TDS. Then, check if enough groundwater is available. If not, the municipal fraction increases and water quality improves above target.
 
 ```
 IF groundwater_tds_ppm <= target_tds_ppm:
     // Groundwater is clean enough; use it preferentially
-    groundwater_fraction = 1.0
-    municipal_fraction = 0.0
-    reason = "groundwater_meets_quality"
+    Request all demand as groundwater
+    Apply constraint check -> actual_gw, constraint_hit
+    municipal = demand - actual_gw
+    IF constraint_hit:
+        reason = "groundwater_meets_quality_but_{constraint}"
+    ELSE:
+        reason = "groundwater_meets_quality"
 
 ELSE:
-    // Mix to achieve target salinity
-    // Required mixing ratio: (groundwater_tds - target) / (groundwater_tds - municipal_tds)
-
+    // Calculate mixing ratio to achieve target salinity
     required_municipal_fraction = (groundwater_tds_ppm - target_tds_ppm)
                                   / (groundwater_tds_ppm - municipal_tds_ppm)
 
     IF required_municipal_fraction >= 1.0:
-        // Can't achieve target even with 100% municipal; use 100% municipal
-        groundwater_fraction = 0.0
-        municipal_fraction = 1.0
+        // Groundwater too salty even with maximum mixing; use 100% municipal
+        groundwater_m3 = 0
+        municipal_m3 = demand
         reason = "groundwater_too_salty_using_municipal"
-
-    ELSE IF required_municipal_fraction <= 0.0:
-        // Municipal water is too salty; shouldn't happen
-        groundwater_fraction = 1.0
-        municipal_fraction = 0.0
-        reason = "municipal_worse_quality"
 
     ELSE:
         // Blend to achieve target
@@ -204,7 +196,8 @@ ELSE:
         Apply constraint check on groundwater_m3 -> actual_gw, constraint_hit
 
         IF constraint_hit:
-            // Can't get enough groundwater; increase municipal
+            // Can't get enough groundwater; increase municipal fraction
+            // This IMPROVES quality above target (municipal is always cleaner)
             municipal_m3 = demand - actual_gw
             reason = "quality_mixing_but_{constraint}"
         ELSE:
@@ -219,6 +212,7 @@ cost_usd = (groundwater_m3 * gw_cost_per_m3) + (municipal_m3 * municipal_price_p
 ```
 mixed_tds_ppm = (groundwater_m3 * groundwater_tds_ppm + municipal_m3 * municipal_tds_ppm)
                 / (groundwater_m3 + municipal_m3)
+// Note: mixed_tds_ppm will always be <= target_tds_ppm because municipal is always cleaner
 ```
 
 ---
@@ -259,18 +253,25 @@ muni_cost_per_m3 = ctx.municipal_price_per_m3
 threshold = gw_cost_per_m3 * price_threshold_multiplier
 
 IF muni_cost_per_m3 > threshold:
-    Request (demand * max_gw_ratio) as groundwater
-    Apply constraint check -> actual_gw, constraint_hit
+    requested_gw = demand * max_gw_ratio
+    Apply constraint check on requested_gw -> actual_gw, constraint_hit
     municipal = demand - actual_gw
+
+    // Track what actually limited the groundwater allocation
     IF constraint_hit:
+        limiting_factor = constraint_hit  // "well_limit" or "treatment_limit"
         reason = "threshold_exceeded_but_{constraint}"
     ELSE:
+        limiting_factor = "ratio_cap"
         reason = "threshold_exceeded"
 ELSE:
     groundwater = 0
     municipal = demand
+    limiting_factor = None
     reason = "threshold_not_met"
 ```
+
+**Note:** The `limiting_factor` field (values: `"ratio_cap"`, `"well_limit"`, `"treatment_limit"`, or None) is included in the decision output to distinguish whether the groundwater allocation was limited by the conservation ratio cap or by physical infrastructure constraints. This enables analysis of whether a farm is conservation-limited or infrastructure-limited.
 
 ### 2.6 `quota_enforced`
 
@@ -316,15 +317,15 @@ ELSE:
 
 ### Umbrella rule: forced sale and FIFO tracking
 
-This rule applies to ALL food processing policies and overrides normal storage behavior:
+This rule applies to ALL food processing policies and overrides normal storage behavior. It executes after food processing updates total storage for the day (step 4b in execution order), before the market policy runs (step 5).
 
 1. **Tranche tracking**: Each harvest batch is tracked as a discrete unit (tranche) with an entry date and product type. This enables first-in, first-out (FIFO) ordering.
 
-2. **Storage-life expiry**: When any tranche reaches its storage life limit (accounting for transit and retail shelf time), it must be sold immediately regardless of market conditions or policy preferences.
+2. **Storage-life expiry**: When any tranche reaches its storage life limit, it must be sold immediately regardless of market conditions or policy preferences. Storage life data is sourced from `data/parameters/crops/spoilage_rates-toy.csv` (per crop, per product type).
 
 3. **Storage overflow**: When storage is full and new production needs space, sell the oldest tranche first, then the next oldest, until enough space is freed. This ensures proper FIFO inventory management.
 
-4. **Priority**: Forced sales from storage-life expiry or overflow take precedence over all market policy decisions.
+4. **Execution timing**: After food processing allocates today's harvest and updates storage totals, the umbrella rule checks all tranches for expiry and overflow. Forced sales execute immediately. Then the market policy runs on remaining inventory without forced-sale constraints.
 
 ### Context (inputs)
 
@@ -349,6 +350,22 @@ This rule applies to ALL food processing policies and overrides normal storage b
 | `decision_reason` | Why this split was chosen |
 
 **Constraint:** Fractions must sum to 1.0.
+
+### Shared logic: capacity clipping
+
+All food processing policies apply capacity clipping after computing their target fractions. If the allocated kg for any pathway exceeds its daily capacity, the excess is redistributed to fresh (which has no practical capacity limit — it requires only washing/sorting):
+
+```
+FOR each pathway in [packaged, canned, dried]:
+    allocated_kg = harvest_yield_kg * pathway_fraction
+    IF allocated_kg > pathway_capacity_kg:
+        excess_kg = allocated_kg - pathway_capacity_kg
+        pathway_fraction = pathway_capacity_kg / harvest_yield_kg
+        fresh_fraction += excess_kg / harvest_yield_kg
+        constraint_hit = true
+```
+
+If capacity clipping occurs, `decision_reason` is appended with `"_capacity_clipped"`.
 
 ### 3.1 `all_fresh`
 
@@ -380,16 +397,15 @@ Adjusts processing mix based on current fresh prices relative to reference farmg
 
 **Trigger:** Fresh price falls below 80% of the crop's reference farmgate price.
 
-**Reference farmgate prices (USD/kg):**
-- tomato: 0.30
-- potato: 0.25
-- onion: 0.20
-- kale: 0.40
-- cucumber: 0.35
-- default (unknown crop): 0.30
+**Reference farmgate prices** are loaded from crop price data files in `data/prices/crops/`. Example values (USD/kg) for illustration only — actual values come from data files:
+- tomato: ~0.30
+- potato: ~0.25
+- onion: ~0.20
+- kale: ~0.40
+- cucumber: ~0.35
 
 ```
-reference_price = lookup crop reference price (default 0.30)
+reference_price = lookup crop reference price from data file
 
 IF fresh_price_per_kg < reference_price * 0.80:
     // Low prices: shift toward processing
@@ -416,12 +432,13 @@ ELSE:
 
 | Field | Description |
 |---|---|
-| `crop_name` | Crop or product being considered for sale |
+| `crop_name` | Crop being considered for sale (e.g., "tomato", "potato") |
+| `product_type` | Processing type: "fresh", "packaged", "canned", or "dried" |
 | `available_kg` | Quantity available to sell (kg) |
-| `current_price_per_kg` | Today's market price (USD/kg) |
-| `avg_price_per_kg` | Average price for this product over recent history |
+| `current_price_per_kg` | Today's market price for this crop+product_type (USD/kg). Loaded from per-product price files in `data/prices/` |
+| `avg_price_per_kg` | Average price for this crop+product_type over recent history |
 | `days_in_storage` | How long this product has been stored |
-| `storage_life_days` | Maximum storage duration (days) before product must be sold. Accounts for on-farm storage time plus buffer for transit and retail shelf placement |
+| `storage_life_days` | Maximum storage duration (days) before product must be sold. Loaded from `data/parameters/crops/spoilage_rates-toy.csv` per crop and product type |
 | `storage_capacity_kg` | Available storage space (kg) |
 
 ### Decision (outputs)
@@ -447,31 +464,34 @@ reason = "sell_immediately"
 
 ### 4.2 `hold_for_peak`
 
-Crops are processed according to the food processing policy. The maximum amount is stored until prices rise above a threshold relative to the average price. If storage life is about to expire or storage is full, sells regardless.
+Crops are processed according to the food processing policy. The maximum amount is stored until prices rise above a threshold relative to the average price. Storage-life expiry and overflow are handled by the umbrella rule (Section 3) before this policy executes.
 
 **Parameters:**
-- `price_threshold_multiplier` — factor above average price that triggers sales (TODO: determine value)
+- `price_threshold_multiplier` (default 1.2) — factor above average price that triggers sales. Sell when current price >= avg_price * 1.2 (20% above average). Configurable via scenario YAML.
+
+Note: Storage-life expiry and storage overflow are handled by the umbrella rule (Section 3), not by this policy. The umbrella rule executes before market policy decisions.
 
 ```
 target_price = avg_price_per_kg * price_threshold_multiplier
 
 IF current_price >= target_price:
-    // Price above threshold: sell
+    // Price above threshold: sell everything
     sell_fraction = 1.0
     reason = "price_above_threshold"
 
-ELSE IF days_in_storage >= storage_life_days - 1:
-    // About to expire: forced sale
-    sell_fraction = 1.0
-    reason = "storage_life_forcing_sale"
-
 ELSE IF storage_capacity_kg >= available_kg:
-    // Room to store: hold
+    // Room to store all: hold everything
     sell_fraction = 0.0, store_fraction = 1.0
     reason = "holding_for_peak"
 
+ELSE IF storage_capacity_kg > 0:
+    // Partial storage: store what fits, sell the rest
+    store_fraction = storage_capacity_kg / available_kg
+    sell_fraction = 1.0 - store_fraction
+    reason = "holding_partial_storage_full"
+
 ELSE:
-    // No storage space: sell
+    // No storage space: sell everything
     sell_fraction = 1.0
     reason = "no_storage_capacity"
 ```
@@ -480,10 +500,13 @@ ELSE:
 
 Uses a sigmoid function to determine what portion of food to sell based on the ratio of current price to historical average price. When prices are high relative to history, sell more. When prices are low, store more and wait.
 
-**Parameters:**
-- Sigmoid midpoint, steepness, and output range (TODO: determine values)
+**Parameters (all configurable via scenario YAML):**
+- `midpoint` (default 1.0) — price ratio at sigmoid midpoint (1.0 = current price equals average)
+- `steepness` (default 5.0) — sigmoid steepness; higher = sharper transition
+- `min_sell` (default 0.2) — minimum sell fraction when prices are very low
+- `max_sell` (default 1.0) — maximum sell fraction when prices are very high
 
-**Conceptual behavior:**
+**Behavior:**
 
 ```
 price_ratio = current_price_per_kg / avg_price_per_kg
@@ -497,6 +520,14 @@ price_ratio = current_price_per_kg / avg_price_per_kg
 sell_fraction = sigmoid(price_ratio, midpoint, steepness, min_sell, max_sell)
 store_fraction = 1.0 - sell_fraction
 
+// Clip store_fraction to available storage capacity
+IF store_fraction * available_kg > storage_capacity_kg AND storage_capacity_kg > 0:
+    store_fraction = storage_capacity_kg / available_kg
+    sell_fraction = 1.0 - store_fraction
+ELSE IF storage_capacity_kg <= 0:
+    sell_fraction = 1.0
+    store_fraction = 0.0
+
 IF sell_fraction > 0.9:
     reason = "high_price_selling"
 ELSE IF sell_fraction < 0.3:
@@ -505,18 +536,11 @@ ELSE:
     reason = "moderate_price_partial_sale"
 ```
 
-### Open items
-
-- Determine the `price_threshold_multiplier` for `hold_for_peak` that triggers sales
-- Determine the sigmoid midpoint, steepness, and min/max band for `adaptive`
-
 ---
 
 ## 5. Energy Policies
 
 **Scope:** Each farm selects an energy source dispatch strategy (unless overridden by community policy). Household and shared facility operations also apply energy policies to their non-farm energy needs. The policy is called daily and returns flags that parameterize the energy dispatch function. The dispatch function itself (not the policy) performs the kWh-by-kWh allocation across sources.
-
-**Current status:** `dispatch_energy()` in `simulation.py` uses a hardcoded renewable-first merit order. These policies return allocation flags that should parameterize the dispatch function.
 
 ### Context (inputs)
 
@@ -527,7 +551,7 @@ ELSE:
 | `wind_available_kwh` | Wind generation available today |
 | `battery_soc` | Current battery state of charge (0-1) |
 | `battery_capacity_kwh` | Total battery capacity |
-| `grid_price_per_kwh` | Current grid electricity price (USD/kWh) |
+| `grid_price_per_kwh` | Current grid electricity price (USD/kWh); resolved upstream from pricing configuration based on consumer type (agricultural or domestic) |
 | `diesel_price_per_L` | Current diesel fuel price (USD/L) |
 | `generator_capacity_kw` | Backup generator nameplate capacity |
 
@@ -618,9 +642,9 @@ reason = "All-grid: import all demand, net-meter renewables"
 
 ---
 
-## 6. Irrigation Policies
+## 6. Crop Policies
 
-**Scope:** Farm-level only. Each farm selects an irrigation management strategy that controls how much water is requested based on crop growth stage and weather conditions. Community-override policies are supported. Called daily before the water policy. The output (adjusted demand) becomes the water demand input to the water policy.
+**Scope:** Farm-level only. Each farm selects a crop management strategy (irrigation adjustment) that controls how much water is requested based on crop growth stage and weather conditions. Community-override policies are supported. Called daily before the water policy. The output (adjusted demand) becomes the water demand input to the water policy.
 
 ### Context (inputs)
 
@@ -633,7 +657,7 @@ reason = "All-grid: import all demand, net-meter renewables"
 | `base_demand_m3` | Standard irrigation demand for today from precomputed data (m3) |
 | `temperature_c` | Ambient temperature (C) |
 | `water_stress_ratio` | Cumulative water received / expected water (0-1) |
-| `available_water_m3` | How much water is available today (m3) |
+| `available_water_m3` | Water available in storage at start of day, before today's allocation (m3). Represents carryover from previous days, not today's water policy output. |
 
 ### Decision (outputs)
 
@@ -641,7 +665,6 @@ reason = "All-grid: import all demand, net-meter renewables"
 |---|---|
 | `adjusted_demand_m3` | How much water to request (m3) |
 | `demand_multiplier` | Multiplier applied to base demand (for tracking) |
-| `priority` | Crop priority; higher values mean more important to water |
 | `decision_reason` | Why this adjustment was made |
 
 ### 6.1 `fixed_schedule`
@@ -717,7 +740,7 @@ adjusted_demand = base_demand_m3 * multiplier
 
 ## 7. Economic Policies
 
-**Scope:** Farm-level only. Each farm selects a financial management strategy governing cash reserve targets, spending limits, and investment approval. Community-override policies are supported. Called monthly or at year boundaries.
+**Scope:** Farm-level only. Each farm selects a financial management strategy governing cash reserve targets and investment approval. Community-override policies are supported. Called monthly or at year boundaries.
 
 ### Context (inputs)
 
@@ -735,48 +758,41 @@ adjusted_demand = base_demand_m3 * multiplier
 
 | Field | Description |
 |---|---|
-| `max_spending_usd` | Spending limit this period (unlimited if unconstrained) |
 | `reserve_target_months` | Target months of cash reserves |
 | `investment_allowed` | Whether to approve new capital investments (bool) |
 | `sell_inventory` | Whether to liquidate stored inventory now (bool) |
-| `spending_priority` | Priority mode: "survival", "maintenance", or "growth" |
 | `decision_reason` | Why this strategy was chosen |
 
 ### Summary
 
-| Policy | Reserve target | Investment threshold | Spending behavior |
+| Policy | Reserve target | Investment threshold | Behavior |
 |---|---|---|---|
-| `balanced` | 3 months | Invest when reserves > 3 months | Survival < 1 month, maintenance 1-3 months, growth > 3 months |
-| `aggressive_growth` | 1 month | Invest when reserves > 0.5 months | Minimize reserves, sell inventory always, maximize reinvestment |
-| `conservative` | 6 months | Invest when reserves > 9 months | Cap spending at 50% of revenue when under target |
-| `risk_averse` | 6+ months | Only with 12+ months reserves | Sell inventory always, survival mode if < 3 months |
+| `balanced` | 3 months | Invest when reserves > 3 months | Adaptive: sell inventory if < 1 month reserves, hold otherwise |
+| `aggressive_growth` | 1 month | Invest when reserves > 0.5 months | Minimize reserves, sell inventory immediately, maximize reinvestment |
+| `conservative` | 6 months | Invest when reserves > 9 months | Maintain high safety buffer, hold inventory |
+| `risk_averse` | 6+ months | Only with 12+ months reserves | Maximize reserves, sell inventory immediately to lock in revenue |
 
 ### 7.1 `balanced`
 
-Adaptive strategy that shifts behavior based on current financial position. Three modes: survival (preserve cash), maintenance (steady operations), and growth (invest).
+Adaptive strategy that shifts behavior based on current financial position. Sells inventory when reserves are critically low, holds otherwise.
 
 ```
 reserve_target = 3.0 months
 
 IF months_of_reserves < 1.0:
-    spending_priority = "survival"
     sell_inventory = true
     investment_allowed = false
     reason = "Low reserves ({months} months), survival mode"
 
 ELSE IF months_of_reserves < 3.0:
-    spending_priority = "maintenance"
     sell_inventory = false
     investment_allowed = false
     reason = "Building reserves ({months}/{target} months)"
 
 ELSE:
-    spending_priority = "growth"
     sell_inventory = false
     investment_allowed = true
     reason = "Healthy reserves ({months} months), growth mode"
-
-max_spending = unlimited
 ```
 
 ### 7.2 `aggressive_growth`
@@ -787,33 +803,27 @@ Minimize cash reserves. Sell all inventory immediately to free up capital. Inves
 reserve_target = 1.0 month
 investment_allowed = months_of_reserves > 0.5
 sell_inventory = true
-spending_priority = "growth"
-max_spending = unlimited
 reason = "Aggressive: 1 month target, invest everything above"
 ```
 
 ### 7.3 `conservative`
 
-Maintain high cash reserves. Limit spending when reserves are below target. Only invest when reserves exceed 1.5x the target (9 months).
+Maintain high cash reserves. Only invest when reserves exceed 1.5x the target (9 months).
 
 ```
 reserve_target = 6.0 months
 investment_allowed = months_of_reserves > 9.0
+sell_inventory = false
 
 IF months_of_reserves < reserve_target:
-    max_spending = monthly_revenue_usd * 0.50
-    reason = "Conservative: under {target} months, limiting spending to 50% of revenue"
+    reason = "Conservative: under {target} months reserves"
 ELSE:
-    max_spending = unlimited
     reason = "Conservative: {months} months reserves, adequate"
-
-sell_inventory = false
-spending_priority = "maintenance"
 ```
 
 ### 7.4 `risk_averse`
 
-Maximum caution. Build large reserves, liquidate inventory to lock in revenue, restrict spending severely when reserves are low.
+Maximum caution. Build large reserves, liquidate inventory to lock in revenue.
 
 ```
 reserve_target = MAX(6.0, configured_minimum)
@@ -821,11 +831,7 @@ investment_allowed = months_of_reserves > 12.0
 sell_inventory = true
 
 IF months_of_reserves < 3.0:
-    max_spending = debt_service_monthly_usd * 1.2
-    spending_priority = "survival"
     reason = "Risk averse: critically low ({months} months)"
 ELSE:
-    max_spending = unlimited
-    spending_priority = "maintenance"
     reason = "Risk averse: {months} months, target {target}"
 ```

@@ -1,11 +1,10 @@
 # Market/sales policies for Community Agri-PV simulation
 # Layer 2: Design configuration
 #
-# Four policies for comparative testing:
-# - SellImmediately: Sell 100% at harvest, no storage, no processing
-# - HoldForPeak: Hold crop in storage if price below threshold, sell when prices rise
-# - ProcessWhenLow: Send crops to processing when fresh prices are low
-# - AdaptiveMarketing: Combine strategies based on conditions
+# Three policies determining WHEN processed food is sold (sell vs. store):
+# - SellImmediately: Sell 100% at market price, no inventory holding
+# - HoldForPeak: Hold inventory until price exceeds threshold above average
+# - Adaptive: Sigmoid-based sell/store decision based on price ratio to average
 
 from dataclasses import dataclass
 
@@ -15,45 +14,43 @@ class MarketPolicyContext:
     """Input context for market/sales decisions.
 
     Args:
-        crop_name: Crop to sell
+        crop_name: Crop being considered for sale (e.g., "tomato")
+        product_type: Processing type ("fresh", "packaged", "canned", "dried")
         available_kg: Harvest or inventory available to sell
-        current_price_per_kg: Today's farmgate price
-        avg_price_per_kg: Average price this season
+        current_price_per_kg: Today's market price for this crop+product_type
+        avg_price_per_kg: Average price for this crop+product_type over recent history
         price_trend: Positive = rising, negative = falling
-        days_in_storage: How long crop has been stored
-        shelf_life_days: Fresh crop shelf life
+        days_in_storage: How long product has been stored
+        storage_life_days: Max storage duration (days) from spoilage_rates data
         storage_capacity_kg: Available storage space
-        processing_capacity_kg: Available processing capacity
     """
     crop_name: str = ""
+    product_type: str = "fresh"
     available_kg: float = 0.0
     current_price_per_kg: float = 0.0
     avg_price_per_kg: float = 0.0
     price_trend: float = 0.0
     days_in_storage: int = 0
-    shelf_life_days: int = 7
+    storage_life_days: int = 7
     storage_capacity_kg: float = 0.0
-    processing_capacity_kg: float = 0.0
 
 
 @dataclass
 class MarketDecision:
     """Output from market/sales decision.
 
-    Fractions (sell_fraction, store_fraction, process_fraction) should
-    sum to approximately 1.0.
+    sell_fraction + store_fraction must equal 1.0. Food processing is
+    handled entirely by food processing policies, not market policies.
 
     Args:
         sell_fraction: Fraction to sell now (0-1)
-        store_fraction: Fraction to store
-        process_fraction: Fraction to send to processing
+        store_fraction: Fraction to keep in storage (0-1)
         target_price_per_kg: Minimum acceptable price (0 = any price)
         decision_reason: Human-readable decision rationale
         policy_name: Name of the policy that made this decision
     """
     sell_fraction: float = 1.0
     store_fraction: float = 0.0
-    process_fraction: float = 0.0
     target_price_per_kg: float = 0.0
     decision_reason: str = ""
     policy_name: str = ""
@@ -83,7 +80,6 @@ class SellImmediately(BaseMarketPolicy):
         return MarketDecision(
             sell_fraction=1.0,
             store_fraction=0.0,
-            process_fraction=0.0,
             decision_reason="Sell immediately at market price",
             policy_name="sell_immediately",
         )
@@ -114,7 +110,7 @@ class HoldForPeak(BaseMarketPolicy):
                 ),
                 policy_name="hold_for_peak",
             )
-        elif ctx.days_in_storage >= ctx.shelf_life_days - 1:
+        elif ctx.days_in_storage >= ctx.storage_life_days - 1:
             # About to spoil -- sell at any price
             return MarketDecision(
                 sell_fraction=1.0,
@@ -150,103 +146,74 @@ class HoldForPeak(BaseMarketPolicy):
         return f"hold_for_peak: Wait for price > {self.price_threshold_multiplier}x average"
 
 
-class ProcessWhenLow(BaseMarketPolicy):
-    """Process fresh produce when prices are low. Preserves value, extends shelf life."""
+class Adaptive(BaseMarketPolicy):
+    """Sigmoid-based sell/store decision based on price ratio to average.
 
-    name = "process_when_low"
+    When prices are high relative to history, sell more. When prices are
+    low, store more and wait for better conditions.
+    """
 
-    def __init__(self, price_floor_multiplier: float = 0.80):
-        self.price_floor_multiplier = price_floor_multiplier
+    name = "adaptive"
+
+    def __init__(self, midpoint=1.0, steepness=5.0, min_sell=0.2, max_sell=1.0):
+        self.midpoint = midpoint
+        self.steepness = steepness
+        self.min_sell = min_sell
+        self.max_sell = max_sell
+
+    def _sigmoid(self, price_ratio):
+        """Map price ratio to sell fraction using scaled sigmoid."""
+        import math
+        raw = 1.0 / (1.0 + math.exp(-self.steepness * (price_ratio - self.midpoint)))
+        return self.min_sell + (self.max_sell - self.min_sell) * raw
 
     def decide(self, ctx: MarketPolicyContext) -> MarketDecision:
-        price_floor = ctx.avg_price_per_kg * self.price_floor_multiplier
-
-        if ctx.current_price_per_kg < price_floor and ctx.processing_capacity_kg > 0:
-            # Price is low -- process instead of selling fresh
-            processable = min(ctx.available_kg, ctx.processing_capacity_kg)
-            process_frac = processable / ctx.available_kg if ctx.available_kg > 0 else 0.0
-            sell_frac = 1.0 - process_frac
-            return MarketDecision(
-                sell_fraction=sell_frac,
-                process_fraction=process_frac,
-                decision_reason=(
-                    f"Low price ${ctx.current_price_per_kg:.2f} < "
-                    f"floor ${price_floor:.2f}, processing {process_frac:.0%}"
-                ),
-                policy_name="process_when_low",
-            )
-        else:
-            # Price is acceptable -- sell fresh
+        if ctx.avg_price_per_kg <= 0:
             return MarketDecision(
                 sell_fraction=1.0,
-                decision_reason=(
-                    f"Price ${ctx.current_price_per_kg:.2f} >= "
-                    f"floor ${price_floor:.2f}, selling fresh"
-                ),
-                policy_name="process_when_low",
+                decision_reason="No average price data, selling all",
+                policy_name="adaptive",
             )
+
+        price_ratio = ctx.current_price_per_kg / ctx.avg_price_per_kg
+        sell_fraction = self._sigmoid(price_ratio)
+        store_fraction = 1.0 - sell_fraction
+
+        # Clip store_fraction to available storage capacity
+        if ctx.storage_capacity_kg <= 0:
+            sell_fraction = 1.0
+            store_fraction = 0.0
+        elif store_fraction * ctx.available_kg > ctx.storage_capacity_kg:
+            store_fraction = ctx.storage_capacity_kg / max(ctx.available_kg, 1)
+            sell_fraction = 1.0 - store_fraction
+
+        if sell_fraction > 0.9:
+            reason = "high_price_selling"
+        elif sell_fraction < 0.3:
+            reason = "low_price_storing"
+        else:
+            reason = "moderate_price_partial_sale"
+
+        return MarketDecision(
+            sell_fraction=sell_fraction,
+            store_fraction=store_fraction,
+            decision_reason=reason,
+            policy_name="adaptive",
+        )
 
     def get_parameters(self) -> dict:
-        return {"price_floor_multiplier": self.price_floor_multiplier}
+        return {
+            "midpoint": self.midpoint,
+            "steepness": self.steepness,
+            "min_sell": self.min_sell,
+            "max_sell": self.max_sell,
+        }
 
     def describe(self) -> str:
-        return f"process_when_low: Process when price < {self.price_floor_multiplier}x average"
-
-
-class AdaptiveMarketing(BaseMarketPolicy):
-    """Combine immediate sales, holding, and processing based on conditions."""
-
-    name = "adaptive_marketing"
-
-    def decide(self, ctx: MarketPolicyContext) -> MarketDecision:
-        if ctx.current_price_per_kg > ctx.avg_price_per_kg * 1.10:
-            # Above average -- sell everything
-            return MarketDecision(
-                sell_fraction=1.0,
-                decision_reason=(
-                    f"Price above average "
-                    f"({ctx.current_price_per_kg:.2f} > {ctx.avg_price_per_kg * 1.10:.2f}), sell all"
-                ),
-                policy_name="adaptive_marketing",
-            )
-        elif ctx.price_trend > 0 and ctx.days_in_storage < ctx.shelf_life_days // 2:
-            # Price is rising and we have storage time -- hold some
-            store_frac = min(0.50, ctx.storage_capacity_kg / max(ctx.available_kg, 1))
-            return MarketDecision(
-                sell_fraction=1.0 - store_frac,
-                store_fraction=store_frac,
-                decision_reason=f"Rising prices, holding {store_frac:.0%} in storage",
-                policy_name="adaptive_marketing",
-            )
-        elif ctx.current_price_per_kg < ctx.avg_price_per_kg * 0.85:
-            # Well below average -- process if possible
-            if ctx.processing_capacity_kg > 0:
-                process_frac = min(
-                    0.60, ctx.processing_capacity_kg / max(ctx.available_kg, 1)
-                )
-                return MarketDecision(
-                    sell_fraction=1.0 - process_frac,
-                    process_fraction=process_frac,
-                    decision_reason=f"Low price, processing {process_frac:.0%}",
-                    policy_name="adaptive_marketing",
-                )
-            return MarketDecision(
-                sell_fraction=1.0,
-                decision_reason="Low price but no processing capacity, selling",
-                policy_name="adaptive_marketing",
-            )
-        else:
-            # Normal price range -- sell now
-            return MarketDecision(
-                sell_fraction=1.0,
-                decision_reason=(
-                    f"Normal price range, selling at ${ctx.current_price_per_kg:.2f}"
-                ),
-                policy_name="adaptive_marketing",
-            )
-
-    def describe(self) -> str:
-        return "adaptive_marketing: Dynamic mix of sell/hold/process strategies"
+        return (
+            f"adaptive: Sigmoid sell/store (midpoint={self.midpoint}, "
+            f"steepness={self.steepness}, range=[{self.min_sell}, {self.max_sell}])"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -256,8 +223,7 @@ class AdaptiveMarketing(BaseMarketPolicy):
 MARKET_POLICIES = {
     "sell_immediately": SellImmediately,
     "hold_for_peak": HoldForPeak,
-    "process_when_low": ProcessWhenLow,
-    "adaptive_marketing": AdaptiveMarketing,
+    "adaptive": Adaptive,
 }
 
 

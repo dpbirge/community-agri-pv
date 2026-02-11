@@ -6,7 +6,7 @@
 
 This document defines the configuration schema and policy structure for the community farm simulation model. It serves as the single source of truth for what parameters exist, their valid options, and how they organize into a complete simulation scenario.
 
-There are two main sections: system configurations (static initial conditions) and policies (rule-sets governing simulation behavior). For detailed policy rule-sets and pseudocode, see `docs/architecture/policies.md`. For calculation methodologies and formulas, see `docs/architecture/calculations.md`.
+There are two main sections: system configurations (static initial conditions) and policies (rule-sets governing simulation behavior). For detailed policy rule-sets and pseudocode, see `policies.md`. For calculation methodologies and formulas, see `calculations.md`.
 
 ## 2. System configurations
 
@@ -187,11 +187,11 @@ Policy source code is in `src/policies/`
 
 Policies operate at three levels:
 
-1. **Farm-level policies** (default) — Each farm independently selects its own policy for each domain (water, energy, irrigation, food processing, market, economic). Policies are set via the `scenarios/` YAML configuration file under each farm's entry.
+1. **Farm-level policies** (default) — Each farm independently selects its own policy for each domain (water, energy, crop, food processing, market, economic). Policies are set via the `scenarios/` YAML configuration file under each farm's entry.
 
 2. **Community-override policies** (optional) — If all farms agree to a universal policy, a community-level override can be set in the scenario YAML. When set, the community policy automatically applies to all farms, overriding individual farm selections. Useful for shared infrastructure decisions that require uniform behavior.
 
-3. **Household and shared facility policies** — Non-farm operations (residential households and shared community buildings) use a subset of water and energy policies to govern their water allocation and energy dispatch. These policies apply only to the water and energy demands of non-farm operations, not to food production or processing. Household/shared facility policies are configured separately from farm policies.
+3. **Household and shared facility policies** — Non-farm operations (residential households and shared community buildings) use water and energy policies for their operational needs. These apply only to water and energy demands of non-farm operations, not to crop production or food processing. Household/facility policies are limited to: water policy `max_groundwater` or `max_municipal`; energy policy `renewable_first` or `all_grid`. Configured in the scenario YAML under `household_policies`.
 
 ### Policy characteristics
 
@@ -199,7 +199,8 @@ Policies are rule-sets that govern actions within the simulation. All policy mod
 - a context dataclass (input)
 - a decision/allocation dataclass (output)
 - a base class with a `decide()` or `allocate()` method, concrete policy classes
-- a registry with a `get_*_policy(name)` factory function. 
+- a registry with a `get_*_policy(name)` factory function
+- a `decision_reason` string in every output — explains why the decision was made (e.g., `"gw_cheaper"`, `"quota_exhausted"`), enabling filtering and grouping in analysis
 
 ### Water policies
 
@@ -207,11 +208,11 @@ Each farm selects a water source allocation strategy. The policy is instantiated
 
 | Policy name | Behavior |
 |---|---|
-| `max_groundwater` | Maximize groundwater extraction up to available capacity (storage + daily treatment throughput, or quota if enforced); municipal fallback if physically constrained |
-| `max_municipal` | Maximize municipal water allocation up to farm-level quota (if set); groundwater used when municipal quota exhausted or unavailable |
-| `min_water_quality` | Mix raw groundwater and municipal water to achieve target salinity/TDS level that all crops can tolerate |
+| `max_groundwater` | Maximize groundwater extraction up to physical limits (well capacity, treatment throughput); municipal fallback when constrained |
+| `max_municipal` | Maximize municipal water; groundwater used only when municipal is physically unavailable |
+| `min_water_quality` | Mix groundwater and municipal water to achieve target salinity/TDS. Municipal water is always highest quality. If groundwater is constrained, the municipal fraction increases, improving quality above target |
 | `cheapest_source` | Daily cost comparison: groundwater (pumping + treatment energy cost) vs municipal (marginal tier price) |
-| `conserve_groundwater` | Prefers municipal; uses groundwater only when municipal price exceeds a configurable threshold multiplier |
+| `conserve_groundwater` | Prefers municipal; uses groundwater only when municipal price exceeds a configurable threshold multiplier. Decision output includes `limiting_factor` to distinguish ratio-cap vs infrastructure constraints |
 | `quota_enforced` | Hard annual groundwater limit with monthly variance controls; forces 100% municipal when quota exhausted |
 
 **Context → Decision:** `WaterPolicyContext` → `WaterAllocation` (groundwater_m3, municipal_m3, cost_usd, energy_used_kwh)
@@ -227,7 +228,7 @@ Each farm selects a food processing policy strategy. Determines how harvested cr
 | `balanced` | 50% | 20% | 15% | 15% | Fixed split according to table |
 | `market_responsive` | 30-65% | 15-20% | 10-25% | 10-25% | Shifts toward processing when fresh prices fall below 80% of reference farmgate prices |
 
-**Note**: All policies have an umbrella policy that forces the sale of food if storage becomes full OR food has reached its storage-life limit. Each harvest must be tracked as a discrete unit to know first-in, first-out tranches and to ensure no food stays past its storage-life deadline. When storage becomes full, the oldest tranche is sold first, then the next oldest, until enough space is made.
+**Note**: All policies have an umbrella rule that forces the sale of food if storage becomes full OR food has reached its storage-life limit. Each harvest is tracked as a discrete tranche (FIFO) to ensure no food stays past its storage-life deadline. Execution order: (1) process today's harvest and update total storage, (2) check all tranches for expiry and overflow — forced sales happen here, (3) market policy runs on remaining inventory without forced-sale constraints. Storage life data is sourced from `data/parameters/crops/spoilage_rates-toy.csv` (per crop, per product type).
 
 **Context → Decision:** `FoodProcessingContext` → `ProcessingAllocation` (fresh_fraction, packaged_fraction, canned_fraction, dried_fraction)
 
@@ -238,14 +239,12 @@ Each farm selects a sales policy. Food processing policies entirely determine ho
 | Policy name | Behavior |
 |---|---|
 | `sell_all_immediately` | Once crops are processed into their final state (fresh, canned, etc.) they are immediately sold to market. Storage is only used to hold products before they are sold to market. This allows minimal storage space |
-| `hold_for_peak` | Crops are processed according to food processing policy and the max amount is stored until prices are above a certain threshold |
-| `adaptive` | Use sigmoid (within range) to determine portion of processed food based on current price relative to historic prices |
+| `hold_for_peak` | Crops are processed according to food processing policy and the max amount is stored until prices are above a threshold. Default `price_threshold_multiplier = 1.2` (sell when price is 20% above average); configurable via scenario YAML |
+| `adaptive` | Use sigmoid to determine portion of processed food to sell based on current price relative to historic prices. Default sigmoid: midpoint = 1.0 (price ratio), steepness = 5.0, min_sell = 0.2, max_sell = 1.0; configurable via scenario YAML |
 
-TODOS:
-- Determine the threshold for `hold_for_peak` that triggers sales
-- Determine the sigmoid and min-max band
+**Context → Decision:** `MarketPolicyContext` → `MarketDecision` (sell_fraction, store_fraction, target_price_per_kg, decision_reason)
 
-**Context → Decision:** `MarketPolicyContext` → `MarketDecision` (sell_fraction, store_fraction, process_fraction, target_price_per_kg)
+**Note:** Market policy context includes `product_type` (fresh, packaged, canned, dried) alongside `crop_name`, since each product type has distinct pricing and storage characteristics. Price data is loaded from per-product price files in `data/prices/`. Storage life data is loaded from `data/parameters/crops/spoilage_rates-toy.csv` (or research variant), which provides `shelf_life_days` per crop-product-type combination.
 
 ### Energy policies
 
@@ -259,11 +258,9 @@ Each farm selects a energy source allocation strategy. The policy is instantiate
 
 **Context → Decision:** `EnergyPolicyContext` → `EnergyAllocation`
 
-NOTE: Three dispatch strategies are defined. Currently, `dispatch_energy()` in `simulation.py` uses a hardcoded renewable-first merit-order. These policies return `EnergyAllocation` flags that could parameterize the dispatch function.
+### Crop policies
 
-### Irrigation policies
-
-Each farm selects an irrigation management strategy. The policy is instantiated during scenario loading and called daily in the simulation loop via `execute_crop_policy()`. Controls how much water is requested based on crop conditions and environmental factors.
+Each farm selects a crop management strategy (irrigation adjustment). The policy is instantiated during scenario loading and called daily in the simulation loop via `execute_crop_policy()`. Controls how much water is requested based on crop conditions and environmental factors.
 
 | Policy name | Behavior |
 |---|---|
@@ -271,20 +268,20 @@ Each farm selects an irrigation management strategy. The policy is instantiated 
 | `deficit_irrigation` | Controlled deficit strategy: full irrigation during initial/development stages, 80% during mid-season, 72% during late-season to conserve water while managing yield impacts |
 | `weather_adaptive` | Temperature-responsive irrigation: +15% water on extreme heat days (>40°C), +5% on hot days (>35°C), -15% on cool days (<20°C) |
 
-**Context → Decision:** `CropPolicyContext` → `CropDecision` (adjusted_demand_m3, demand_multiplier, priority, decision_reason)
+**Context → Decision:** `CropPolicyContext` → `CropDecision` (adjusted_demand_m3, demand_multiplier, decision_reason)
 
 ### Economic policies
 
 Each farm selects a financial management strategy. The policy is instantiated during scenario loading and governs cash reserve targets, spending limits, and investment decisions. Called monthly or when financial decisions are triggered.
 
-| Policy name | Reserve target | Investment threshold | Spending behavior |
+| Policy name | Reserve target | Investment threshold | Behavior |
 |---|---|---|---|
-| `balanced` | 3 months | Invest when reserves >3 months | Adaptive: survival mode <1 month, maintenance 1-3 months, growth mode >3 months |
-| `aggressive_growth` | 1 month | Invest when reserves >0.5 months | Minimize cash reserves, sell inventory immediately, maximize reinvestment into operations |
-| `conservative` | 6 months | Invest when reserves >9 months | Cap spending at 50% of revenue when under target, maintain high safety buffer |
-| `risk_averse` | 6+ months | Invest only with >12 months reserves | Maximize reserves, sell inventory immediately to lock in revenue, survival priority if <3 months |
+| `balanced` | 3 months | Invest when reserves >3 months | Adaptive: sell inventory if <1 month reserves, hold otherwise |
+| `aggressive_growth` | 1 month | Invest when reserves >0.5 months | Minimize cash reserves, sell inventory immediately, maximize reinvestment |
+| `conservative` | 6 months | Invest when reserves >9 months | Maintain high safety buffer, hold inventory |
+| `risk_averse` | 6+ months | Invest only with >12 months reserves | Maximize reserves, sell inventory immediately to lock in revenue |
 
-**Context → Decision:** `EconomicPolicyContext` → `EconomicDecision` (max_spending_usd, reserve_target_months, investment_allowed, sell_inventory, spending_priority)
+**Context → Decision:** `EconomicPolicyContext` → `EconomicDecision` (reserve_target_months, investment_allowed, sell_inventory, decision_reason)
 
 
 ## 4. Metrics

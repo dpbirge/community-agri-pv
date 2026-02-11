@@ -39,19 +39,15 @@ class EconomicDecision:
     """Output from economic policy decision.
 
     Args:
-        max_spending_usd: Spending limit this period (inf = unlimited)
         reserve_target_months: Target months of cash reserves to maintain
         investment_allowed: Whether to approve new investments
         sell_inventory: Whether to sell stored inventory now
-        spending_priority: Current priority ("maintenance", "growth", "survival")
         decision_reason: Human-readable decision rationale
         policy_name: Name of the policy that produced this decision
     """
-    max_spending_usd: float = float('inf')
     reserve_target_months: float = 3.0
     investment_allowed: bool = True
     sell_inventory: bool = False
-    spending_priority: str = "maintenance"
     decision_reason: str = ""
     policy_name: str = ""
 
@@ -81,20 +77,16 @@ class Balanced(BaseEconomicPolicy):
         investment_ok = ctx.months_of_reserves > reserve_target
 
         if ctx.months_of_reserves < 1.0:
-            priority = "survival"
             reason = f"Low reserves ({ctx.months_of_reserves:.1f} months), survival mode"
         elif ctx.months_of_reserves < reserve_target:
-            priority = "maintenance"
             reason = f"Building reserves ({ctx.months_of_reserves:.1f}/{reserve_target:.0f} months target)"
         else:
-            priority = "growth" if investment_ok else "maintenance"
             reason = f"Healthy reserves ({ctx.months_of_reserves:.1f} months), balanced approach"
 
         return EconomicDecision(
             reserve_target_months=reserve_target,
             investment_allowed=investment_ok,
             sell_inventory=ctx.months_of_reserves < 1.0,
-            spending_priority=priority,
             decision_reason=reason,
             policy_name="balanced",
         )
@@ -123,7 +115,6 @@ class AggressiveGrowth(BaseEconomicPolicy):
             reserve_target_months=reserve_target,
             investment_allowed=investment_ok,
             sell_inventory=sell,
-            spending_priority="growth",
             decision_reason=f"Aggressive: {self.min_cash_months} month reserve target, invest everything above",
             policy_name="aggressive_growth",
         )
@@ -154,18 +145,14 @@ class Conservative(BaseEconomicPolicy):
         investment_ok = ctx.months_of_reserves > reserve_target * 1.5
 
         if ctx.months_of_reserves < reserve_target:
-            max_spend = ctx.monthly_revenue_usd * 0.5  # Cap spending at 50% of revenue
-            reason = f"Conservative: under {reserve_target} months reserves, limiting spending"
+            reason = f"Conservative: under {reserve_target} months reserves"
         else:
-            max_spend = float('inf')
             reason = f"Conservative: {ctx.months_of_reserves:.1f} months reserves, adequate"
 
         return EconomicDecision(
-            max_spending_usd=max_spend,
             reserve_target_months=reserve_target,
             investment_allowed=investment_ok,
             sell_inventory=False,
-            spending_priority="maintenance",
             decision_reason=reason,
             policy_name="conservative",
         )
@@ -193,18 +180,14 @@ class RiskAverse(BaseEconomicPolicy):
         sell = ctx.crop_inventory_kg > 0
 
         if ctx.months_of_reserves < 3.0:
-            max_spend = ctx.debt_service_monthly_usd * 1.2  # Only essential payments
             reason = f"Risk averse: critically low reserves ({ctx.months_of_reserves:.1f} months)"
         else:
-            max_spend = float('inf')
             reason = f"Risk averse: {ctx.months_of_reserves:.1f} months reserves, target {reserve_target:.0f}"
 
         return EconomicDecision(
-            max_spending_usd=max_spend,
             reserve_target_months=reserve_target,
             investment_allowed=investment_ok,
             sell_inventory=sell,
-            spending_priority="survival" if ctx.months_of_reserves < 3 else "maintenance",
             decision_reason=reason,
             policy_name="risk_averse",
         )

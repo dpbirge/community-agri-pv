@@ -42,13 +42,11 @@ class CropDecision:
     Args:
         adjusted_demand_m3: How much water to request (m3)
         demand_multiplier: Multiplier applied to base demand (for tracking)
-        priority: Crop priority (higher = more important to water)
         decision_reason: Human-readable explanation of the decision
         policy_name: Name of the policy that made this decision
     """
     adjusted_demand_m3: float = 0.0
     demand_multiplier: float = 1.0
-    priority: float = 1.0
     decision_reason: str = ""
     policy_name: str = ""
 
@@ -77,7 +75,7 @@ class FixedSchedule(BaseCropPolicy):
         return CropDecision(
             adjusted_demand_m3=ctx.base_demand_m3,
             demand_multiplier=1.0,
-            priority=1.0,
+
             decision_reason="Fixed schedule: full irrigation demand",
             policy_name="fixed_schedule",
         )
@@ -110,7 +108,7 @@ class DeficitIrrigation(BaseCropPolicy):
         return CropDecision(
             adjusted_demand_m3=ctx.base_demand_m3 * multiplier,
             demand_multiplier=multiplier,
-            priority=1.0,
+
             decision_reason=reason,
             policy_name="deficit_irrigation",
         )
@@ -148,7 +146,7 @@ class WeatherAdaptive(BaseCropPolicy):
         return CropDecision(
             adjusted_demand_m3=ctx.base_demand_m3 * multiplier,
             demand_multiplier=multiplier,
-            priority=1.0,
+
             decision_reason=reason,
             policy_name="weather_adaptive",
         )

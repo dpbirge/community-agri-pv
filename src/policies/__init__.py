@@ -64,8 +64,7 @@ from src.policies.market_policies import (
     BaseMarketPolicy,
     SellImmediately,
     HoldForPeak,
-    ProcessWhenLow,
-    AdaptiveMarketing,
+    Adaptive,
     MARKET_POLICIES,
     get_market_policy,
 )
@@ -160,8 +159,7 @@ __all__ = [
     "BaseMarketPolicy",
     "SellImmediately",
     "HoldForPeak",
-    "ProcessWhenLow",
-    "AdaptiveMarketing",
+    "Adaptive",
     # Market registry
     "MARKET_POLICIES",
     "get_market_policy",

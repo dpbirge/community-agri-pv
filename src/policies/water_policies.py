@@ -25,11 +25,15 @@ class WaterDecisionMetadata:
         muni_cost_per_m3: Municipal water cost at decision time
         constraint_hit: Which constraint limited GW allocation, if any
             Values: "well_limit", "treatment_limit", "energy_limit", None
+        limiting_factor: What actually limited the groundwater allocation.
+            Distinguishes ratio caps from infrastructure constraints.
+            Values: "ratio_cap", "well_limit", "treatment_limit", "energy_limit", None
     """
     decision_reason: str
     gw_cost_per_m3: float
     muni_cost_per_m3: float
     constraint_hit: Optional[str] = None
+    limiting_factor: Optional[str] = None
 
 
 @dataclass
@@ -300,14 +304,17 @@ class ConserveGroundwater(BaseWaterPolicy):
         muni_cost_per_m3 = ctx.municipal_price_per_m3
 
         constraint_hit = None
+        limiting_factor = None
         if muni_cost_per_m3 > threshold:
             # Municipal expensive - use GW up to max ratio, subject to constraints
             gw_demand = ctx.demand_m3 * self.max_gw_ratio
             gw_m3, constraint_hit = self._apply_constraints(gw_demand, ctx)
             muni_m3 = ctx.demand_m3 - gw_m3
             if constraint_hit:
+                limiting_factor = constraint_hit
                 reason = f"threshold_exceeded_but_{constraint_hit}"
             else:
+                limiting_factor = "ratio_cap"
                 reason = "threshold_exceeded"
         else:
             gw_m3 = 0.0
@@ -319,6 +326,7 @@ class ConserveGroundwater(BaseWaterPolicy):
             gw_cost_per_m3=gw_cost_per_m3,
             muni_cost_per_m3=muni_cost_per_m3,
             constraint_hit=constraint_hit,
+            limiting_factor=limiting_factor,
         )
 
         return WaterAllocation(
