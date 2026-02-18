@@ -14,6 +14,10 @@ ENV/
 # IDE
 .vscode/
 .idea/
+.cursor/
+
+# Claude Code (may contain secrets)
+.claude/mcp.json
 *.swp
 *.swo
 *~

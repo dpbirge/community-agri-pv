@@ -310,16 +310,14 @@ Self_sufficiency_pct = (groundwater_m3 / total_water_m3) × 100
 
 ### Water Allocation Policies
 
-> **MVP implementation note:** The water simulation implements five water allocation policies in `src/policies/water_policies.py`. Each policy class inherits from `BaseWaterPolicy` and implements `allocate_water(ctx: WaterPolicyContext) → WaterAllocation`. The four original policies are:
+> **MVP implementation note:** The water simulation implements water allocation policies in `src/policies/water_policies.py`. Each policy class inherits from `BaseWaterPolicy` and implements `allocate_water(ctx: WaterPolicyContext) → WaterAllocation`. See `policies.md` Section 2 for full policy specifications. The policies are:
 >
-> 1. **AlwaysGroundwater** — 100% groundwater, municipal fallback if constrained
-> 2. **AlwaysMunicipal** — 100% municipal, no treatment energy needed
-> 3. **CheapestSource** — Dynamic daily cost comparison (GW vs municipal)
-> 4. **ConserveGroundwater** — Prefers municipal; uses GW only when municipal price exceeds a configurable threshold multiplier
->
-> A fifth policy was added for quota-based management:
->
-> 5. **QuotaEnforced** — Hard annual groundwater limit with monthly variance controls. Parameters:
+> 1. **`max_groundwater`** — 100% groundwater, municipal fallback if constrained
+> 2. **`max_municipal`** — 100% municipal, no treatment energy needed
+> 3. **`min_water_quality`** — Mix groundwater and municipal water to achieve target TDS (see TDS blending formula below)
+> 4. **`cheapest_source`** — Dynamic daily cost comparison (GW vs municipal)
+> 5. **`conserve_groundwater`** — Prefers municipal; uses GW only when municipal price exceeds a configurable threshold multiplier
+> 6. **`quota_enforced`** — Hard annual groundwater limit with monthly variance controls. Parameters:
 >    - `annual_quota_m3`: Maximum groundwater extraction per year
 >    - `monthly_variance_pct`: Allowed deviation from equal monthly distribution (default 15%)
 >    - Example: 12,000 m³/year quota → 1,000 m³/month target, allowed range 850–1,150 m³/month
@@ -327,8 +325,23 @@ Self_sufficiency_pct = (groundwater_m3 / total_water_m3) × 100
 >    - When monthly limit is exceeded, forces municipal for the remainder of the month
 >
 > All policies apply physical infrastructure constraints (well capacity, treatment throughput, energy availability) and track decision metadata for visualization. For calculation details of groundwater cost, see Water Cost Calculation in Section 5.
+>
+> **TDS Blending Formula (`min_water_quality`):**
+>
+> The `min_water_quality` policy targets a maximum TDS by mixing groundwater and municipal water. The required groundwater fraction is:
+>
+> ```
+> gw_fraction = (target_tds - municipal_tds) / (groundwater_tds - municipal_tds)
+> gw_fraction = clip(gw_fraction, 0, 1)
+> ```
+>
+> [OWNER: verify TDS blending formula]
+>
+> Where `target_tds` is the maximum acceptable TDS for the mixed water (set per policy instance), `municipal_tds` is the TDS of municipal supply, and `groundwater_tds` is the TDS of raw groundwater. If groundwater TDS is below the target, groundwater is used preferentially (gw_fraction = 1.0). If groundwater is too saline for any blending to achieve the target, 100% municipal is used (gw_fraction = 0.0). Physical constraints (well capacity, treatment throughput) may further reduce the groundwater fraction, which always improves water quality (municipal water is the cleaner source). See `policies.md` Section 2.3 for full pseudocode.
 
 ### Aquifer Depletion Rate
+
+> **MVP simplification:** Aquifer depletion is tracked for reporting and resilience analysis but does not trigger allocation changes or modify water policy behavior in MVP. The aquifer drawdown feedback (below) affects pumping energy costs only.
 
 **Purpose:** Estimate the rate of groundwater drawdown and remaining aquifer lifespan, with feedback to pumping energy costs
 
@@ -479,7 +492,7 @@ Unmet_demand_pct = (Demand_gap_m3 / irrigation_demand_m3) × 100
 
 - `irrigation_demand_m3` comes from FAO Penman-Monteith calculation (see Irrigation Water Demand)
 - `actual_delivery_m3` is the water policy allocation result
-- Persistent unmet demand triggers yield reduction via the crop water stress model (see Crop Yield Estimation)
+- Persistent unmet demand triggers yield reduction via the FAO-33 water deficit formula at harvest (see Crop Yield Estimation). Water stress ratio is not tracked as a daily policy input in MVP.
 - Can be aggregated to monthly/yearly for trend analysis
 
 ## 3. Energy System Calculations
@@ -545,7 +558,7 @@ Current implementation uses a static density-based approximation. Note: actual s
 - CF_pv(t): Capacity factor at time t (from precomputed data)
 - `density`: Panel density configuration
 - `height_m`: Panel height above crops
-- `degradation_rate`: Annual capacity degradation rate (from parameter file, default 0.005)
+- `degradation_rate`: Annual capacity degradation rate (from parameter file, default 0.005). **Note:** This value comes from equipment parameter files, not from user scenario configuration.
 - γ: Temperature coefficient of power (from parameter file, default -0.004 /°C)
 
 **Output:** P_pv in kW at each time step
@@ -608,6 +621,8 @@ For this project, either approach is defensible. The log-law is recommended if r
 - `hub_height_m`: Hub height in meters
 - α: Wind shear exponent = 0.143 (power law), or z_0: surface roughness length (log law)
 
+> **Note on hub_height_m:** This is **not a user-configurable parameter**. The user selects a wind turbine `type` (small, medium, or large) in the scenario YAML. The `hub_height_m` is then looked up from the wind turbine equipment data file (`data/parameters/equipment/wind_turbines-toy.csv`) based on the selected turbine type. Configuration reference is for documentation purposes only.
+
 **Output:** P_wind in kW at each time step
 
 **Dependencies:**
@@ -631,6 +646,8 @@ For this project, either approach is defensible. The log-law is recommended if r
 ```
 SOC(t+1) = SOC(t) + (P_charge(t) × η_charge - P_discharge(t) / η_discharge) × Δt / capacity_kwh
 ```
+
+> **Note:** In the dispatch implementation, all charge/discharge values are in kWh (dt = 1 day is absorbed into the values). The formula simplifies to `SOC(t+1) = SOC(t) + (energy_stored_kwh - energy_removed_kwh) / capacity_kwh`.
 
 **Constraints:**
 
@@ -777,55 +794,131 @@ P_gen(t) = max(P_rated × 0.30, deficit)   otherwise
 
 ### Energy Dispatch (Load Balance)
 
-> **Status: Implemented** — `src/simulation/simulation.py:dispatch_energy()` (lines 578–751). Uses a hardcoded renewable-first merit-order dispatch. Energy policy objects exist in `src/policies/energy_policies.py` but are not yet consumed by the dispatch function (see `structure.md` Section 3 for integration notes).
+> **Status: Implemented** — `src/simulation/simulation.py:dispatch_energy()` (lines 578-751). The dispatch function must consume the boolean flags returned by the energy policy object to determine which sources are available. See `policies.md` Section 5 for the full policy specifications.
 
-**Purpose:** Determine how generation sources meet demand at each time step, including battery charge/discharge decisions, grid import/export, and curtailment
-
-**Merit-order dispatch (as implemented):**
-
-```
-1. Renewable generation (PV + wind) — marginal cost ≈ 0
-2. Battery discharge — marginal cost ≈ degradation cost per cycle
-3. Grid import — marginal cost = grid electricity price
-4. Backup generator — marginal cost = SFC × diesel_price
-```
+**Purpose:** Determine how generation sources meet demand at each time step, including battery charge/discharge decisions, grid import/export, and curtailment. The dispatch algorithm is parameterized by the energy policy's boolean flags (`use_renewables`, `use_battery`, `grid_import`, `grid_export`, `use_generator`, `sell_renewables_to_grid`).
 
 **PV generation (within dispatch):**
 
 ```
-pv_kwh = sys_capacity_kw × pv_kwh_per_kw(date, density) × degradation_factor × shading_factor
+pv_kwh [kWh] = sys_capacity_kw × pv_kwh_per_kw(date, density) × degradation_factor × shading_factor
 
-degradation_factor = (1 - 0.005)^years_since_start
+degradation_factor = (1 - degradation_rate)^years_since_start
 shading_factor = {low: 0.95, medium: 0.90, high: 0.85}
 ```
 
-**Load balance at each time step:**
+> **Note:** `degradation_rate` comes from parameter files (default 0.005/yr), not user configuration. See PV Power Generation section above.
+
+**Total demand (full model, all 6 components):**
 
 ```
-Total_demand(t) = water_treatment_energy(t) + pumping_energy(t)
-                + household_energy(t)
-
-Total_generation(t) = P_pv(t) + P_wind(t)
-
-Surplus(t) = Total_generation(t) - Total_demand(t)
-
-If Surplus(t) > 0:
-  Battery_charge(t) = min(Surplus(t), available_room / η_charge)
-  Grid_export(t) = Surplus(t) - Battery_charge(t)        # Unlimited for MVP
-  Curtailment(t) = Surplus(t) - Battery_charge(t) - Grid_export(t)
-
-If Surplus(t) < 0:
-  Deficit(t) = -Surplus(t)
-  Battery_discharge(t) = min(Deficit(t), available_stored × η_discharge)
-  Grid_import(t) = Deficit(t) - Battery_discharge(t)     # Unlimited for MVP
-  Generator(t) = max(0, Deficit(t) - Battery_discharge(t) - Grid_import(t))
+E_demand(t) [kWh] = E_pump(t) + E_treatment(t) + E_convey(t)
+                  + E_household(t) + E_processing(t) + E_irrigation_pump(t)
 ```
 
-**Battery SOC update:**
+See Total Energy Demand section below for component descriptions.
+
+**Total renewable generation:**
 
 ```
-energy_stored = Battery_charge(t) × η_charge
-energy_removed = Battery_discharge(t) / η_discharge
+E_renewable(t) [kWh] = P_pv(t) [kWh] + P_wind(t) [kWh]
+```
+
+**Policy-conditioned dispatch:**
+
+The energy policy returns boolean flags that control the dispatch algorithm. Each policy type produces a different merit order:
+
+**`microgrid` policy** — PV -> Wind -> Battery -> Generator (NO grid connection)
+
+Flags: `use_renewables=true`, `use_battery=true`, `grid_import=false`, `grid_export=false`, `use_generator=true`, `sell_renewables_to_grid=false`
+
+```
+// Step 1: Use PV + wind to meet demand
+used_renewable [kWh] = min(E_renewable(t), E_demand(t))
+remaining_demand [kWh] = E_demand(t) - used_renewable
+
+// Step 2: Charge battery from surplus renewables
+surplus [kWh] = E_renewable(t) - used_renewable
+Battery_charge(t) [kWh] = min(surplus, available_room / η_charge)
+
+// Step 3: Discharge battery for remaining demand
+Battery_discharge(t) [kWh] = min(remaining_demand, available_stored [kWh] × η_discharge)
+remaining_demand = remaining_demand - Battery_discharge(t)
+
+// Step 4: Generator for any remaining shortfall
+Generator(t) [kWh] = min(remaining_demand, P_rated [kW] × hours_available)
+remaining_demand = remaining_demand - Generator(t)
+
+// Step 5: No grid import/export
+Grid_import(t) = 0
+Grid_export(t) = 0
+
+// Step 6: Curtailment — surplus that cannot be stored
+Curtailment(t) [kWh] = surplus - Battery_charge(t)
+
+// Step 7: Unmet demand (if generator insufficient)
+Unmet_demand(t) [kWh] = remaining_demand
+```
+
+**`renewable_first` policy** — PV -> Wind -> Battery -> Grid import (standard merit order)
+
+Flags: `use_renewables=true`, `use_battery=true`, `grid_import=true`, `grid_export=true`, `use_generator=false`, `sell_renewables_to_grid=false`
+
+```
+// Step 1: Use PV + wind to meet demand
+used_renewable [kWh] = min(E_renewable(t), E_demand(t))
+remaining_demand [kWh] = E_demand(t) - used_renewable
+
+// Step 2: Charge battery from surplus renewables
+surplus [kWh] = E_renewable(t) - used_renewable
+Battery_charge(t) [kWh] = min(surplus, available_room / η_charge)
+
+// Step 3: Discharge battery for remaining demand
+Battery_discharge(t) [kWh] = min(remaining_demand, available_stored [kWh] × η_discharge)
+remaining_demand = remaining_demand - Battery_discharge(t)
+
+// Step 4: Grid import for remaining shortfall
+Grid_import(t) [kWh] = remaining_demand    // Unlimited for MVP
+
+// Step 5: Export surplus renewable generation to grid
+Grid_export(t) [kWh] = surplus - Battery_charge(t)    // Unlimited for MVP
+
+// Step 6: No generator dispatch (grid is fallback)
+Generator(t) = 0
+
+// Step 7: Curtailment = 0 (grid absorbs all surplus)
+Curtailment(t) = 0
+```
+
+**`all_grid` policy** — Grid import for all demand; renewables exported
+
+Flags: `use_renewables=false`, `use_battery=false`, `grid_import=true`, `grid_export=true`, `use_generator=false`, `sell_renewables_to_grid=true`
+
+```
+// Step 1: Import all demand from grid
+Grid_import(t) [kWh] = E_demand(t)    // Unlimited for MVP
+
+// Step 2: Route all renewable generation to grid export (net metering revenue)
+Grid_export(t) [kWh] = E_renewable(t)
+
+// Step 3: No battery usage
+Battery_charge(t) = 0
+Battery_discharge(t) = 0
+
+// Step 4: No generator
+Generator(t) = 0
+
+// Step 5: No curtailment (all goes to grid)
+Curtailment(t) = 0
+```
+
+**Battery SOC update (applies when `use_battery=true`):**
+
+> **Note:** Dispatch uses kWh values directly (dt is absorbed into the energy values since the simulation uses a daily time step where dt = 1 day and all generation/demand values are already in kWh/day).
+
+```
+energy_stored [kWh] = Battery_charge(t) × η_charge
+energy_removed [kWh] = Battery_discharge(t) / η_discharge
 SOC(t+1) = SOC(t) + (energy_stored - energy_removed) / capacity_kwh
 SOC(t+1) = clamp(SOC(t+1), SOC_min, SOC_max)
 ```
@@ -833,8 +926,8 @@ SOC(t+1) = clamp(SOC(t+1), SOC_min, SOC_max)
 **Generator fuel (Willans line, at full rated load for shortest run time):**
 
 ```
-hours = Generator_kwh / P_rated
-fuel_L = (a × P_rated + b × P_rated) × hours
+hours = Generator_kwh [kWh] / P_rated [kW]
+fuel_L [L] = (a [L/kWh] × P_rated [kW] + b [L/kWh] × P_rated [kW]) × hours
 ```
 
 Running at full load is the most fuel-efficient operating point per Section 3 (Backup Generator Fuel Consumption).
@@ -844,10 +937,7 @@ Running at full load is the most fuel-efficient operating point per Section 3 (B
 **Current MVP simplifications:**
 
 - Grid import and export are unlimited (no capacity constraints)
-- Grid export is always enabled
-- No time-of-use price optimization — dispatch is fixed merit-order regardless of TOU pricing
-- Processing energy is not included in demand (noted as Gap 4 in code; will be added when food processing is fully integrated)
-- Energy policy objects (`PvFirstBatteryGridDiesel`, `GridFirst`, `CheapestEnergy`) are not consumed by the dispatch function
+- No time-of-use price optimization -- dispatch is fixed merit-order regardless of TOU pricing
 
 ### Total Energy Demand
 
@@ -855,21 +945,23 @@ Running at full load is the most fuel-efficient operating point per Section 3 (B
 
 **Purpose:** Sum all energy demand components for load balance
 
-**Formula (full model):**
+**Formula (full model — all 6 demand components):**
 
 ```
-E_demand(t) = E_pump(t) + E_treatment(t) + E_convey(t)
-            + E_household(t) + E_processing(t) + E_irrigation_pump(t)
+E_demand(t) [kWh/day] = E_pump(t) + E_treatment(t) + E_convey(t)
+                      + E_household(t) + E_processing(t) + E_irrigation_pump(t)
 ```
 
-**Where:**
+**Where (all units kWh/day):**
 
-- `E_pump(t)`: Groundwater pumping energy (Section 2)
-- `E_treatment(t)`: BWRO desalination energy (Section 2)
-- `E_convey(t)`: Water conveyance energy (Section 2)
-- `E_household(t)`: Household electricity demand (from `calculations.py:calculate_household_demand`)
-- `E_processing(t)`: Food processing energy (Section 6)
-- `E_irrigation_pump(t)`: Pressurization energy for drip irrigation system
+- `E_pump(t) [kWh/day]`: Groundwater pumping energy = E_pump [kWh/m3] x groundwater_m3 (Section 2)
+- `E_treatment(t) [kWh/day]`: BWRO desalination energy = treatment_kwh_per_m3 x groundwater_m3 (Section 2)
+- `E_convey(t) [kWh/day]`: Water conveyance energy = E_convey [kWh/m3] x total_water_m3 (Section 2)
+- `E_household(t) [kWh/day]`: Household electricity demand (from `calculations.py:calculate_household_demand`)
+- `E_processing(t) [kWh/day]`: Food processing energy = processing_kwh_per_kg x processed_kg (Section 6)
+- `E_irrigation_pump(t) [kWh/day]`: Pressurization energy for drip irrigation system
+
+**All 6 components must be included in the dispatch Total_demand calculation.** The dispatch section (above) references this full formula.
 
 **Current implementation:**
 
@@ -1000,34 +1092,34 @@ LCOE_renewable = (annual_infrastructure_cost_pv + annual_infrastructure_cost_win
 
 **Grid Electricity Pricing Regimes:**
 
-The simulation supports two grid electricity pricing regimes configured in `energy_pricing.grid.pricing_regime`:
+The simulation supports dual electricity pricing regimes — one for agricultural use (water pumping, processing) and one for domestic use (households, community buildings). Each regime is configured independently in the scenario YAML under `energy_pricing`. See `structure.md` Pricing Configuration for the canonical schema.
 
-1. **Subsidized** (agricultural rates):
-   - Uses preferential agricultural/irrigation electricity tariffs
-   - Based on Egyptian agricultural rates (~15% discount vs commercial)
-   - Data: `historical_grid_electricity_prices-research.csv` (200 pt/kWh Aug 2024)
-   - Appropriate for communities with agricultural electricity access
+1. **Agricultural regime** (`energy_pricing.agricultural.pricing_regime`):
+   - `subsidized`: Uses preferential agricultural/irrigation electricity tariffs. Based on Egyptian agricultural rates (~15% discount vs commercial). Data: `historical_grid_electricity_prices-research.csv` (200 pt/kWh Aug 2024). Appropriate for communities with agricultural electricity access.
+   - `unsubsidized`: Uses full-cost commercial/industrial tariffs without subsidy. Approximately 16.5% higher than subsidized agricultural rates. Data: `historical_grid_electricity_prices_unsubsidized-research.csv` (233 pt/kWh Aug 2024).
 
-2. **Unsubsidized** (commercial/industrial rates):
-   - Uses full-cost commercial/industrial tariffs without subsidy
-   - Approximately 16.5% higher than subsidized agricultural rates
-   - Data: `historical_grid_electricity_prices_unsubsidized-research.csv` (233 pt/kWh Aug 2024)
-   - Appropriate for communities without agricultural electricity classification
+2. **Domestic regime** (`energy_pricing.domestic.pricing_regime`):
+   - `subsidized`: Flat rate for domestic electricity (households, community buildings).
+   - `unsubsidized`: Full-cost domestic electricity tariff.
 
-The pricing regime is specified in scenario configuration and determines which price dataset is loaded during simulation initialization.
+The pricing regime for each consumer type is specified in scenario configuration and determines which price dataset is loaded during simulation initialization. The simulation resolves the applicable price upstream based on consumer type before passing it to energy and water policies.
 
 **Configuration:**
 
-- `energy_pricing.grid.pricing_regime`: [subsidized, unsubsidized]
-- `energy_pricing.grid.subsidized.use_peak_offpeak`: Optional flag for peak/offpeak rates
-- `energy_pricing.grid.unsubsidized.base_price_usd_kwh`: Base price for unsubsidized flat-rate scenarios
-- `energy_pricing.grid.unsubsidized.annual_escalation_pct`: Annual price escalation rate
+- `energy_pricing.agricultural.pricing_regime`: [subsidized, unsubsidized]
+- `energy_pricing.agricultural.subsidized.price_usd_per_kwh`: Flat rate for subsidized agricultural electricity [USD/kWh]
+- `energy_pricing.agricultural.unsubsidized.price_usd_per_kwh`: Flat rate for unsubsidized agricultural electricity [USD/kWh]
+- `energy_pricing.domestic.pricing_regime`: [subsidized, unsubsidized]
+- `energy_pricing.domestic.subsidized.price_usd_per_kwh`: Flat rate for subsidized domestic electricity [USD/kWh]
+- `energy_pricing.domestic.unsubsidized.price_usd_per_kwh`: Flat rate for unsubsidized domestic electricity [USD/kWh]
+- `use_peak_offpeak`: Optional flag for peak/offpeak rates (per regime)
+- `annual_escalation_pct`: Annual price escalation rate (per regime)
 
 **Dependencies:**
 
 - Price data (subsidized): `data/prices/electricity/historical_grid_electricity_prices-research.csv`
 - Price data (unsubsidized): `data/prices/electricity/historical_grid_electricity_prices_unsubsidized-research.csv`
-- Configuration: `energy_pricing.grid.pricing_regime`
+- Configuration: `energy_pricing.agricultural.pricing_regime`, `energy_pricing.domestic.pricing_regime`
 
 **Output:** $/kWh blended cost
 
@@ -1179,7 +1271,7 @@ salinity_factor = max(0, 1 - b × max(0, ECe - ECe_threshold) / 100)
 **Dependencies:**
 
 - Parameter file:`data/parameters/crops/crop_parameters-toy.csv`
-- Configuration:`farms[].crops[].planting_date`
+- Configuration:`farms[].crops[].planting_dates`
 
 **Sources:**
 
@@ -1200,13 +1292,13 @@ Loss_pct = loss_rate × 100
 
 **Loss rates by pathway:**
 
-- Fresh sale (unprocessed): 10–15% (handling, transport, spoilage)
-- Processed (dried, canned, packaged): 3–5% (processing waste)
+- Fresh sale (unprocessed): default 10% (typical range 10-15% for handling, transport, spoilage in arid developing-economy contexts)
+- Processed (dried, canned, packaged): default 4% (typical range 3-5% for processing waste)
 
 **Parameters:**
 
-- `loss_rate`: Default = 0.10 for fresh produce, 0.04 for processed
-- Crop-specific loss rates may be defined in`data/parameters/crops/crop_parameters-toy.csv`
+- `loss_rate`: Default = 0.10 (10%) for fresh produce, 0.04 (4%) for processed. The 10-15% range for fresh losses reflects variation by crop type and supply chain quality, but the simulation uses 10% as the single default.
+- Crop-specific loss rates may be defined in `data/parameters/crops/crop_parameters-toy.csv`
 
 **Output:** Loss in kg/yr and as percentage of harvest
 
@@ -1242,25 +1334,11 @@ Processed_output_kg = raw_input_kg × (1 - weight_loss_pct / 100)
 
 **Allocation logic:**
 
-> Partially TBD — The food processing policy determines what fraction of each crop goes to each processing pathway. The `all_fresh` policy sends 100% to fresh sale. Other policies (`maximize_storage`, `balanced`, `market_responsive`) need allocation rules.
+The food processing policy determines what fraction of each crop goes to each processing pathway. See `policies.md` Section 3 for full allocation rules for all four policies (`all_fresh`, `maximize_storage`, `balanced`, `market_responsive`), including capacity clipping logic and the forced-sale umbrella rule.
 
-**Simple allocation approach (for `balanced` policy):**
+**Policy-specific allocation fractions:**
 
-```
-fresh_fraction = 0.50
-packaged_fraction = 0.20
-canned_fraction = 0.15
-dried_fraction = 0.15
-```
-
-**Market-responsive allocation (conceptual):**
-
-```
-If fresh_price > processed_price_equivalent:
-  Increase fresh_fraction
-Else:
-  Shift to processing type with highest value_add_multiplier × (1 - weight_loss_pct/100)
-```
+See `policies.md` Section 3 for the authoritative fraction tables for all policies (`all_fresh`, `maximize_storage`, `balanced`, `market_responsive`), including the `market_responsive` price-trigger logic (Section 3.4). Fractions are not duplicated here to avoid divergence.
 
 **Dependencies:**
 
@@ -1489,29 +1567,34 @@ This provides a realistic annual cost that smooths replacement shocks and should
 **Groundwater Cost (full system):**
 
 ```
-Cost_gw = (E_pump + E_convey + E_treatment) × electricity_price + O&M_cost
+Cost_gw [USD/day] = (E_pump [kWh/m3] + E_convey [kWh/m3] + E_treatment [kWh/m3])
+                  × electricity_price [USD/kWh] × volume_m3 [m3]
+                  + O&M_cost [USD/day]
 ```
 
 **Municipal Water Cost:**
 
 ```
-Cost_municipal = volume_m3 × price_per_m3(tier, regime)
+Cost_municipal [USD/day] = volume_m3 [m3] × price_per_m3 [USD/m3] (tier, regime)
 ```
 
 **Parameters:**
 
-- Electricity price from grid pricing data
-- Municipal water pricing from configuration
-- O&M costs from parameter files
+- `electricity_price [USD/kWh]`: Grid electricity price from pricing data
+- `price_per_m3 [USD/m3]`: Municipal water price from configuration (resolved by consumer type)
+- O&M costs [USD/day] from parameter files
 
 **Output:** Daily water cost in USD
 
 **Dependencies:**
 
-- Configuration:`water_pricing.pricing_regime`
-- Configuration:`water_pricing.municipal_source`
-- Price data:`data/prices/electricity/historical_grid_electricity_prices-research.csv`
-- Price data:`data/prices/water/municipal_water_prices-research.csv`
+- Configuration: `water_pricing.municipal_source`
+- Configuration: `water_pricing.agricultural.pricing_regime` [subsidized, unsubsidized] (for farm water demands)
+- Configuration: `water_pricing.domestic.pricing_regime` [subsidized, unsubsidized] (for household/facility water demands)
+- Price data: `data/prices/electricity/historical_grid_electricity_prices-research.csv`
+- Price data: `data/prices/water/municipal_water_prices-research.csv`
+
+**Note:** Water pricing uses dual agricultural/domestic regimes configured independently. The simulation resolves the applicable regime based on consumer type before passing the price to the water policy. See `structure.md` Pricing Configuration for the canonical schema.
 
 **Sources:**
 
@@ -1541,7 +1624,7 @@ For each consumption event within a billing period:
 **Key functions:**
 
 - `calculate_tiered_cost(consumption, cumulative_consumption, tier_config)` — Returns total cost, effective average cost per unit, tier breakdown, and marginal tier number
-- `get_marginal_tier_price(cumulative_consumption, tier_config)` — Returns the price for the *next* unit of consumption. Used by water allocation policies for cost comparison decisions (e.g., `CheapestSource` comparing GW cost vs marginal municipal cost)
+- `get_marginal_tier_price(cumulative_consumption, tier_config)` — Returns the price for the *next* unit of consumption. Used by water allocation policies for cost comparison decisions (e.g., `cheapest_source` comparing GW cost vs marginal municipal cost)
 
 **Example (Egyptian-style tiers):**
 
@@ -1562,8 +1645,8 @@ If cumulative = 8 m³ and new consumption = 5 m³:
 
 **Dependencies:**
 
-- Configuration:`water_pricing.subsidized.tier_pricing` (bracket definitions)
-- Configuration:`water_pricing.subsidized.tier_pricing.wastewater_surcharge_pct`
+- Configuration: `water_pricing.agricultural.subsidized.tier_pricing` or `water_pricing.domestic.subsidized.tier_pricing` (bracket definitions, per consumer type)
+- Configuration: `water_pricing.[agricultural|domestic].subsidized.tier_pricing.wastewater_surcharge_pct`
 
 **Sources:**
 
@@ -1571,26 +1654,38 @@ If cumulative = 8 m³ and new consumption = 5 m³:
 
 ### Crop Revenue Calculation
 
-**Purpose:** Calculate revenue from crop sales
+**Purpose:** Calculate revenue from crop sales across all product types
 
-**Formula:**
+**Fresh Crop Revenue:**
 
 ```
-Revenue = yield_kg × price_per_kg × (1 - loss_rate)
+Fresh_revenue [USD] = fresh_yield_kg [kg] × fresh_price_per_kg [USD/kg] × (1 - loss_rate)
 ```
+
+Where `loss_rate` = 0.10 (10% default; see Post-Harvest Losses in Section 4) and `fresh_yield_kg` is the fresh fraction of the harvest after the food processing policy split.
+
+**Total Crop Revenue (unified formula across all product types):**
+
+```
+Total_revenue [USD] = Σ (product_kg(product_type) × price_per_kg(product_type))
+```
+
+Where `product_type` is one of [fresh, packaged, canned, dried], and `product_kg` is the output quantity AFTER weight loss from processing (see Processed Product Output in Section 4). This avoids double counting: the food processing policy splits the raw harvest into fractions, each fraction undergoes weight loss during processing, and the resulting product weight is multiplied by the product-type-specific price.
 
 **Parameters:**
 
-- yield_kg: From crop yield calculation
-- price_per_kg: From historical price data
-- loss_rate: Post-harvest losses = 0.10 (10% typical for fresh produce)
+- `fresh_yield_kg [kg]`: Fresh fraction of harvest from food processing policy
+- `product_kg [kg]`: Output kg per product type after processing weight loss
+- `price_per_kg [USD/kg]`: Per-product-type price from historical price data
+- `loss_rate`: Post-harvest losses = 0.10 (10% default for fresh produce; 0.04 for processed)
 
-**Output:** Revenue in USD per crop per season
+**Output:** Revenue in USD per crop per season (fresh and processed combined)
 
 **Dependencies:**
 
-- Price data:`data/prices/crops/historical_crop_prices-research.csv`
-- Processing data:`data/prices/crops/historical_processed_crop_prices-research.csv`
+- Price data: `data/prices/crops/historical_crop_prices-research.csv` (fresh prices)
+- Processing data: `data/prices/crops/historical_processed_crop_prices-research.csv` (processed prices)
+- Processing specs: `data/parameters/crops/processing_specs-toy.csv` (weight loss, value multipliers)
 
 **Assumptions:**
 
@@ -1600,6 +1695,8 @@ Revenue = yield_kg × price_per_kg × (1 - loss_rate)
 ### Debt Service Calculation
 
 **Purpose:** Calculate monthly loan payments
+
+> **MVP simplification:** Debt service is fixed monthly payments per financing profile. No accelerated repayment or debt pay-down policies in MVP.
 
 **Formula (fixed-rate amortization):**
 
@@ -1617,9 +1714,10 @@ Payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 
 **Dependencies:**
 
-- Configuration:`economics.debt.principal_usd`
-- Configuration:`economics.debt.term_years`
-- Configuration:`economics.debt.interest_rate`
+- Configuration: `[system].[subsystem].financing_status` — per-subsystem financing category (determines whether debt service applies)
+- Parameter file: `data/parameters/economic/financing_profiles.csv` — contains principal amounts, loan terms, and interest rates per financing profile
+
+> **MVP simplification:** Debt service is fixed monthly payments per financing profile. No accelerated repayment or debt pay-down policies in MVP. There is no single `economics.debt` configuration — debt parameters are resolved per subsystem from `financing_status` and `financing_profiles.csv`.
 
 ### Diesel Fuel Cost
 

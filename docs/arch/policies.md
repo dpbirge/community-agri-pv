@@ -7,7 +7,7 @@ This document specifies the decision logic for all 23 simulation policies across
 **Policy scope:** Policies operate at three distinct levels:
 - **Farm-level** (default): Each farm selects its own policy for each domain (water, energy, crop, food processing, market, economic)
 - **Community-override** (optional): If all farms agree, a universal community policy can override individual farm selections
-- **Household and shared facilities**: Non-farm operations (residential households and community buildings) use water and energy policies for their operational needs only. These apply only to water and energy demands, not to crop production or food processing. Available household policies are limited to: water policy `max_groundwater` or `max_municipal`; energy policy `renewable_first` or `all_grid`. Configured in the scenario YAML under `household_policies`.
+- **Household and shared facilities**: Non-farm operations (residential households and community buildings) use water and energy policies for their operational needs only. These apply only to water and energy demands, not to crop production or food processing. Available household policies are limited to: water policy `max_groundwater` or `max_municipal`; energy policy `microgrid`, `renewable_first`, or `all_grid`. Configured in the scenario YAML under `household_policies`.
 
 For configuration schemas and parameter definitions, see `structure.md`. For calculation formulas, see `calculations.md`.
 
@@ -27,11 +27,29 @@ All policy domains share these structural conventions:
 
 - **Lookup by name**: Policies are referenced by name strings in scenario YAML files (e.g., `water_policy: cheapest_source`). Each domain provides a factory function that takes a name string and returns the corresponding policy.
 
+- **Policy name**: Every policy output includes a `policy_name: str` field identifying which policy produced the decision (e.g., `"cheapest_source"`, `"hold_for_peak"`). This enables unambiguous attribution when analyzing results across farms with different policy selections.
+
 - **Decision reasons**: Every policy returns a `decision_reason` string explaining why the decision was made (e.g., `"gw_cheaper"`, `"quota_exhausted"`). These enable filtering and grouping in analysis and debugging.
 
 - **Constraint clipping**: When a policy requests more of a resource than is physically available, the request is clipped to the physical limit and the shortfall is met from an alternative source. The binding constraint is recorded in the decision.
 
 - **Configurable parameters**: Some policies accept tuning parameters (e.g., threshold multipliers, reserve targets). Parameters are set at instantiation from the scenario YAML and remain fixed for the run. Defaults are noted in each policy description.
+
+- **Sigmoid function**: Policies that map a continuous input to a bounded output range (e.g., `adaptive` market policy) use a shared sigmoid definition:
+
+  ```
+  sigmoid(x, min_val, max_val, k, midpoint) = min_val + (max_val - min_val) / (1 + exp(-k * (x - midpoint)))
+  ```
+
+  Where `x` is the input value, `min_val` and `max_val` bound the output range, `k` controls steepness (higher = sharper transition), and `midpoint` is the input value where the output is halfway between min_val and max_val.
+
+### Error handling
+
+All policies follow these conventions for invalid or degenerate inputs:
+
+- **Zero-demand inputs**: When demand is zero (e.g., `demand_m3 = 0`, `harvest_yield_kg = 0`), return an allocation with zero quantities and `decision_reason = "zero_demand"`. Do not proceed to cost calculations or constraint checks.
+- **NaN/negative inputs**: Raise `ValueError` immediately. Policies must fail explicitly on malformed inputs rather than silently producing incorrect results.
+- **Division by zero**: Guard with a zero-demand early return before any division. For example, check `available_kg > 0` before computing `store_fraction = storage_capacity_kg / available_kg`.
 
 ### Execution order
 
@@ -43,7 +61,7 @@ Policies execute in this order each simulation day:
 4. **Food processing** — Splits harvest across processing pathways and updates total storage (runs only on harvest days; skipped when no harvest occurs)
 4b. **Forced sales** — After storage is updated, checks all tranches for expiry and overflow; forced sales execute here before market policy runs
 5. **Market** — Determines when to sell or store remaining inventory (forced sales have already occurred, so market policy operates freely)
-6. **Economic** — Sets reserve targets and investment gates (monthly or at year boundaries)
+6. **Economic** — Sets reserve targets and inventory decisions (monthly or at year boundaries)
 
 ### Operational independence
 
@@ -271,7 +289,7 @@ ELSE:
     reason = "threshold_not_met"
 ```
 
-**Note:** The `limiting_factor` field (values: `"ratio_cap"`, `"well_limit"`, `"treatment_limit"`, or None) is included in the decision output to distinguish whether the groundwater allocation was limited by the conservation ratio cap or by physical infrastructure constraints. This enables analysis of whether a farm is conservation-limited or infrastructure-limited.
+**Note on `limiting_factor` vs `constraint_hit`:** All water policies return `constraint_hit` (shared output field, values: `"well_limit"`, `"treatment_limit"`, or None) which records only infrastructure constraints. The `conserve_groundwater` policy additionally returns `limiting_factor` (values: `"ratio_cap"`, `"well_limit"`, `"treatment_limit"`, or None), which is a superset of `constraint_hit` — it includes both the shared infrastructure constraint values AND the policy's own ratio cap. When `limiting_factor = "ratio_cap"`, the allocation was limited by the conservation policy's `max_gw_ratio` parameter, not by physical infrastructure. When `limiting_factor` matches an infrastructure constraint, it mirrors `constraint_hit`. This enables analysis of whether a farm is conservation-limited or infrastructure-limited.
 
 ### 2.6 `quota_enforced`
 
@@ -321,7 +339,7 @@ This rule applies to ALL food processing policies and overrides normal storage b
 
 1. **Tranche tracking**: Each harvest batch is tracked as a discrete unit (tranche) with an entry date and product type. This enables first-in, first-out (FIFO) ordering.
 
-2. **Storage-life expiry**: When any tranche reaches its storage life limit, it must be sold immediately regardless of market conditions or policy preferences. Storage life data is sourced from `data/parameters/crops/spoilage_rates-toy.csv` (per crop, per product type).
+2. **Storage-life expiry**: When any tranche reaches its storage life limit, it must be sold immediately regardless of market conditions or policy preferences. Storage life data is sourced from `data/parameters/crops/spoilage_rates-toy.csv` (per crop, per product type). CSV schema: `crop_name, product_type, shelf_life_days`.
 
 3. **Storage overflow**: When storage is full and new production needs space, sell the oldest tranche first, then the next oldest, until enough space is freed. This ensures proper FIFO inventory management.
 
@@ -334,7 +352,6 @@ This rule applies to ALL food processing policies and overrides normal storage b
 | `harvest_yield_kg` | Total harvest yield before processing (kg) |
 | `crop_name` | Name of crop being processed |
 | `fresh_price_per_kg` | Current fresh farmgate price (USD/kg) |
-| `fresh_packaging_capacity_kg` | Daily fresh packaging capacity (kg); infinite if unconstrained |
 | `drying_capacity_kg` | Daily drying capacity (kg); infinite if unconstrained |
 | `canning_capacity_kg` | Daily canning capacity (kg); infinite if unconstrained |
 | `packaging_capacity_kg` | Daily packaging capacity (kg); infinite if unconstrained |
@@ -353,9 +370,10 @@ This rule applies to ALL food processing policies and overrides normal storage b
 
 ### Shared logic: capacity clipping
 
-All food processing policies apply capacity clipping after computing their target fractions. If the allocated kg for any pathway exceeds its daily capacity, the excess is redistributed to fresh (which has no practical capacity limit — it requires only washing/sorting):
+All food processing policies apply capacity clipping after computing their target fractions. If the allocated kg for any pathway exceeds its daily capacity, the excess is redistributed to fresh. Fresh is explicitly excluded from capacity clipping — it has no practical capacity limit (requires only washing/sorting) and serves as the overflow sink for all capacity-constrained pathways:
 
 ```
+// Fresh is never clipped — it absorbs all excess from constrained pathways
 FOR each pathway in [packaged, canned, dried]:
     allocated_kg = harvest_yield_kg * pathway_fraction
     IF allocated_kg > pathway_capacity_kg:
@@ -459,6 +477,7 @@ Once crops are processed into their final state (fresh, canned, etc.) they are i
 ```
 sell_fraction = 1.0
 store_fraction = 0.0
+target_price_per_kg = 0
 reason = "sell_immediately"
 ```
 
@@ -469,9 +488,12 @@ Crops are processed according to the food processing policy. The maximum amount 
 **Parameters:**
 - `price_threshold_multiplier` (default 1.2) — factor above average price that triggers sales. Sell when current price >= avg_price * 1.2 (20% above average). Configurable via scenario YAML.
 
-Note: Storage-life expiry and storage overflow are handled by the umbrella rule (Section 3), not by this policy. The umbrella rule executes before market policy decisions.
+Note: Storage-life expiry and storage overflow from pre-existing tranches are handled by the umbrella rule (Section 3), not by this policy. The umbrella rule executes before market policy decisions. The storage capacity checks below serve a different purpose: they govern this policy's own hold-vs-sell decision by checking whether remaining capacity can accommodate what the policy wants to hold. This is distinct from the umbrella rule, which forces sales of already-stored tranches that have expired or overflowed.
 
 ```
+// Note: Spoilage-based forced sales are handled by the umbrella rule before
+// this policy runs. This policy does not check days_in_storage or storage_life_days.
+
 target_price = avg_price_per_kg * price_threshold_multiplier
 
 IF current_price >= target_price:
@@ -481,6 +503,8 @@ IF current_price >= target_price:
 
 ELSE IF storage_capacity_kg >= available_kg:
     // Room to store all: hold everything
+    // Note: this checks REMAINING capacity after umbrella rule has already
+    // freed space from expired/overflowed tranches
     sell_fraction = 0.0, store_fraction = 1.0
     reason = "holding_for_peak"
 
@@ -491,7 +515,7 @@ ELSE IF storage_capacity_kg > 0:
     reason = "holding_partial_storage_full"
 
 ELSE:
-    // No storage space: sell everything
+    // No remaining storage space: sell everything
     sell_fraction = 1.0
     reason = "no_storage_capacity"
 ```
@@ -656,8 +680,9 @@ reason = "All-grid: import all demand, net-meter renewables"
 | `total_growing_days` | Total days in growing cycle |
 | `base_demand_m3` | Standard irrigation demand for today from precomputed data (m3) |
 | `temperature_c` | Ambient temperature (C) |
-| `water_stress_ratio` | Cumulative water received / expected water (0-1) |
 | `available_water_m3` | Water available in storage at start of day, before today's allocation (m3). Represents carryover from previous days, not today's water policy output. |
+
+> **MVP simplification:** Water stress ratio is not tracked as a policy input. Yield reduction from water deficit is computed at harvest using the FAO-33 formula (see `calculations.md`) but does not feed back into daily crop policy decisions.
 
 ### Decision (outputs)
 
@@ -740,7 +765,9 @@ adjusted_demand = base_demand_m3 * multiplier
 
 ## 7. Economic Policies
 
-**Scope:** Farm-level only. Each farm selects a financial management strategy governing cash reserve targets and investment approval. Community-override policies are supported. Called monthly or at year boundaries.
+**Scope:** Farm-level only. Each farm selects a financial management strategy governing cash reserve targets. Community-override policies are supported. Called monthly or at year boundaries.
+
+> **MVP simplification — debt service:** Debt service is fixed monthly payments per financing profile (see `calculations.md` Section 5). No accelerated repayment or debt pay-down policies in MVP.
 
 ### Context (inputs)
 
@@ -759,18 +786,19 @@ adjusted_demand = base_demand_m3 * multiplier
 | Field | Description |
 |---|---|
 | `reserve_target_months` | Target months of cash reserves |
-| `investment_allowed` | Whether to approve new capital investments (bool) |
 | `sell_inventory` | Whether to liquidate stored inventory now (bool) |
 | `decision_reason` | Why this strategy was chosen |
 
+> **MVP simplification:** Equipment maintenance and upgrades are included in annual OPEX. No separate investment mechanism (`investment_allowed`) in MVP.
+
 ### Summary
 
-| Policy | Reserve target | Investment threshold | Behavior |
-|---|---|---|---|
-| `balanced` | 3 months | Invest when reserves > 3 months | Adaptive: sell inventory if < 1 month reserves, hold otherwise |
-| `aggressive_growth` | 1 month | Invest when reserves > 0.5 months | Minimize reserves, sell inventory immediately, maximize reinvestment |
-| `conservative` | 6 months | Invest when reserves > 9 months | Maintain high safety buffer, hold inventory |
-| `risk_averse` | 6+ months | Only with 12+ months reserves | Maximize reserves, sell inventory immediately to lock in revenue |
+| Policy | Reserve target | Behavior |
+|---|---|---|
+| `balanced` | 3 months | Adaptive: sell inventory if < 1 month reserves, hold otherwise |
+| `aggressive_growth` | 1 month | Minimize reserves, sell inventory immediately |
+| `conservative` | 6 months | Maintain high safety buffer, hold inventory |
+| `risk_averse` | 6+ months | Maximize reserves, sell inventory immediately to lock in revenue |
 
 ### 7.1 `balanced`
 
@@ -781,38 +809,33 @@ reserve_target = 3.0 months
 
 IF months_of_reserves < 1.0:
     sell_inventory = true
-    investment_allowed = false
     reason = "Low reserves ({months} months), survival mode"
 
 ELSE IF months_of_reserves < 3.0:
     sell_inventory = false
-    investment_allowed = false
     reason = "Building reserves ({months}/{target} months)"
 
 ELSE:
     sell_inventory = false
-    investment_allowed = true
     reason = "Healthy reserves ({months} months), growth mode"
 ```
 
 ### 7.2 `aggressive_growth`
 
-Minimize cash reserves. Sell all inventory immediately to free up capital. Invest everything above the bare minimum reserve.
+Minimize cash reserves. Sell all inventory immediately to free up capital.
 
 ```
 reserve_target = 1.0 month
-investment_allowed = months_of_reserves > 0.5
 sell_inventory = true
-reason = "Aggressive: 1 month target, invest everything above"
+reason = "Aggressive: 1 month target, sell immediately"
 ```
 
 ### 7.3 `conservative`
 
-Maintain high cash reserves. Only invest when reserves exceed 1.5x the target (9 months).
+Maintain high cash reserves.
 
 ```
 reserve_target = 6.0 months
-investment_allowed = months_of_reserves > 9.0
 sell_inventory = false
 
 IF months_of_reserves < reserve_target:
@@ -826,8 +849,7 @@ ELSE:
 Maximum caution. Build large reserves, liquidate inventory to lock in revenue.
 
 ```
-reserve_target = MAX(6.0, configured_minimum)
-investment_allowed = months_of_reserves > 12.0
+reserve_target = MAX(6.0, min_cash_months)
 sell_inventory = true
 
 IF months_of_reserves < 3.0:

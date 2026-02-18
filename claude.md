@@ -61,12 +61,12 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 
 **Policies (Layer 2):**
 
-- [water_policies.py](src/policies/water_policies.py) - 5 water allocation policies
+- [water_policies.py](src/policies/water_policies.py) - 6 water allocation policies
 - [energy_policies.py](src/policies/energy_policies.py) - 3 energy dispatch policies (merit-order parameters)
 - [food_policies.py](src/policies/food_policies.py) - 4 food processing policies
 - [crop_policies.py](src/policies/crop_policies.py) - 3 crop management policies
 - [economic_policies.py](src/policies/economic_policies.py) - 4 economic strategy policies
-- [market_policies.py](src/policies/market_policies.py) - 4 market timing policies
+- [market_policies.py](src/policies/market_policies.py) - 3 market timing policies
 
 **Configuration (Layer 2):**
 

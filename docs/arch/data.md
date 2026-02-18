@@ -1,8 +1,8 @@
 # Data Organization Specification
 
-**Document Version**: 1.0
-**Date**: 2026-02-02
-**Status**: Draft for review
+**Document Version**: 2.0
+**Date**: 2026-02-12
+**Status**: Updated to match actual codebase
 
 ## Overview
 
@@ -25,6 +25,7 @@ data/
 ├── precomputed/        # Layer 1 outputs (pre-computed physical libraries)
 ├── parameters/         # Static parameters (Layer 2 design inputs)
 ├── prices/            # Historical price time-series (Layer 2 economic inputs)
+├── scripts/           # Data generation scripts (Layer 1)
 └── README.md          # Data folder overview and usage guide
 ```
 
@@ -32,8 +33,7 @@ Scenario configurations live in:
 ```
 settings/
 ├── data_registry.yaml # Central registry mapping data keys to file paths
-├── mvp-settings.yaml  # MVP scenario configuration
-└── README.md          # Settings overview and usage guide
+└── mvp-settings.yaml  # MVP scenario configuration
 ```
 
 Policy implementations live in the source code:
@@ -88,10 +88,24 @@ precomputed/
 │   ├── household_energy_kwh_per_day-toy.csv      # Community household electricity demand
 │   └── household_water_m3_per_day-toy.csv        # Community household water demand
 │
+├── community_buildings/
+│   ├── community_buildings_energy_kwh_per_day-toy.csv  # Community/industrial building electricity demand
+│   └── community_buildings_water_m3_per_day-toy.csv    # Community/industrial building water demand
+│
 └── microclimate/
     ├── pv_shade_adjustments-toy.csv              # Temperature and irradiance adjustments under agri-PV
     └── pv_shade_adjustments-research.csv
 ```
+
+**Registry keys** (from `data_registry.yaml`):
+- `weather.daily` → weather data
+- `power.pv`, `power.wind` → normalized power output
+- `irrigation.<crop>` → per-crop irrigation demand
+- `yields.<crop>` → per-crop yield potential
+- `water_treatment.energy` → treatment energy lookup
+- `household.energy`, `household.water` → household demand
+- `community_buildings.energy`, `community_buildings.water` → building demand
+- `microclimate.pv_shade` → agri-PV microclimate effects
 
 #### Weather File Format Example
 
@@ -156,10 +170,16 @@ parameters/
 │   ├── crop_coefficients-toy.csv              # Kc by growth stage, root depth, growing season length
 │   ├── crop_coefficients-research.csv         # FAO-56 based coefficients for Sinai climate
 │   ├── growth_stages-toy.csv                  # Duration and water sensitivity by crop and growth stage
+│   ├── yield_response_factors-toy.csv         # K_y values for FAO-33 water deficit yield formula
+│   ├── yield_response_factors-research.csv    # FAO-33 K_y values from literature
+│   ├── post_harvest_losses-toy.csv            # Loss rates by crop and processing pathway
+│   ├── post_harvest_losses-research.csv       # Research-grade post-harvest loss rates
+│   ├── planting_windows-research.csv          # Valid planting date ranges per crop for Sinai
 │   ├── microclimate_yield_effects-research.csv # PV shade effects on crop yield by density
 │   ├── processing_specs-toy.csv               # Energy, labor, weight loss, value-add by processing type
 │   ├── processing_specs-research.csv          # Research-grade processing specifications
-│   └── spoilage_rates-toy.csv                 # Percent per day by product type and storage condition
+│   ├── spoilage_rates-toy.csv                 # Shelf life days by crop and product type (FIFO tracking)
+│   └── TEMPLATE_crop_coefficients.csv         # Template for creating new crop coefficient files
 │
 ├── equipment/
 │   ├── pv_systems-toy.csv                     # Module efficiency, temp coefficient, degradation, lifespan
@@ -185,7 +205,8 @@ parameters/
 ├── community/
 │   ├── farm_profiles-toy.csv                  # Farm size, yield factor, starting capital by profile type
 │   ├── housing_energy_water-toy.csv           # Per-household energy and water demand
-│   └── land_allocation-toy.csv                # Total area, farmland, housing, buffer zones, solar arrays
+│   ├── land_allocation-toy.csv                # Total area, farmland, housing, buffer zones, solar arrays
+│   └── community_buildings_energy_water-toy.csv # Energy/water demand for community and industrial buildings
 │
 ├── economic/
 │   └── financing_profiles.csv                 # Financing category parameters (loan terms, rates, multipliers)
@@ -200,6 +221,15 @@ parameters/
     ├── operating_costs-toy.csv                # Opex rates by equipment type ($/kW/year, etc.)
     └── operating_costs-research.csv           # Research-grade O&M costs (wind: Bergey measured, NREL benchmarks)
 ```
+
+**Registry keys** (from `data_registry.yaml`):
+- `crops.*` → crop parameter files (coefficients, growth_stages, processing_specs, yield_response_factors, post_harvest_losses, planting_windows, spoilage_rates)
+- `equipment.*` → equipment parameter files (pv_systems, wind_turbines, batteries, processing, failure_rates, wells, irrigation_systems, storage_systems, generators, fresh_packaging, processed_packaging)
+- `water_treatment.equipment` → water treatment equipment specs
+- `labor.*` → labor requirements and wages
+- `community.*` → farm profiles, land allocation, housing, buildings
+- `economic.*` → financing profiles
+- `costs.*` → capital and operating costs
 
 #### Crop Coefficients File Format Example
 
@@ -270,8 +300,10 @@ prices/
 │   └── historical_pickled_cucumber_prices-toy.csv
 │
 ├── electricity/
-│   ├── historical_grid_electricity_prices-toy.csv
-│   └── historical_grid_electricity_prices-research.csv  # Egyptian agricultural tariffs
+│   ├── historical_grid_electricity_prices-toy.csv               # Subsidized agricultural tariffs
+│   ├── historical_grid_electricity_prices-research.csv          # Egyptian agricultural tariffs (researched)
+│   ├── historical_grid_electricity_prices_unsubsidized-toy.csv  # Unsubsidized commercial tariffs
+│   └── historical_grid_electricity_prices_unsubsidized-research.csv  # Egyptian unsubsidized tariffs (researched)
 │
 ├── inputs/
 │   └── historical_fertilizer_costs-toy.csv     # Fertilizer cost per hectare
@@ -284,6 +316,16 @@ prices/
     ├── historical_diesel_prices-toy.csv
     └── historical_diesel_prices-research.csv   # Egyptian diesel prices
 ```
+
+**Registry keys** (from `data_registry.yaml`):
+- `prices_crops.<crop>` → fresh crop price files
+- `prices_processed.<product>` → processed product price files
+- `prices_utilities.electricity_subsidized` → subsidized grid prices
+- `prices_utilities.electricity_unsubsidized` → unsubsidized grid prices
+- `prices_utilities.municipal_water` → municipal water prices
+- `prices_utilities.diesel` → diesel fuel prices
+
+**Electricity pricing note:** The simulation supports dual pricing regimes (subsidized/unsubsidized) for both agricultural and domestic consumers. The registry maps to separate files for each regime. See `structure.md` Pricing Configuration and `simulation_flow.md` Section 3 for resolution logic.
 
 #### Crop Price File Format Example
 
@@ -306,22 +348,21 @@ date,usd_per_kg,season,market_condition
 2021-01-01,2.85,winter,high
 ```
 
-#### Electricity Price File Format Example
+---
 
-```csv
-# SOURCE: Regional utility rate schedules (toy approximation)
-# DATE: 2026-02-02
-# DESCRIPTION: Daily average grid electricity price with time-of-use structure
-# UNITS: usd_per_kwh (USD per kilowatt-hour)
-# LOGIC: Base rate + TOU premium during peak hours (16:00-20:00)
-# DEPENDENCIES: None (utility data)
-# STRUCTURE: off_peak (00:00-15:59), peak (16:00-20:00), off_peak (20:01-23:59)
-# NOTES: Future versions may include demand charges and seasonal rate changes
-date,usd_per_kwh_offpeak,usd_per_kwh_peak,usd_per_kwh_avg_daily,rate_schedule
-2024-01-01,0.08,0.18,0.10,standard
-2024-01-02,0.08,0.18,0.10,standard
-2024-06-01,0.09,0.20,0.11,summer
-2024-06-02,0.09,0.20,0.11,summer
+### `data/scripts/` - Data Generation Scripts
+
+Layer 1 pre-computation scripts that generate the precomputed libraries and parameter files.
+
+```
+scripts/
+├── generate_weather_data.py              # 15-year synthetic weather for Sinai (~28N, 34E)
+├── generate_crop_parameters.py           # Crop coefficients, growth stages, processing specs
+├── generate_irrigation_and_yields.py     # FAO Penman-Monteith irrigation demand and yield calculations
+├── generate_power_data.py                # PV and wind normalized power output
+├── generate_price_data.py                # Historical price time-series (crop, processed, electricity, water, diesel, fertilizer)
+├── generate_household_demand.py          # Household energy and water demand
+└── generate_community_building_demand.py # Community and industrial building energy and water demand
 ```
 
 ---
@@ -355,7 +396,7 @@ The settings folder contains the scenario YAML file and the central data registr
 
 The scenario YAML structure uses `_system` suffixes for infrastructure sections (`water_system`, `energy_system`, `food_processing_system`) and references policies by name. See `structure.md` for the full schema.
 
-**Data registry**: `settings/data_registry.yaml` maps logical data keys (e.g., `weather.scenario_001`) to file paths. The `SimulationDataLoader` uses this registry to resolve data at runtime.
+**Data registry**: `settings/data_registry.yaml` maps logical data keys (e.g., `weather.daily`, `irrigation.tomato`) to file paths. The `SimulationDataLoader` uses this registry to resolve data at runtime. The registry supports alternative file comments (e.g., `# alt: ...`) for easy switching between toy and research data.
 
 ### `src/policies/` - Policy Implementations
 
@@ -364,12 +405,12 @@ Policy classes live in `src/policies/` with a consistent pattern: context datacl
 ```
 src/policies/
 ├── __init__.py               # Exports all policies, registries, and factory functions
-├── water_policies.py         # 5 water allocation policies (integrated)
+├── water_policies.py         # 6 water allocation policies (integrated)
 ├── food_policies.py          # 4 food processing allocation policies (integrated)
 ├── energy_policies.py        # 3 energy dispatch policies (not yet integrated)
 ├── crop_policies.py          # 3 irrigation management policies (not yet integrated)
 ├── economic_policies.py      # 4 financial management policies (not yet integrated)
-└── market_policies.py        # 4 sale timing policies (not yet integrated)
+└── market_policies.py        # 3 sale timing policies (not yet integrated)
 ```
 
 Policies are selected by name in the scenario YAML and instantiated during scenario loading. See `structure.md` Section 3 for the full policy catalog and integration status.
@@ -389,75 +430,93 @@ All datasets follow this iterative improvement path:
    - Purpose: Improve realism using FAO, USDA, Egyptian government data, and academic sources
    - Quality: Representative of real-world ranges for the Sinai/Egypt context
    - Example: FAO crop coefficients, Egyptian HCWW water tariffs, Egyptian agricultural wages
-   - **Current status:** 14+ research-grade files exist alongside toy data
 
 3. **Real data** (`-real` suffix): Empirical measurements or validated simulations
    - Purpose: Location-specific accuracy for production runs
    - Quality: Actual historical data or high-fidelity simulations
    - Example: Historical weather from specific location, actual market price data
 
-> **Note on suffix convention:** The original plan used `-toy` for both synthetic and researched estimates. The codebase now uses `-research` for literature-grounded data, reserving `-toy` for purely synthetic values. The `-real` suffix is reserved for future empirical data. The `SimulationDataLoader` has a `use_research_prices` flag to prefer `-research` files when available.
+> **Note on suffix convention:** The codebase uses `-research` for literature-grounded data, reserving `-toy` for purely synthetic values. The `-real` suffix is reserved for future empirical data. The `SimulationDataLoader` has a `use_research_prices` flag to prefer `-research` files when available.
 
 ---
 
-## Dataset Checklist
+## Dataset Inventory
 
-This checklist tracks all datasets identified in the model plan. Status indicates toy (T), research (R), or not yet created (--).
+This table tracks all datasets in the model. Status columns: T = toy exists, R = research exists.
 
 ### Precomputed (Layer 1 outputs)
 
-| Dataset | T | R | Notes |
-|---|---|---|---|
-| Weather time-series (temp, irradiance, wind, precip) | x | x | 15-year Sinai synthetic (2010-2024) |
-| PV power normalized output | x | | |
-| Wind power normalized output | x | | |
-| Crop irrigation demand (5 crops) | x | | Tomato, potato, onion, kale, cucumber |
-| Crop yields (5 crops) | x | | |
-| Water treatment energy curves | x | | Categorical salinity lookup |
-| Microclimate adjustments under agri-PV | x | x | |
-| Household energy demand | x | | Community household electricity |
-| Household water demand | x | | Community household water |
+| Dataset | T | R | Registry Key | Notes |
+|---|---|---|---|---|
+| Weather time-series | x | x | `weather.daily` | 15-year Sinai synthetic (2010-2024) |
+| PV power normalized output | x | | `power.pv` | |
+| Wind power normalized output | x | | `power.wind` | |
+| Crop irrigation demand (5 crops) | x | | `irrigation.<crop>` | Tomato, potato, onion, kale, cucumber |
+| Crop yields (5 crops) | x | | `yields.<crop>` | |
+| Water treatment energy curves | x | | `water_treatment.energy` | Categorical salinity lookup |
+| Microclimate adjustments under agri-PV | x | x | `microclimate.pv_shade` | |
+| Household energy demand | x | | `household.energy` | Community household electricity |
+| Household water demand | x | | `household.water` | Community household water |
+| Community buildings energy demand | x | | `community_buildings.energy` | Offices, storage, industrial |
+| Community buildings water demand | x | | `community_buildings.water` | Facility water needs |
 
 ### Parameters (Static characteristics)
 
-| Dataset | T | R | Notes |
-|---|---|---|---|
-| Crop coefficients (Kc, growth stages) | x | x | FAO-56 based |
-| Crop processing specifications | x | x | Weight loss, value-add, energy |
-| Microclimate yield effects | | x | PV shade effects by density |
-| Spoilage rates | x | | |
-| PV system specifications | x | | |
-| Battery specifications | x | | |
-| Wind turbine specifications | x | | |
-| Water treatment specifications | x | x | BWRO parameters |
-| Well specifications | x | | |
-| Generator specifications | x | | |
-| Irrigation system specifications | x | | |
-| Fresh packaging equipment | x | | |
-| Processed packaging equipment | x | | |
-| Storage systems | x | | |
-| Processing equipment | x | | |
-| Equipment failure rates | x | | |
-| Labor requirements | x | | |
-| Labor wages | x | x | Egyptian agricultural rates |
-| Farm profiles | x | | |
-| Community housing energy/water | x | | |
-| Land allocation | x | | |
-| Capital costs | x | x | |
-| Operating costs | x | | |
-| Financing profiles | x | | Loan terms, rates, multipliers |
-| Aquifer parameters | | | Documentation only (markdown) |
+| Dataset | T | R | Registry Key | Notes |
+|---|---|---|---|---|
+| Crop coefficients (Kc, growth stages) | x | x | `crops.coefficients` | FAO-56 based |
+| Growth stages (durations, sensitivity) | x | | `crops.growth_stages` | |
+| Yield response factors (K_y) | x | x | `crops.yield_response_factors` | FAO-33 water deficit |
+| Post-harvest losses | x | x | `crops.post_harvest_losses` | By crop and pathway |
+| Planting windows | | x | `crops.planting_windows` | Valid planting dates for Sinai |
+| Crop processing specifications | x | x | `crops.processing_specs` | Weight loss, value-add, energy |
+| Microclimate yield effects | | x | (not in registry) | PV shade effects by density |
+| Spoilage rates / shelf life | x | | `crops.spoilage_rates` | FIFO tranche tracking |
+| PV system specifications | x | | `equipment.pv_systems` | |
+| Battery specifications | x | | `equipment.batteries` | |
+| Wind turbine specifications | x | x | `equipment.wind_turbines` | Bergey, Eocycle, Endurance |
+| Water treatment specifications | x | x | `water_treatment.equipment` | BWRO parameters |
+| Well specifications | x | | `equipment.wells` | |
+| Generator specifications | x | | `equipment.generators` | |
+| Irrigation system specifications | x | | `equipment.irrigation_systems` | |
+| Fresh packaging equipment | x | | `equipment.fresh_packaging` | |
+| Processed packaging equipment | x | | `equipment.processed_packaging` | |
+| Storage systems | x | | `equipment.storage_systems` | |
+| Processing equipment | x | | `equipment.processing` | |
+| Equipment failure rates | x | | `equipment.failure_rates` | |
+| Labor requirements | x | | `labor.requirements` | |
+| Labor wages | x | x | `labor.wages` | Egyptian agricultural rates |
+| Farm profiles | x | | `community.farm_profiles` | |
+| Community housing energy/water | x | | `community.housing` | |
+| Land allocation | x | | `community.land_allocation` | |
+| Community buildings energy/water | x | | `community.buildings` | Offices, storage, industrial |
+| Capital costs | x | x | `costs.capital` | |
+| Operating costs | x | x | `costs.operating` | |
+| Financing profiles | x | | `economic.financing_profiles` | Loan terms, rates, multipliers |
+| Aquifer parameters | | | (documentation) | Markdown reference doc |
+| Water source metadata | | | (config) | YAML metadata file |
 
 ### Price Time-Series
 
-| Dataset | T | R | Notes |
-|---|---|---|---|
-| Historical crop prices (5 crops) | x | x | FAO/USDA-based Egyptian farmgate |
-| Historical processed product prices (10 products) | x | | Packaged, canned, dried variants |
-| Historical electricity prices | x | x | Egyptian agricultural tariffs |
-| Historical municipal water prices | x | x | Egyptian HCWW tiered pricing |
-| Historical diesel prices | x | x | Egyptian diesel prices |
-| Historical fertilizer costs | x | | Per-hectare aggregate |
+| Dataset | T | R | Registry Key | Notes |
+|---|---|---|---|---|
+| Historical crop prices (5 crops) | x | x | `prices_crops.<crop>` | FAO/USDA-based Egyptian farmgate |
+| Historical processed product prices (10 products) | x | | `prices_processed.<product>` | Packaged, canned, dried variants |
+| Historical electricity prices (subsidized) | x | x | `prices_utilities.electricity_subsidized` | Egyptian agricultural tariffs |
+| Historical electricity prices (unsubsidized) | x | x | `prices_utilities.electricity_unsubsidized` | Commercial/industrial tariffs |
+| Historical municipal water prices | x | x | `prices_utilities.municipal_water` | Egyptian HCWW tiered pricing |
+| Historical diesel prices | x | x | `prices_utilities.diesel` | Egyptian diesel prices |
+| Historical fertilizer costs | x | | (not in registry) | Per-hectare aggregate |
+
+### Planned Datasets (Not Yet Created)
+
+These datasets are referenced in the architecture docs but do not yet exist. They are needed for future simulation features.
+
+| Dataset | Referenced In | Purpose |
+|---|---|---|
+| `parameters/crops/crop_salinity_tolerance.csv` | `calculations.md` Section 4 | FAO-29 salinity yield reduction thresholds (ECe, slope b) |
+| `parameters/economic/equipment_lifespans.csv` | `calculations.md` Section 5 | Component lifespans for replacement cost calculations |
+| `parameters/crops/storage_costs-toy.csv` | `simulation_flow.md` Section 10.7 | Daily storage cost per kg by product type |
 
 ### Settings (Configuration)
 
@@ -478,6 +537,95 @@ This checklist tracks all datasets identified in the model plan. Status indicate
 | `generate_power_data.py` | PV and wind normalized output | |
 | `generate_price_data.py` | All price time-series | Crop, processed, electricity, water, diesel, fertilizer |
 | `generate_household_demand.py` | Household energy and water demand | |
+| `generate_community_building_demand.py` | Community building energy and water demand | |
+
+---
+
+## Data Requirements by Simulation Subsystem
+
+This section maps which data files feed into each subsystem, linking `data/` files to the calculations in `calculations.md`, the policies in `policies.md`, and the simulation flow in `simulation_flow.md`.
+
+### Water Subsystem
+
+**Daily loop steps:** Crop policy (Step 1) → Water policy (Step 2) → Household water (Step 2b)
+
+| Data Needed | Source File | Used By |
+|---|---|---|
+| Irrigation demand per crop | `precomputed/irrigation_demand/irrigation_m3_per_ha_<crop>-toy.csv` | Crop policy context (`base_demand_m3`) |
+| Treatment energy per m3 | `precomputed/water_treatment/treatment_kwh_per_m3-toy.csv` | Water policy context (`treatment_kwh_per_m3`) |
+| Well specifications | `parameters/equipment/wells-toy.csv` | System constraints (`max_groundwater_m3`) |
+| Water treatment specs | `parameters/equipment/water_treatment-toy.csv` | System constraints (`max_treatment_m3`) |
+| Municipal water prices | `prices/water/historical_municipal_water_prices-*.csv` | Water policy context (`municipal_price_per_m3`) |
+| Grid electricity prices | `prices/electricity/historical_grid_electricity_prices-*.csv` | Water policy context (`energy_price_per_kwh`) |
+| Household water demand | `precomputed/household/household_water_m3_per_day-toy.csv` | Step 2b household allocation |
+| Community buildings water | `precomputed/community_buildings/community_buildings_water_m3_per_day-toy.csv` | Step 2b facility allocation |
+| Housing parameters | `parameters/community/housing_energy_water-toy.csv` | `calculate_household_demand()` |
+| Community buildings params | `parameters/community/community_buildings_energy_water-toy.csv` | Building demand calculation |
+| Aquifer parameters | `parameters/water/aquifer_parameters.md` | Aquifer drawdown feedback (yearly) |
+
+### Energy Subsystem
+
+**Daily loop step:** Energy policy and dispatch (Step 3)
+
+| Data Needed | Source File | Used By |
+|---|---|---|
+| PV normalized output | `precomputed/pv_power/pv_normalized_kwh_per_kw_daily-toy.csv` | `dispatch_energy()` (`pv_available_kwh`) |
+| Wind normalized output | `precomputed/wind_power/wind_normalized_kwh_per_kw_daily-toy.csv` | `dispatch_energy()` (`wind_available_kwh`) |
+| PV system specs | `parameters/equipment/pv_systems-toy.csv` | Degradation rate, temp coefficient |
+| Wind turbine specs | `parameters/equipment/wind_turbines-*.csv` | Hub height, power curve |
+| Battery specs | `parameters/equipment/batteries-toy.csv` | Capacity, charge/discharge efficiency, SOC limits |
+| Generator specs | `parameters/equipment/generators-toy.csv` | Capacity, fuel coefficients |
+| Diesel prices | `prices/diesel/historical_diesel_prices-*.csv` | Generator fuel cost |
+| Grid electricity prices | `prices/electricity/historical_grid_electricity_prices*-*.csv` | Grid import/export cost |
+| Household energy demand | `precomputed/household/household_energy_kwh_per_day-toy.csv` | E_household component |
+| Community buildings energy | `precomputed/community_buildings/community_buildings_energy_kwh_per_day-toy.csv` | E_other component |
+| Microclimate adjustments | `precomputed/microclimate/pv_shade_adjustments-*.csv` | Shading factor for PV output |
+
+### Crop and Harvest Subsystem
+
+**Daily loop step:** Crop policy (Step 1), harvest yield calculation (Step 4)
+
+| Data Needed | Source File | Used By |
+|---|---|---|
+| Crop coefficients | `parameters/crops/crop_coefficients-*.csv` | Kc values, growth stage durations |
+| Growth stages | `parameters/crops/growth_stages-toy.csv` | Stage durations, water sensitivity |
+| Yield response factors | `parameters/crops/yield_response_factors-*.csv` | K_y for FAO-33 yield formula |
+| Planting windows | `parameters/crops/planting_windows-research.csv` | Valid planting dates |
+| Post-harvest losses | `parameters/crops/post_harvest_losses-*.csv` | Loss rates by pathway |
+| Crop yields (potential) | `precomputed/crop_yields/yield_kg_per_ha_<crop>-toy.csv` | Y_potential for harvest calculation |
+| Microclimate yield effects | `parameters/crops/microclimate_yield_effects-research.csv` | PV shade yield modification |
+| Weather data | `precomputed/weather/daily_weather_scenario_001-*.csv` | Temperature for crop/weather policies |
+
+### Food Processing and Market Subsystem
+
+**Daily loop steps:** Food processing (Step 4) → Forced sales (Step 4b) → Market policy (Step 5)
+
+| Data Needed | Source File | Used By |
+|---|---|---|
+| Processing specifications | `parameters/crops/processing_specs-*.csv` | Weight loss, energy per kg, value-add |
+| Processing equipment | `parameters/equipment/processing_equipment-toy.csv` | Capacity limits for clipping |
+| Fresh packaging specs | `parameters/equipment/fresh_packaging-toy.csv` | Fresh line throughput |
+| Processed packaging specs | `parameters/equipment/processed_packaging-toy.csv` | Packaging capacity |
+| Storage systems | `parameters/equipment/storage_systems-toy.csv` | Storage capacity by type |
+| Spoilage rates | `parameters/crops/spoilage_rates-toy.csv` | Shelf life for FIFO tracking |
+| Fresh crop prices | `prices/crops/historical_<crop>_prices-toy.csv` | Market policy context, food policy trigger |
+| Processed product prices | `prices/processed/historical_<product>_prices-toy.csv` | Revenue calculation |
+
+### Economic Subsystem
+
+**Periodic steps:** Economic policy (Step 6, monthly), Daily accounting (Step 7), Yearly boundary (Step 8)
+
+| Data Needed | Source File | Used By |
+|---|---|---|
+| Financing profiles | `parameters/economic/financing_profiles.csv` | Debt service, cost multipliers |
+| Capital costs | `parameters/costs/capital_costs-*.csv` | Infrastructure CAPEX |
+| Operating costs | `parameters/costs/operating_costs-*.csv` | Infrastructure OPEX |
+| Farm profiles | `parameters/community/farm_profiles-toy.csv` | Starting capital, yield factor |
+| Land allocation | `parameters/community/land_allocation-toy.csv` | Area for cost allocation |
+| Labor requirements | `parameters/labor/labor_requirements-toy.csv` | Labor cost calculation |
+| Labor wages | `parameters/labor/labor_wages-*.csv` | Wage rates by activity |
+| Fertilizer costs | `prices/inputs/historical_fertilizer_costs-toy.csv` | Input cost tracking |
+| Equipment failure rates | `parameters/equipment/equipment_failure_rates-toy.csv` | Stochastic events (future) |
 
 ---
 
@@ -514,14 +662,12 @@ This checklist tracks all datasets identified in the model plan. Status indicate
 - **Cropping**: Multiple growing seasons per year (2-3 seasons for fast crops, 1 for slower crops)
 - **Community scale**: 20 farms, 500 hectares total farmland, ~150 population
 
-### Crop Selection (updated from original plan)
-1. **Tomato** — Multiple seasons/year, high value, export potential
-2. **Potato** — Single season, staple crop, storage crop
-3. **Onion** — Single season, staple crop, excellent storage
-4. **Kale** — Multiple seasons, nutritious, heat-tolerant leafy green
-5. **Cucumber** — Multiple seasons, high export value, processing potential
-
-> **Note:** The original model plan specified wheat, lettuce, and melon instead of potato, onion, and kale. The crop selection was updated to better reflect Sinai agricultural context (staple crops with storage potential, heat tolerance, and diverse market channels).
+### Crop Selection
+1. **Tomato** -- Multiple seasons/year, high value, export potential
+2. **Potato** -- Single season, staple crop, storage crop
+3. **Onion** -- Single season, staple crop, excellent storage
+4. **Kale** -- Multiple seasons, nutritious, heat-tolerant leafy green
+5. **Cucumber** -- Multiple seasons, high export value, processing potential
 
 ### Time Series Parameters
 - **Weather data**: Single scenario, 15 years (2010-2024) of synthetic data for Sinai Red Sea climate
@@ -535,7 +681,7 @@ This checklist tracks all datasets identified in the model plan. Status indicate
 - **Design**: Extensible for future irrigation methods
 
 #### Solar PV (Agri-PV)
-- **Configuration**: Fixed-tilt, ~28° angle (mid-Sinai latitude)
+- **Configuration**: Fixed-tilt, ~28 angle (mid-Sinai latitude)
 - **Optimization**: Fall-spring peak output, reduced summer performance
 - **Panel height**: 3 meters above crops
 - **Density variants**:
@@ -595,9 +741,9 @@ This checklist tracks all datasets identified in the model plan. Status indicate
 #### Pricing
 - **Crop prices**: Global food prices (FAO, USDA) as baseline
 - **Export prices**: European market prices + shipping cost estimates
-- **Electricity**: Egyptian agricultural electricity tariffs (researched)
-- **Water**: Egyptian municipal water prices (researched)
-- **Diesel**: Egyptian diesel prices (researched)
+- **Electricity**: Egyptian agricultural electricity tariffs (subsidized and unsubsidized regimes)
+- **Water**: Egyptian municipal water prices (tiered and flat regimes)
+- **Diesel**: Egyptian diesel prices
 
 ### Energy and Water Loads
 
@@ -607,7 +753,7 @@ Model includes:
 - **Water treatment**: Desalination energy
 - **Housing**: Small AC units, refrigerators, lighting (~150 people)
 - **Processing facilities**: Canning, drying, packaging operations
-- **Administrative buildings**: Offices, storage facilities
+- **Community buildings**: Offices, storage facilities, industrial buildings
 - **Farm equipment**: Hand-operated machinery (no tractors)
 
 #### Community Water Demand
@@ -615,39 +761,27 @@ Model includes:
 - **Irrigation**: Primary demand
 - **Domestic**: Housing and sanitation (~150 people)
 - **Processing**: Washing, canning, cleaning operations
-- **Facilities**: Administrative building needs
+- **Facilities**: Community building needs
 
 ### Grid Reliability
 - **Modeling**: Price variations only (no brownouts/outages in initial model)
-- **Tariff structure**: Agricultural rates, may include time-of-use if available
+- **Tariff structure**: Dual agricultural/domestic regimes, subsidized and unsubsidized options
 - **Future**: Can add outage modeling in later phases
 
-### Data Sources Strategy
-- **General approach**: Widely available global datasets for rapid initial development
-- **Egyptian-specific priority**: Energy prices (electricity, diesel), water prices, labor wages
-- **Quality evolution**: Toy → researched estimates → real data (iterative improvement)
-
 ### Monte Carlo Configuration
-- **Location**: Implemented in `src/simulation/monte_carlo.py` (not a separate settings folder)
-- **Status**: Functional — stochastic price/yield sampling with configurable CVs and N runs
-- **Sensitivity**: Implemented in `src/simulation/sensitivity.py` — ±20% one-at-a-time analysis
+- **Location**: Implemented in `src/simulation/monte_carlo.py`
+- **Status**: Functional -- stochastic price/yield sampling with configurable CVs and N runs
+- **Sensitivity**: Implemented in `src/simulation/sensitivity.py` -- one-at-a-time analysis
 - **Future**: Weather scenario variation, equipment failure events, correlation structure
-
----
-
-## Next Steps
-
-1. **Create folder structure**: Set up empty directories and README files
-2. **Generate initial toy datasets**: Start with minimal viable datasets (1 crop, 1 weather scenario)
-3. **Define CSV schemas**: Create template files with proper metadata headers
-4. **Build data validation tools**: Scripts to check units, ranges, required columns
-5. **Create example scenario file**: Baseline configuration to test data loading
-6. **Document policy definitions**: Write first policy implementation with natural language docs
 
 ---
 
 ## References
 
-- Community Farm Model Specifications: `docs/architecture/overview.md`
+- Community Farm Model Specifications: `docs/arch/overview.md`
+- Configuration Schema: `docs/arch/structure.md`
+- Calculation Methodologies: `docs/arch/calculations.md`
+- Policy Specifications: `docs/arch/policies.md`
+- Simulation Flow: `docs/arch/simulation_flow.md`
 - FAO Irrigation and Drainage Paper 56: http://www.fao.org/3/x0490e/x0490e00.htm
 - NREL PV Performance Data: https://www.nrel.gov/grid/solar-resource/

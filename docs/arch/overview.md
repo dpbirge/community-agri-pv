@@ -329,7 +329,7 @@ Policies are rule sets that govern operational decisions. The framework supports
     - Groundwater treatment cost exceeds municipal price by X%
     - Energy availability for treatment falls below threshold
     - Municipal price spike triggers shift to groundwater
-- Seasonal allocation strategies (e.g., more groundwater in high-solar months when treatment energy is cheap)
+- ~~Seasonal allocation strategies~~ — Removed for MVP. Water source allocation does not vary by season. Seasonal differences in crop water *demand* are captured by the irrigation model, but supply-side policies are season-agnostic.
 
 **Energy policies:**
 
@@ -348,7 +348,7 @@ Policies are rule sets that govern operational decisions. The framework supports
 **Economic policies:**
 
 - Pooling percentages and distribution rules
-- Debt structure selection
+- Debt structure selection (fixed monthly payments per financing profile; no accelerated repayment in MVP)
 - Insurance vs self-insurance strategies
 - Working capital advance rules
 
