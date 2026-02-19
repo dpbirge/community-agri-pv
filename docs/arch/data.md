@@ -172,13 +172,13 @@ parameters/
 │   ├── growth_stages-toy.csv                  # Duration and water sensitivity by crop and growth stage
 │   ├── yield_response_factors-toy.csv         # K_y values for FAO-33 water deficit yield formula
 │   ├── yield_response_factors-research.csv    # FAO-33 K_y values from literature
-│   ├── post_harvest_losses-toy.csv            # Loss rates by crop and processing pathway
-│   ├── post_harvest_losses-research.csv       # Research-grade post-harvest loss rates
+│   ├── handling_loss_rates-toy.csv            # Loss rates by crop and processing pathway
+│   ├── handling_loss_rates-research.csv       # Research-grade post-harvest loss rates
 │   ├── planting_windows-research.csv          # Valid planting date ranges per crop for Sinai
 │   ├── microclimate_yield_effects-research.csv # PV shade effects on crop yield by density
 │   ├── processing_specs-toy.csv               # Energy, labor, weight loss, value-add by processing type
 │   ├── processing_specs-research.csv          # Research-grade processing specifications
-│   ├── spoilage_rates-toy.csv                 # Shelf life days by crop and product type (FIFO tracking)
+│   ├── storage_spoilage_rates-toy.csv                 # Shelf life days by crop and product type (FIFO tracking)
 │   └── TEMPLATE_crop_coefficients.csv         # Template for creating new crop coefficient files
 │
 ├── equipment/
@@ -209,12 +209,7 @@ parameters/
 │   └── community_buildings_energy_water-toy.csv # Energy/water demand for community and industrial buildings
 │
 ├── economic/
-│   └── financing_profiles.csv                 # Financing category parameters (loan terms, rates, multipliers)
-│
-├── water/
-│   ├── aquifer_parameters.md                  # Aquifer data and assumptions documentation
-│   └── water_source_metadata.yaml             # Water source configuration metadata
-│
+│   └── financing_profiles-toy.csv                 # Financing category parameters (loan terms, rates, multipliers)
 └── costs/
     ├── capital_costs-toy.csv                  # Capex by equipment type ($/kW, $/kWh, $/m³/day, etc.)
     ├── capital_costs-research.csv             # Research-grade capital costs (model-specific wind turbine pricing)
@@ -223,7 +218,7 @@ parameters/
 ```
 
 **Registry keys** (from `data_registry.yaml`):
-- `crops.*` → crop parameter files (coefficients, growth_stages, processing_specs, yield_response_factors, post_harvest_losses, planting_windows, spoilage_rates)
+- `crops.*` → crop parameter files (coefficients, growth_stages, processing_specs, yield_response_factors, handling_loss_rates, planting_windows, storage_spoilage_rates)
 - `equipment.*` → equipment parameter files (pv_systems, wind_turbines, batteries, processing, failure_rates, wells, irrigation_systems, storage_systems, generators, fresh_packaging, processed_packaging)
 - `water_treatment.equipment` → water treatment equipment specs
 - `labor.*` → labor requirements and wages
@@ -281,11 +276,11 @@ prices/
 │   ├── historical_onion_prices-toy.csv
 │   ├── historical_kale_prices-toy.csv
 │   ├── historical_cucumber_prices-toy.csv
-│   ├── tomato_prices-research.csv              # FAO/USDA-based Egyptian farmgate prices
-│   ├── potato_prices-research.csv
-│   ├── onion_prices-research.csv
-│   ├── kale_prices-research.csv
-│   └── cucumber_prices-research.csv
+│   ├── historical_tomato_prices-research.csv    # FAO/USDA-based Egyptian farmgate prices
+│   ├── historical_potato_prices-research.csv
+│   ├── historical_onion_prices-research.csv
+│   ├── historical_kale_prices-research.csv
+│   └── historical_cucumber_prices-research.csv
 │
 ├── processed/
 │   ├── historical_canned_tomato_prices-toy.csv
@@ -467,11 +462,11 @@ This table tracks all datasets in the model. Status columns: T = toy exists, R =
 | Crop coefficients (Kc, growth stages) | x | x | `crops.coefficients` | FAO-56 based |
 | Growth stages (durations, sensitivity) | x | | `crops.growth_stages` | |
 | Yield response factors (K_y) | x | x | `crops.yield_response_factors` | FAO-33 water deficit |
-| Post-harvest losses | x | x | `crops.post_harvest_losses` | By crop and pathway |
+| Post-harvest losses | x | x | `crops.handling_loss_rates` | By crop and pathway |
 | Planting windows | | x | `crops.planting_windows` | Valid planting dates for Sinai |
 | Crop processing specifications | x | x | `crops.processing_specs` | Weight loss, value-add, energy |
 | Microclimate yield effects | | x | (not in registry) | PV shade effects by density |
-| Spoilage rates / shelf life | x | | `crops.spoilage_rates` | FIFO tranche tracking |
+| Spoilage rates / shelf life | x | | `crops.storage_spoilage_rates` | FIFO tranche tracking |
 | PV system specifications | x | | `equipment.pv_systems` | |
 | Battery specifications | x | | `equipment.batteries` | |
 | Wind turbine specifications | x | x | `equipment.wind_turbines` | Bergey, Eocycle, Endurance |
@@ -561,7 +556,7 @@ This section maps which data files feed into each subsystem, linking `data/` fil
 | Community buildings water | `precomputed/community_buildings/community_buildings_water_m3_per_day-toy.csv` | Step 2b facility allocation |
 | Housing parameters | `parameters/community/housing_energy_water-toy.csv` | `calculate_household_demand()` |
 | Community buildings params | `parameters/community/community_buildings_energy_water-toy.csv` | Building demand calculation |
-| Aquifer parameters | `parameters/water/aquifer_parameters.md` | Aquifer drawdown feedback (yearly) |
+| Aquifer parameters | `docs/research/aquifer_parameters.md` | Aquifer drawdown feedback (yearly) |
 
 ### Energy Subsystem
 
@@ -591,7 +586,7 @@ This section maps which data files feed into each subsystem, linking `data/` fil
 | Growth stages | `parameters/crops/growth_stages-toy.csv` | Stage durations, water sensitivity |
 | Yield response factors | `parameters/crops/yield_response_factors-*.csv` | K_y for FAO-33 yield formula |
 | Planting windows | `parameters/crops/planting_windows-research.csv` | Valid planting dates |
-| Post-harvest losses | `parameters/crops/post_harvest_losses-*.csv` | Loss rates by pathway |
+| Post-harvest losses | `parameters/crops/handling_loss_rates-*.csv` | Loss rates by pathway |
 | Crop yields (potential) | `precomputed/crop_yields/yield_kg_per_ha_<crop>-toy.csv` | Y_potential for harvest calculation |
 | Microclimate yield effects | `parameters/crops/microclimate_yield_effects-research.csv` | PV shade yield modification |
 | Weather data | `precomputed/weather/daily_weather_scenario_001-*.csv` | Temperature for crop/weather policies |
@@ -607,7 +602,7 @@ This section maps which data files feed into each subsystem, linking `data/` fil
 | Fresh packaging specs | `parameters/equipment/fresh_packaging-toy.csv` | Fresh line throughput |
 | Processed packaging specs | `parameters/equipment/processed_packaging-toy.csv` | Packaging capacity |
 | Storage systems | `parameters/equipment/storage_systems-toy.csv` | Storage capacity by type |
-| Spoilage rates | `parameters/crops/spoilage_rates-toy.csv` | Shelf life for FIFO tracking |
+| Spoilage rates | `parameters/crops/storage_spoilage_rates-toy.csv` | Shelf life for FIFO tracking |
 | Fresh crop prices | `prices/crops/historical_<crop>_prices-toy.csv` | Market policy context, food policy trigger |
 | Processed product prices | `prices/processed/historical_<product>_prices-toy.csv` | Revenue calculation |
 
@@ -617,7 +612,7 @@ This section maps which data files feed into each subsystem, linking `data/` fil
 
 | Data Needed | Source File | Used By |
 |---|---|---|
-| Financing profiles | `parameters/economic/financing_profiles.csv` | Debt service, cost multipliers |
+| Financing profiles | `parameters/economic/financing_profiles-toy.csv` | Debt service, cost multipliers |
 | Capital costs | `parameters/costs/capital_costs-*.csv` | Infrastructure CAPEX |
 | Operating costs | `parameters/costs/operating_costs-*.csv` | Infrastructure OPEX |
 | Farm profiles | `parameters/community/farm_profiles-toy.csv` | Starting capital, yield factor |

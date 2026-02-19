@@ -1,0 +1,21 @@
+# SOURCE: Industry benchmarks for food warehousing in developing regions (Egypt/MENA)
+# DATE: 2026-02-18
+# DESCRIPTION: Daily storage costs per kg by product type and storage condition
+# UNITS:
+#   - product_type: Processing pathway (fresh, packaged, canned, dried)
+#   - storage_condition: ambient (25-35C shed/warehouse) or climate_controlled (2-8C cold storage)
+#   - cost_per_kg_per_day_usd: Daily holding cost per kg including space, handling, and energy
+# LOGIC: Fresh requires cold chain or rapid turnover (highest cost). Shelf-stable products
+#   (canned, dried) have lowest costs under ambient conditions. Climate-controlled costs
+#   include refrigeration energy at ~0.10 USD/kWh.
+# DEPENDENCIES: spoilage_rates-toy.csv (product types must match)
+# ASSUMPTIONS: Community-scale storage in hot arid climate, simple warehouse/shed construction
+product_type,storage_condition,cost_per_kg_per_day_usd
+fresh,ambient,0.008
+fresh,climate_controlled,0.015
+packaged,ambient,0.004
+packaged,climate_controlled,0.008
+canned,ambient,0.001
+canned,climate_controlled,0.002
+dried,ambient,0.001
+dried,climate_controlled,0.002

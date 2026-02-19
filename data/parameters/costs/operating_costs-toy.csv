@@ -28,3 +28,4 @@ irrigation_pump_maintenance,per_unit_per_year,250,"Impeller inspection and seal 
 water_storage_tank,per_m3_capacity_per_year,3,"Cleaning (annual) and inspection and minor leak repairs and valve maintenance"
 mounting_structure,per_kw_per_year,2,"Corrosion inspection and bolt tightening and structural integrity checks (annual)"
 electrical_bos,per_kw_per_year,4,"Cable inspection and junction box cleaning and grounding checks and monitoring calibration"
+groundwater_maintenance,per_m3_produced,0.05,"Wellhead maintenance and aquifer monitoring and water quality testing (amortized per m3 treated)"

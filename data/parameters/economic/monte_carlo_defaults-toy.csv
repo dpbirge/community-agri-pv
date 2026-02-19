@@ -1,0 +1,31 @@
+# Monte Carlo Default Variation Ranges
+# =====================================
+# Coefficient of variation (CV) for each stochastic parameter used in Monte Carlo simulation.
+# CV = standard_deviation / mean, where mean is 1.0 (the baseline multiplier).
+# A single CV value means the distribution is symmetric around the mean.
+# A range (cv_low, cv_high) allows asymmetric sampling bounds in future extensions.
+#
+# Fields:
+# - parameter: Stochastic parameter name used as dict key in simulation code
+# - cv_low: Low end of CV range (currently equal to cv_high for symmetric distributions)
+# - cv_high: High end of CV range (currently equal to cv_low for symmetric distributions)
+# - category: Parameter grouping (input_price, crop_price, yield)
+# - description: Brief explanation of the parameter and its volatility basis
+#
+# Data source: Representative volatility estimates for arid-region agricultural simulation
+# Author: David Birge
+# Date: 2026-02-18
+# Version: 0.1.0
+# Status: toy
+
+parameter,cv_low,cv_high,category,description
+municipal_water,0.15,0.15,input_price,Water price volatility
+electricity,0.20,0.20,input_price,Electricity price volatility
+diesel,0.25,0.25,input_price,Diesel price volatility (global oil markets)
+fertilizer,0.15,0.15,input_price,Fertilizer cost volatility
+crop_tomato,0.25,0.25,crop_price,Tomato price volatility
+crop_potato,0.20,0.20,crop_price,Potato price volatility
+crop_onion,0.20,0.20,crop_price,Onion price volatility
+crop_kale,0.15,0.15,crop_price,Kale price volatility
+crop_cucumber,0.25,0.25,crop_price,Cucumber price volatility
+yield_factor,0.10,0.10,yield,Yield variation from weather and pests

@@ -55,6 +55,49 @@ def _load_wind_turbine_specs(project_root):
     return specs
 
 
+def _load_pv_system_specs(project_root):
+    """Load PV system specs from the parameter CSV (single source of truth).
+
+    Returns a dict keyed by density_name ('low', 'medium', 'high') with
+    all PV performance model parameters needed for validation plots.
+    """
+    csv_path = _registry_path(project_root, 'equipment', 'pv_systems')
+    df = pd.read_csv(csv_path, comment='#')
+    specs = {}
+    for _, row in df.iterrows():
+        specs[row['density_name']] = {
+            'temp_coefficient': float(row['temp_coefficient_per_c']),
+            'temp_reference_c': float(row['temp_reference_c']),
+            'system_losses': float(row['system_losses_pct']) / 100.0,
+            'tilt_factor': float(row['tilt_factor']),
+            'temp_adjustment_c': float(row['temp_adjustment_c']),
+            'irradiance_factor': float(row['irradiance_factor']),
+        }
+    return specs
+
+
+def _load_battery_validation_specs(project_root):
+    """Load battery specs from the parameter CSV for validation plots.
+
+    Uses the medium LFP battery (lithium_iron_phosphate_medium) as the
+    reference for SOC/efficiency validation, matching the simulation default.
+
+    Returns a dict with capacity_kwh, soc_min, soc_max, charge_efficiency,
+    discharge_efficiency, and initial_soc.
+    """
+    csv_path = _registry_path(project_root, 'equipment', 'batteries')
+    df = pd.read_csv(csv_path, comment='#')
+    row = df[df['battery_type'] == 'lithium_iron_phosphate_medium'].iloc[0]
+    return {
+        'capacity_kwh': float(row['capacity_kwh']),
+        'soc_min': float(row['soc_min']),
+        'soc_max': float(row['soc_max']),
+        'charge_efficiency': float(row['charge_efficiency']),
+        'discharge_efficiency': float(row['discharge_efficiency']),
+        'initial_soc': float(row['soc_min']),  # start at SOC_MIN for clean round-trip measurement
+    }
+
+
 def _power_curve(v, v_in, v_rated, v_out):
     """Normalized power output (0-1) for a given wind speed array."""
     power = np.zeros_like(v, dtype=float)
@@ -322,29 +365,47 @@ def _load_pv_csv(project_root):
     return df
 
 
-def _calculate_pv_output(solar_irradiance, temp_max, temp_min, density_variant):
-    """PV output calculation — mirrors data/scripts/generate_power_data.calculate_pv_output()."""
-    PV_SPECS = {
-        'temp_coefficient': -0.004,
-        'temp_reference_c': 25,
-        'system_losses': 0.15,
-    }
-    DENSITY_ADJ = {
-        'low': {'temp_adjustment_c': 2.0, 'irradiance_factor': 1.0},
-        'medium': {'temp_adjustment_c': 0.0, 'irradiance_factor': 1.0},
-        'high': {'temp_adjustment_c': -2.0, 'irradiance_factor': 1.0},
-    }
-    adj = DENSITY_ADJ[density_variant]
+def _calculate_pv_output(solar_irradiance, temp_max, temp_min, density_variant,
+                         pv_specs=None):
+    """PV output calculation -- mirrors data/scripts/generate_power_data.calculate_pv_output().
+
+    Args:
+        solar_irradiance: Daily GHI in kWh/m2/day (scalar or array).
+        temp_max: Daily max temperature in C (scalar or array).
+        temp_min: Daily min temperature in C (scalar or array).
+        density_variant: PV density level ('low', 'medium', 'high').
+        pv_specs: Dict keyed by density_name from _load_pv_system_specs().
+            When None, falls back to hardcoded defaults matching the original
+            generate_power_data.py script.
+
+    Returns:
+        Tuple of (kwh_per_kw, capacity_factor) arrays.
+    """
+    # TODO: CSV has temp_coefficient_per_c=-0.0045 while generate_power_data.py
+    # uses -0.004. The CSV value is the manufacturer spec; the script value is
+    # a rounded approximation. Once generate_power_data.py is updated to read
+    # from the CSV, this discrepancy will resolve. Until then, loading from CSV
+    # will produce slightly different numbers than the precomputed PV data.
+    if pv_specs is not None:
+        spec = pv_specs[density_variant]
+    else:
+        spec = {
+            'temp_coefficient': -0.004,
+            'temp_reference_c': 25,
+            'system_losses': 0.15,
+            'tilt_factor': 1.05,
+            'temp_adjustment_c': {'low': 2.0, 'medium': 0.0, 'high': -2.0}[density_variant],
+            'irradiance_factor': 1.0,
+        }
 
     temp_avg = (temp_max + temp_min) / 2
-    temp_cell = temp_avg + 25 + adj['temp_adjustment_c']
-    temp_diff = temp_cell - PV_SPECS['temp_reference_c']
-    temp_factor = 1 + PV_SPECS['temp_coefficient'] * temp_diff
+    temp_cell = temp_avg + 25 + spec['temp_adjustment_c']
+    temp_diff = temp_cell - spec['temp_reference_c']
+    temp_factor = 1 + spec['temp_coefficient'] * temp_diff
     temp_factor = np.clip(temp_factor, 0.5, 1.1)
 
-    tilt_factor = 1.05
-    effective_irradiance = solar_irradiance * tilt_factor * adj['irradiance_factor']
-    kwh_per_kw = effective_irradiance * temp_factor * (1 - PV_SPECS['system_losses'])
+    effective_irradiance = solar_irradiance * spec['tilt_factor'] * spec['irradiance_factor']
+    kwh_per_kw = effective_irradiance * temp_factor * (1 - spec['system_losses'])
     kwh_per_kw = np.clip(kwh_per_kw, 0, 10)
     capacity_factor = kwh_per_kw / 24.0
     return kwh_per_kw, capacity_factor
@@ -363,6 +424,7 @@ def plot_pv_validation(project_root="."):
     root = Path(project_root)
     pv_df = _load_pv_csv(project_root)
     weather_df = _load_weather_csv(project_root)
+    pv_specs = _load_pv_system_specs(project_root)
 
     # Merge weather into PV data for scatter analysis
     merged = pv_df.merge(weather_df[['date', 'solar_irradiance_kwh_m2', 'temp_max_c', 'temp_min_c']],
@@ -384,7 +446,8 @@ def plot_pv_validation(project_root="."):
                    s=3, alpha=0.3, color=color)
 
         # Theoretical line at 20°C ambient (moderate day, no extreme derating)
-        theoretical, _ = _calculate_pv_output(ghi_range, 30.0, 10.0, density)
+        theoretical, _ = _calculate_pv_output(ghi_range, 30.0, 10.0, density,
+                                              pv_specs=pv_specs)
         ax.plot(ghi_range, theoretical, '-', color=color, linewidth=1.5,
                 label=f'{density} (line: 20°C ambient)')
 
@@ -399,12 +462,13 @@ def plot_pv_validation(project_root="."):
 
     for density in ['low', 'medium', 'high']:
         color = DENSITY_COLORS[density]
-        temp_adj = {'low': 2.0, 'medium': 0.0, 'high': -2.0}[density]
+        spec = pv_specs[density]
+        temp_adj = spec['temp_adjustment_c']
 
         # Recalculate temperature factor from weather data
         temp_avg = (weather_df['temp_max_c'] + weather_df['temp_min_c']) / 2
         temp_cell = temp_avg + 25 + temp_adj
-        temp_factor = 1 + (-0.004) * (temp_cell - 25)
+        temp_factor = 1 + spec['temp_coefficient'] * (temp_cell - spec['temp_reference_c'])
         temp_factor = np.clip(temp_factor, 0.5, 1.1)
 
         # Monthly average temperature factor
@@ -475,15 +539,16 @@ def plot_battery_validation(project_root="."):
     root = Path(project_root)
     battery_specs = _load_battery_specs(project_root)
 
-    # Simulation parameters (from initialize_energy_state in simulation.py)
-    CAPACITY_KWH = 200.0
-    SOC_MIN = 0.10
-    SOC_MAX = 0.90
-    ETA_CHARGE = 0.95
-    ETA_DISCHARGE = 0.95
+    # Load operational params from the medium LFP battery CSV row (single source of truth).
     # Start at SOC_MIN so every kWh discharged must first have been charged.
     # Starting at 0.50 would pre-load 100 kWh, inflating cumulative OUT vs IN.
-    INITIAL_SOC = SOC_MIN
+    batt_params = _load_battery_validation_specs(project_root)
+    CAPACITY_KWH = batt_params['capacity_kwh']
+    SOC_MIN = batt_params['soc_min']
+    SOC_MAX = batt_params['soc_max']
+    ETA_CHARGE = batt_params['charge_efficiency']
+    ETA_DISCHARGE = batt_params['discharge_efficiency']
+    INITIAL_SOC = batt_params['initial_soc']
 
     # Synthetic 30-day scenario: alternating 5-day surplus / 5-day deficit blocks
     # to exercise full charge-then-discharge cycles for round-trip measurement
@@ -639,7 +704,7 @@ def _load_processing_specs(project_root):
 
 def _load_post_harvest_losses(project_root):
     """Load research-grade post-harvest losses (per data_registry.yaml)."""
-    path = Path(project_root) / "data/parameters/crops/post_harvest_losses-research.csv"
+    path = Path(project_root) / "data/parameters/crops/handling_loss_rates-research.csv"
     return pd.read_csv(path, comment='#')
 
 

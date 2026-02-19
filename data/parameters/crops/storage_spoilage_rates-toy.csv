@@ -1,0 +1,53 @@
+# SOURCE: USDA food storage guidelines, post-harvest literature
+# DATE: 2026-02-02
+# DESCRIPTION: Spoilage rates and shelf life for crop products by storage condition
+# UNITS:
+#   - crop_name: Crop name (e.g., tomato, potato)
+#   - product_type: Processing type (e.g., fresh, dried, canned, packaged)
+#   - storage_condition: ambient (25-35C) or climate_controlled (2-8C)
+#   - spoilage_rate_pct_per_day: Daily percentage loss to spoilage
+#   - shelf_life_days: Maximum days before product is unsellable
+# LOGIC: Fresh products spoil fastest; dried/canned last longest
+# DEPENDENCIES: processing_specs-toy.csv (product types must match)
+# ASSUMPTIONS: Hot arid ambient conditions (25-35C), proper cold chain for controlled
+crop_name,product_type,storage_condition,spoilage_rate_pct_per_day,shelf_life_days
+tomato,fresh,ambient,3.5,10
+tomato,fresh,climate_controlled,1.0,28
+potato,fresh,ambient,2.0,14
+potato,fresh,climate_controlled,0.5,45
+onion,fresh,ambient,1.5,21
+onion,fresh,climate_controlled,0.3,60
+kale,fresh,ambient,4.0,7
+kale,fresh,climate_controlled,1.5,21
+cucumber,fresh,ambient,3.0,12
+cucumber,fresh,climate_controlled,0.8,35
+tomato,packaged,ambient,2.5,12
+tomato,packaged,climate_controlled,0.7,35
+potato,packaged,ambient,1.5,18
+potato,packaged,climate_controlled,0.4,50
+onion,packaged,ambient,1.2,25
+onion,packaged,climate_controlled,0.25,70
+kale,packaged,ambient,3.0,10
+kale,packaged,climate_controlled,1.2,25
+cucumber,packaged,ambient,2.5,14
+cucumber,packaged,climate_controlled,0.6,40
+tomato,canned,ambient,0.008,730
+tomato,canned,climate_controlled,0.005,1095
+potato,canned,ambient,0.008,730
+potato,canned,climate_controlled,0.005,1095
+onion,canned,ambient,0.008,730
+onion,canned,climate_controlled,0.005,1095
+kale,canned,ambient,0.008,730
+kale,canned,climate_controlled,0.005,1095
+cucumber,canned,ambient,0.008,730
+cucumber,canned,climate_controlled,0.005,1095
+tomato,dried,ambient,0.05,400
+tomato,dried,climate_controlled,0.02,730
+potato,dried,ambient,0.04,450
+potato,dried,climate_controlled,0.015,800
+onion,dried,ambient,0.03,500
+onion,dried,climate_controlled,0.01,900
+kale,dried,ambient,0.06,365
+kale,dried,climate_controlled,0.025,600
+cucumber,dried,ambient,0.07,350
+cucumber,dried,climate_controlled,0.03,550

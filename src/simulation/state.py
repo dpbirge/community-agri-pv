@@ -350,7 +350,8 @@ class EnergyState:
     pv_capacity_kw: float = 0.0
     wind_capacity_kw: float = 0.0
 
-    # Battery parameters
+    # Battery parameters — defaults must match values in batteries-toy.csv.
+    # At runtime these are loaded from CSV via data_loader.get_battery_params().
     battery_capacity_kwh: float = 0.0
     battery_soc: float = 0.5  # State of charge (0-1), starts at 50%
     battery_soc_min: float = 0.10
@@ -358,7 +359,8 @@ class EnergyState:
     battery_charge_efficiency: float = 0.95
     battery_discharge_efficiency: float = 0.95
 
-    # Generator parameters
+    # Generator parameters — defaults must match values in generators-toy.csv.
+    # At runtime these are loaded from CSV via data_loader.get_generator_params().
     generator_capacity_kw: float = 0.0
     generator_min_load_fraction: float = 0.30
     generator_sfc_a: float = 0.06  # No-load fuel coefficient (L/kWh)

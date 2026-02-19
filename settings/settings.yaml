@@ -33,8 +33,11 @@ water_system:
     system_capacity_m3_day: 2000
     number_of_units: 4
     salinity_level: moderate
-    tds_ppm: 6500
+    groundwater_tds_ppm: 6500       # raw groundwater salinity
+    municipal_tds_ppm: 300          # municipal supply salinity (post-desalination)
     financing_status: loan_concessional
+
+  conveyance_kwh_per_m3: 0.2       # fixed estimate for pipe conveyance energy (well→treatment→storage)
 
   irrigation_water_storage:
     capacity_m3: 500
@@ -71,6 +74,7 @@ energy_system:
   backup_generator:
     capacity_kw: 50
     type: diesel
+    max_runtime_hours: 18           # maximum daily generator runtime (hours); reserves 6h for maintenance/cooling
     financing_status: purchased_cash
 
 # ============================================================================
@@ -121,19 +125,23 @@ community_structure:
   total_area_ha: 125
   community_population: 30
   houses: 10
-  industrial_buildings_m2: 2000
-  community_buildings_m2: 1000
+  community_buildings:
+    office_admin_m2: 500
+    storage_warehouse_m2: 1000
+    meeting_hall_m2: 300
+    workshop_maintenance_m2: 200
+  cost_allocation_method: equal  # [equal, area_proportional, usage_proportional]
 
   # Farms
   farms:
     - id: farm_1
       name: "Demo Farm"
-      area_ha: 100
+      plantable_area_ha: 100
       yield_factor: 1.0
       starting_capital_usd: 50000
       
       policies:
-        economic: balanced
+        economic: balanced_finance
         water: cheapest_source
         energy: all_grid
         food: all_fresh
@@ -172,22 +180,36 @@ community_policy_parameters:
   conserve_groundwater:
     price_threshold_multiplier: 1.5
     max_gw_ratio: 0.30
-  
+
   quota_enforced:
     annual_quota_m3: 20000
     monthly_variance_pct: 0.15
+
+  aggressive_growth:
+    min_cash_months: 1
+
+  conservative:
+    min_cash_months: 6
+
+  risk_averse:
+    min_cash_months: 3
+
+# ============================================================================
+# HOUSEHOLD POLICIES
+# ============================================================================
+household_policies:
+  water_policy: max_municipal        # [max_groundwater, max_municipal]
+  energy_policy: renewable_first     # [microgrid, renewable_first, all_grid]
 
 # ============================================================================
 # ECONOMICS
 # ============================================================================
 economics:
   currency: USD
+  exchange_rate_egp_per_usd: 49.5  # fixed for simulation run; EGP values converted to USD at load time
   discount_rate: 0.06
-  
-  debt:
-    principal_usd: 150000
-    term_years: 15
-    interest_rate: 0.035   # 3.5% concessional loan
+  # Note: Debt service is resolved per-subsystem from financing_status and financing_profiles-toy.csv.
+  # There is no single economics.debt section — see structure.md and calculations.md Section 5.
 
 # ============================================================================
 # PRICING
@@ -199,6 +221,7 @@ water_pricing:
     pricing_regime: unsubsidized
     subsidized:
       price_usd_per_m3: 0.75
+      annual_escalation_pct: 0.0    # 0 = flat government-fixed rate
     unsubsidized:
       base_price_usd_m3: 0.75
       annual_escalation_pct: 3.0
@@ -206,22 +229,47 @@ water_pricing:
   domestic:
     pricing_regime: subsidized
     subsidized:
-      price_usd_per_m3: 0.45
+      # Egyptian 5-tier increasing block tariff (2018 decree, EGP values)
+      # Converted to USD at load time via economics.exchange_rate_egp_per_usd
+      tier_pricing:
+        - tier: 1
+          max_m3_per_month: 10
+          price_egp_per_m3: 0.65
+        - tier: 2
+          max_m3_per_month: 20
+          price_egp_per_m3: 1.60
+        - tier: 3
+          max_m3_per_month: 30
+          price_egp_per_m3: 2.25
+        - tier: 4
+          max_m3_per_month: 40
+          price_egp_per_m3: 2.75
+        - tier: 5
+          max_m3_per_month: null    # unlimited above tier 4
+          price_egp_per_m3: 3.15
+      wastewater_surcharge_pct: 75  # applied to water bill total
     unsubsidized:
       base_price_usd_m3: 0.75
       annual_escalation_pct: 3.0
 
 energy_pricing:
+  net_metering_ratio: 0.70  # export_price = grid_import_price * this value
+  # annual_escalation_pct: applied to all energy prices each year (0 = flat/government-fixed, >0 = inflation-adjusted)
+  # Set to 0 for government-fixed pricing, or match inflation rate for escalating scenarios
   agricultural:
     pricing_regime: subsidized
     subsidized:
       price_usd_per_kwh: 0.12
+      annual_escalation_pct: 0.0    # 0 = flat government-fixed rate
     unsubsidized:
       price_usd_per_kwh: 0.15
+      annual_escalation_pct: 3.0    # matches water escalation rate
 
   domestic:
     pricing_regime: subsidized
     subsidized:
       price_usd_per_kwh: 0.10
+      annual_escalation_pct: 0.0    # 0 = flat government-fixed rate
     unsubsidized:
       price_usd_per_kwh: 0.15
+      annual_escalation_pct: 3.0    # matches water escalation rate

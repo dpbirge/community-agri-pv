@@ -368,7 +368,13 @@ def create_revenue_diversification_table(all_metrics, data_loader, scenario):
     all_crops = sorted(area_fractions.keys())
 
     # Compute Price CV for each crop using farmgate prices across available years
-    years = list(range(2015, 2025))
+    # Derive year range from actual price data instead of hardcoding
+    all_price_years = set()
+    for crop in all_crops:
+        if crop in data_loader.crop_prices:
+            idx = data_loader.crop_prices[crop].index
+            all_price_years.update(idx.year.unique())
+    years = sorted(all_price_years) if all_price_years else []
     dates = [datetime.date(y, 1, 1) for y in years]
 
     rows = []

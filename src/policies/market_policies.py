@@ -21,7 +21,7 @@ class MarketPolicyContext:
         avg_price_per_kg: Average price for this crop+product_type over recent history
         price_trend: Positive = rising, negative = falling
         days_in_storage: How long product has been stored
-        storage_life_days: Max storage duration (days) from spoilage_rates data
+        storage_life_days: Max storage duration (days) from storage_spoilage_rates data
         storage_capacity_kg: Available storage space
     """
     crop_name: str = ""

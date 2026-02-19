@@ -12,6 +12,7 @@ from typing import Optional
 import yaml
 
 from src.policies import get_water_policy, BaseWaterPolicy, get_food_policy, BaseFoodPolicy
+from src.simulation.data_loader import load_pv_density_coverage
 
 
 @dataclass
@@ -365,7 +366,7 @@ def _load_infrastructure(data):
         raise ValueError(f"percent_over_crops must be between 0 and 1, got {percent_over_crops}")
 
     density = pv.get("density", "medium")
-    density_coverage = {"low": 0.30, "medium": 0.50, "high": 0.80}.get(density, 0.50)
+    density_coverage = load_pv_density_coverage().get(density, 0.50)
     if density_coverage * percent_over_crops > 1.0:
         raise ValueError(f"density × percent_over_crops ({density_coverage} × {percent_over_crops} = {density_coverage * percent_over_crops}) must be ≤ 1.0")
 
@@ -403,7 +404,7 @@ def _load_infrastructure(data):
             tilt_angle=pv.get("tilt_angle", 28.0),
             percent_over_crops=percent_over_crops,
             density=density,
-            height_m=pv.get("height_m", 4.0),
+            height_m=pv.get("height_m", 3.0),  # fallback must match settings.yaml default
             financing_status=pv.get("financing_status", "existing_owned"),
         ),
         wind=WindConfig(
@@ -564,7 +565,7 @@ def _load_water_pricing(data):
             subsidized:
               price_usd_per_m3: 0.75
             unsubsidized:
-              base_price_usd_m3: 1.20
+              base_price_usd_m3: 0.75
               annual_escalation_pct: 3.0
           domestic:
             pricing_regime: subsidized
@@ -588,7 +589,7 @@ def _load_water_pricing(data):
     agricultural = AgriculturalPricingConfig(
         pricing_regime=ag_data.get("pricing_regime", "unsubsidized"),
         subsidized_price_usd_m3=ag_subsidized.get("price_usd_per_m3", 0.75),
-        unsubsidized_base_price_usd_m3=ag_unsubsidized.get("base_price_usd_m3", 1.20),
+        unsubsidized_base_price_usd_m3=ag_unsubsidized.get("base_price_usd_m3", 0.75),  # fallback must match settings.yaml default
         annual_escalation_pct=ag_unsubsidized.get("annual_escalation_pct", 3.0),
     )
 

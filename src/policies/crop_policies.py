@@ -128,17 +128,29 @@ class WeatherAdaptive(BaseCropPolicy):
 
     name = "weather_adaptive"
 
+    def __init__(self, extreme_heat_threshold=40, hot_threshold=35, cool_threshold=20,
+                 extreme_heat_multiplier=1.15, hot_multiplier=1.05, cool_multiplier=0.85):
+        self.extreme_heat_threshold = extreme_heat_threshold
+        self.hot_threshold = hot_threshold
+        self.cool_threshold = cool_threshold
+        self.extreme_heat_multiplier = extreme_heat_multiplier
+        self.hot_multiplier = hot_multiplier
+        self.cool_multiplier = cool_multiplier
+
     def decide(self, ctx: CropPolicyContext) -> CropDecision:
         # Increase water on very hot days, reduce on cooler days
-        if ctx.temperature_c > 40:
-            multiplier = 1.15  # 15% extra on extreme heat days
-            reason = f"Heat stress adjustment: +15% (T={ctx.temperature_c:.0f}\u00b0C)"
-        elif ctx.temperature_c > 35:
-            multiplier = 1.05  # 5% extra on hot days
-            reason = f"Warm day adjustment: +5% (T={ctx.temperature_c:.0f}\u00b0C)"
-        elif ctx.temperature_c < 20:
-            multiplier = 0.85  # 15% less on cool days
-            reason = f"Cool day adjustment: -15% (T={ctx.temperature_c:.0f}\u00b0C)"
+        if ctx.temperature_c > self.extreme_heat_threshold:
+            multiplier = self.extreme_heat_multiplier
+            pct = (multiplier - 1) * 100
+            reason = f"Heat stress adjustment: +{pct:.0f}% (T={ctx.temperature_c:.0f}\u00b0C)"
+        elif ctx.temperature_c > self.hot_threshold:
+            multiplier = self.hot_multiplier
+            pct = (multiplier - 1) * 100
+            reason = f"Warm day adjustment: +{pct:.0f}% (T={ctx.temperature_c:.0f}\u00b0C)"
+        elif ctx.temperature_c < self.cool_threshold:
+            multiplier = self.cool_multiplier
+            pct = (1 - multiplier) * 100
+            reason = f"Cool day adjustment: -{pct:.0f}% (T={ctx.temperature_c:.0f}\u00b0C)"
         else:
             multiplier = 1.0
             reason = f"Normal irrigation (T={ctx.temperature_c:.0f}\u00b0C)"
@@ -151,8 +163,24 @@ class WeatherAdaptive(BaseCropPolicy):
             policy_name="weather_adaptive",
         )
 
+    def get_parameters(self) -> dict:
+        return {
+            "extreme_heat_threshold": self.extreme_heat_threshold,
+            "hot_threshold": self.hot_threshold,
+            "cool_threshold": self.cool_threshold,
+            "extreme_heat_multiplier": self.extreme_heat_multiplier,
+            "hot_multiplier": self.hot_multiplier,
+            "cool_multiplier": self.cool_multiplier,
+        }
+
     def describe(self) -> str:
-        return "weather_adaptive: Temperature-based irrigation adjustment (+15% above 40\u00b0C, -15% below 20\u00b0C)"
+        eh_pct = (self.extreme_heat_multiplier - 1) * 100
+        cool_pct = (1 - self.cool_multiplier) * 100
+        return (
+            f"weather_adaptive: Temperature-based irrigation adjustment "
+            f"(+{eh_pct:.0f}% above {self.extreme_heat_threshold}\u00b0C, "
+            f"-{cool_pct:.0f}% below {self.cool_threshold}\u00b0C)"
+        )
 
 
 # --- Registry and factory ---

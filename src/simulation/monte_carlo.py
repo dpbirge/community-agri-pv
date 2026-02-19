@@ -8,11 +8,11 @@ random sampling across all parameters.
 Phase 10-11 of the development plan (calculations.md Section 8).
 """
 
+import csv
 import random
 import time
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from src.settings.loader import load_scenario
 from src.simulation.simulation import run_simulation
@@ -20,9 +20,9 @@ from src.simulation.data_loader import SimulationDataLoader
 from src.simulation.metrics import compute_all_metrics
 
 
-# Default coefficient of variation for each stochastic parameter.
+# Fallback CV ranges used when the external CSV cannot be loaded.
 # CV = standard_deviation / mean, where mean is 1.0 (the baseline multiplier).
-DEFAULT_VARIATION_RANGES = {
+_FALLBACK_CV_RANGES = {
     # Input price variations
     "municipal_water": 0.15,   # ±15% water price volatility
     "electricity": 0.20,       # ±20% electricity price volatility
@@ -38,8 +38,11 @@ DEFAULT_VARIATION_RANGES = {
     "yield_factor": 0.10,      # ±10% yield variation (weather, pests)
 }
 
+# Relative path from project root to the CV ranges CSV
+_CV_RANGES_CSV = "data/parameters/economic/monte_carlo_defaults-toy.csv"
 
-def _find_project_root(start_path: Path) -> Path:
+
+def _find_project_root(start_path):
     """Find project root by searching upward for data_registry.yaml."""
     current = start_path if start_path.is_dir() else start_path.parent
     for _ in range(10):
@@ -52,51 +55,99 @@ def _find_project_root(start_path: Path) -> Path:
     return start_path.parent.parent
 
 
-def sample_multipliers(
-    variation_ranges: Dict[str, float], rng: random.Random
-) -> Dict[str, float]:
+def _load_cv_ranges_from_csv(csv_path):
+    """Load coefficient of variation ranges from a CSV data file.
+
+    Reads the monte_carlo_defaults CSV and returns a dict mapping parameter
+    names to their CV values. Uses cv_high as the single CV value (cv_low
+    and cv_high are equal for symmetric distributions).
+
+    # TODO: Support asymmetric CV ranges (cv_low != cv_high) once sampling
+    # functions are extended to use asymmetric distributions.
+
+    Args:
+        csv_path: Path to the monte_carlo_defaults CSV file.
+
+    Returns:
+        Dict mapping parameter name to CV float value.
+    """
+    result = {}
+    with open(csv_path, "r") as f:
+        # Skip metadata comment lines and blank lines
+        lines = [line for line in f if line.strip() and not line.startswith("#")]
+    reader = csv.DictReader(lines)
+    for row in reader:
+        param = row["parameter"].strip()
+        cv_high = float(row["cv_high"].strip())
+        result[param] = cv_high
+    return result
+
+
+def _load_default_variation_ranges():
+    """Load CV ranges from CSV, falling back to hardcoded values.
+
+    Searches for the CSV file relative to the project root. If found,
+    parses it into the same dict structure as _FALLBACK_CV_RANGES.
+    If the file is missing or unreadable, returns the fallback dict.
+
+    Returns:
+        Dict mapping parameter name to CV float value.
+    """
+    # Search upward from this file to find project root
+    project_root = _find_project_root(Path(__file__))
+    csv_path = project_root / _CV_RANGES_CSV
+    if csv_path.exists():
+        return _load_cv_ranges_from_csv(csv_path)
+    return dict(_FALLBACK_CV_RANGES)
+
+
+DEFAULT_VARIATION_RANGES = _load_default_variation_ranges()
+
+
+def sample_multipliers(variation_ranges, rng, price_floor=0.5):
     """Sample price multipliers from normal distributions.
 
     Each parameter gets a multiplier drawn from N(1.0, cv) where cv is
-    the coefficient of variation. Multipliers are floored at 0.5 to avoid
+    the coefficient of variation. Multipliers are floored to prevent
     unrealistically low values (e.g., negative prices).
 
     Args:
-        variation_ranges: {parameter_name: cv} mapping
-        rng: Seeded random.Random instance
+        variation_ranges: {parameter_name: cv} mapping.
+        rng: Seeded random.Random instance.
+        price_floor: Minimum multiplier value. Prevents sampled prices from
+            dropping below this fraction of baseline (default 0.5 = 50%).
 
     Returns:
-        dict of {parameter_name: multiplier} (excludes yield_factor)
+        dict of {parameter_name: multiplier} (excludes yield_factor).
     """
     multipliers = {}
     for param, cv in variation_ranges.items():
         if param == "yield_factor":
             continue  # Handled separately via scenario modification
-        multiplier = max(0.5, rng.gauss(1.0, cv))
+        multiplier = max(price_floor, rng.gauss(1.0, cv))
         multipliers[param] = multiplier
     return multipliers
 
 
-def sample_yield_factor(
-    base_yield_factor: float, cv: float, rng: random.Random
-) -> float:
+def sample_yield_factor(base_yield_factor, cv, rng, yield_floor=0.1):
     """Sample a yield factor variation.
 
-    Draws from N(base, base * cv), floored at 0.1 to prevent
-    negative or zero yields.
+    Draws from N(base, base * cv), floored to prevent negative or zero yields.
 
     Args:
-        base_yield_factor: Original yield_factor from scenario farm config
-        cv: Coefficient of variation for yield
-        rng: Seeded random.Random instance
+        base_yield_factor: Original yield_factor from scenario farm config.
+        cv: Coefficient of variation for yield.
+        rng: Seeded random.Random instance.
+        yield_floor: Minimum yield factor. Prevents sampled yields from
+            dropping below this fraction of baseline (default 0.1 = 10%).
 
     Returns:
-        float: Sampled yield factor
+        Sampled yield factor as a float.
     """
-    return max(0.1, rng.gauss(base_yield_factor, base_yield_factor * cv))
+    return max(yield_floor, rng.gauss(base_yield_factor, base_yield_factor * cv))
 
 
-def extract_run_outcomes(state, all_metrics, scenario) -> Dict:
+def extract_run_outcomes(state, all_metrics, scenario):
     """Extract key outcome metrics from one simulation run.
 
     Pulls financial performance, yield totals, and resilience metrics
@@ -154,7 +205,7 @@ def extract_run_outcomes(state, all_metrics, scenario) -> Dict:
     }
 
 
-def compute_monte_carlo_summary(run_results: List[Dict]) -> Dict:
+def compute_monte_carlo_summary(run_results):
     """Compute summary statistics from Monte Carlo runs.
 
     Aggregates per-run outcome metrics into percentile distributions,
@@ -219,12 +270,12 @@ def compute_monte_carlo_summary(run_results: List[Dict]) -> Dict:
 
 
 def run_monte_carlo(
-    scenario_path: str,
-    n_runs: int = 100,
-    seed: int = 42,
-    variation_ranges: Optional[Dict] = None,
-    verbose: bool = False,
-) -> Dict:
+    scenario_path,
+    n_runs=100,
+    seed=42,
+    variation_ranges=None,
+    verbose=False,
+):
     """Run Monte Carlo simulation with stochastic price/yield variations.
 
     For each run:

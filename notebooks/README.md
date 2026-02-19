@@ -4,26 +4,13 @@ Jupyter notebooks for interactive analysis, testing, and exploration of the Comm
 
 ## Current Notebooks
 
-### `run_simulation.ipynb` ⭐
-**Primary simulation runner** - Interactive notebook for running simulations and viewing results.
+### `run_simulation.ipynb`
 
-**Features:**
-- Load and run simulations from scenario YAML files (defaults to `settings/mvp-settings.yaml`)
-- View summary statistics in interactive tables
-- Selectively display plots using checkboxes:
-  - Monthly water use (agricultural vs community)
-  - Monthly self-sufficiency
-  - Monthly crop yields (by crop type)
-  - Monthly water costs
-  - Monthly crop revenue
-  - Yearly comparison (4-panel overview)
-- Export results to timestamped CSV files in `exports/`
+Primary simulation runner. Load and run simulations from scenario YAML files, view summary statistics in interactive tables, and selectively display plots using checkboxes (water use, self-sufficiency, crop yields, costs, revenue, yearly comparison). Export results to timestamped CSV files in `exports/`.
 
-**Quick Start:**
-1. Open the notebook in Jupyter
-2. Run all cells (Cell → Run All)
-3. Use checkboxes to select which plots to view
-4. Click "Show Selected Plots" button
+### `validations.ipynb`
+
+Data validation notebook for verifying dataset integrity, checking metadata standards, and inspecting parameter distributions.
 
 ## Exports Folder
 

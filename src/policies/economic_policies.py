@@ -40,13 +40,11 @@ class EconomicDecision:
 
     Args:
         reserve_target_months: Target months of cash reserves to maintain
-        investment_allowed: Whether to approve new investments
         sell_inventory: Whether to sell stored inventory now
         decision_reason: Human-readable decision rationale
         policy_name: Name of the policy that produced this decision
     """
     reserve_target_months: float = 3.0
-    investment_allowed: bool = True
     sell_inventory: bool = False
     decision_reason: str = ""
     policy_name: str = ""
@@ -67,14 +65,13 @@ class BaseEconomicPolicy:
         return f"{self.name}: {self.__class__.__doc__}"
 
 
-class Balanced(BaseEconomicPolicy):
+class BalancedFinance(BaseEconomicPolicy):
     """Adaptive: adjust risk based on current financial position."""
 
-    name = "balanced"
+    name = "balanced_finance"
 
     def decide(self, ctx: EconomicPolicyContext) -> EconomicDecision:
         reserve_target = 3.0
-        investment_ok = ctx.months_of_reserves > reserve_target
 
         if ctx.months_of_reserves < 1.0:
             reason = f"Low reserves ({ctx.months_of_reserves:.1f} months), survival mode"
@@ -85,14 +82,13 @@ class Balanced(BaseEconomicPolicy):
 
         return EconomicDecision(
             reserve_target_months=reserve_target,
-            investment_allowed=investment_ok,
             sell_inventory=ctx.months_of_reserves < 1.0,
             decision_reason=reason,
-            policy_name="balanced",
+            policy_name="balanced_finance",
         )
 
     def describe(self) -> str:
-        return "balanced: Adaptive risk based on financial health, 3-month reserve target"
+        return "balanced_finance: Adaptive risk based on financial health, 3-month reserve target"
 
 
 class AggressiveGrowth(BaseEconomicPolicy):
@@ -106,16 +102,12 @@ class AggressiveGrowth(BaseEconomicPolicy):
 
     def decide(self, ctx: EconomicPolicyContext) -> EconomicDecision:
         reserve_target = self.min_cash_months
-        investment_ok = ctx.months_of_reserves > 0.5
-
-        # Sell inventory aggressively to free up capital
         sell = ctx.crop_inventory_kg > 0
 
         return EconomicDecision(
             reserve_target_months=reserve_target,
-            investment_allowed=investment_ok,
             sell_inventory=sell,
-            decision_reason=f"Aggressive: {self.min_cash_months} month reserve target, invest everything above",
+            decision_reason=f"Aggressive: {self.min_cash_months} month reserve target, sell immediately",
             policy_name="aggressive_growth",
         )
 
@@ -142,7 +134,6 @@ class Conservative(BaseEconomicPolicy):
 
     def decide(self, ctx: EconomicPolicyContext) -> EconomicDecision:
         reserve_target = self.min_cash_months
-        investment_ok = ctx.months_of_reserves > reserve_target * 1.5
 
         if ctx.months_of_reserves < reserve_target:
             reason = f"Conservative: under {reserve_target} months reserves"
@@ -151,7 +142,6 @@ class Conservative(BaseEconomicPolicy):
 
         return EconomicDecision(
             reserve_target_months=reserve_target,
-            investment_allowed=investment_ok,
             sell_inventory=False,
             decision_reason=reason,
             policy_name="conservative",
@@ -173,10 +163,7 @@ class RiskAverse(BaseEconomicPolicy):
         self.min_cash_months = min_cash_months
 
     def decide(self, ctx: EconomicPolicyContext) -> EconomicDecision:
-        reserve_target = max(self.min_cash_months, 6.0)  # At least 6 months always
-        investment_ok = ctx.months_of_reserves > 12.0  # Only invest with 12+ months reserves
-
-        # Sell inventory immediately to lock in revenue
+        reserve_target = max(self.min_cash_months, 6.0)
         sell = ctx.crop_inventory_kg > 0
 
         if ctx.months_of_reserves < 3.0:
@@ -186,7 +173,6 @@ class RiskAverse(BaseEconomicPolicy):
 
         return EconomicDecision(
             reserve_target_months=reserve_target,
-            investment_allowed=investment_ok,
             sell_inventory=sell,
             decision_reason=reason,
             policy_name="risk_averse",
@@ -207,7 +193,7 @@ class RiskAverse(BaseEconomicPolicy):
 # ---------------------------------------------------------------------------
 
 ECONOMIC_POLICIES = {
-    "balanced": Balanced,
+    "balanced_finance": BalancedFinance,
     "aggressive_growth": AggressiveGrowth,
     "conservative": Conservative,
     "risk_averse": RiskAverse,
@@ -218,7 +204,7 @@ def get_economic_policy(name, **kwargs):
     """Get an economic policy instance by name.
 
     Args:
-        name: Policy name as string (e.g., "balanced", "conservative")
+        name: Policy name as string (e.g., "balanced_finance", "conservative")
         **kwargs: Parameters to pass to policy constructor
 
     Returns:

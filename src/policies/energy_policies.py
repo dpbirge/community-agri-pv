@@ -97,9 +97,9 @@ class PvFirstBatteryGridDiesel(BaseEnergyPolicy):
     """Energy dispatch priority: PV -> Wind -> Battery -> Grid -> Diesel.
 
     Prioritizes renewable energy, uses battery to smooth supply,
-    grid as backup, generator as last resort.  Keeps a 20% battery
-    reserve for evening / nighttime demand.  Allows grid export of
-    surplus renewable generation.
+    grid as backup, generator as last resort.  Keeps a configurable
+    battery reserve for evening / nighttime demand (default 20%).
+    Allows grid export of surplus renewable generation.
 
     This is the default merit-order dispatch — it passes through with
     renewable-first priorities, matching the dispatch_energy() logic.
@@ -109,19 +109,25 @@ class PvFirstBatteryGridDiesel(BaseEnergyPolicy):
 
     name = "pv_first_battery_grid_diesel"
 
+    def __init__(self, battery_reserve_fraction=0.20):
+        self.battery_reserve_fraction = battery_reserve_fraction
+
     def allocate_energy(self, ctx: EnergyPolicyContext) -> EnergyAllocation:
         return EnergyAllocation(
             use_renewables=True,
             use_battery=True,
             use_grid=True,
             use_generator=True,
-            battery_reserve_pct=0.20,
+            battery_reserve_pct=self.battery_reserve_fraction,
             max_grid_import_pct=1.0,
             prefer_grid_over_generator=True,
             allow_grid_export=True,
             policy_name="pv_first_battery_grid_diesel",
             decision_reason="Merit order: renewables → battery → grid → diesel",
         )
+
+    def get_parameters(self):
+        return {"battery_reserve_fraction": self.battery_reserve_fraction}
 
     def describe(self) -> str:
         return "pv_first_battery_grid_diesel: Prioritize renewable sources, grid backup, diesel last resort"
@@ -166,10 +172,18 @@ class CheapestEnergy(BaseEnergyPolicy):
     otherwise uses the standard renewable-first merit order.  Always
     uses battery when it saves money and exports to grid when profitable.
 
+    Uses separate configurable battery reserve fractions for each mode:
+    lower reserve when grid is cheap (default 10%), higher when using
+    renewables (default 15%).
+
     Maps to scenario policy name: "cost_minimize".
     """
 
     name = "cheapest_energy"
+
+    def __init__(self, battery_reserve_grid_cheap=0.10, battery_reserve_renewable_cheap=0.15):
+        self.battery_reserve_grid_cheap = battery_reserve_grid_cheap
+        self.battery_reserve_renewable_cheap = battery_reserve_renewable_cheap
 
     def allocate_energy(self, ctx: EnergyPolicyContext) -> EnergyAllocation:
         if ctx.grid_price_per_kwh < ctx.renewable_lcoe_per_kwh:
@@ -179,7 +193,7 @@ class CheapestEnergy(BaseEnergyPolicy):
                 use_battery=True,
                 use_grid=True,
                 use_generator=True,
-                battery_reserve_pct=0.10,
+                battery_reserve_pct=self.battery_reserve_grid_cheap,
                 max_grid_import_pct=1.0,
                 prefer_grid_over_generator=True,
                 allow_grid_export=True,
@@ -196,7 +210,7 @@ class CheapestEnergy(BaseEnergyPolicy):
                 use_battery=True,
                 use_grid=True,
                 use_generator=True,
-                battery_reserve_pct=0.15,
+                battery_reserve_pct=self.battery_reserve_renewable_cheap,
                 max_grid_import_pct=1.0,
                 prefer_grid_over_generator=True,
                 allow_grid_export=True,
@@ -207,8 +221,12 @@ class CheapestEnergy(BaseEnergyPolicy):
                 ),
             )
 
-    def get_parameters(self) -> dict:
-        return {"strategy": "dynamic_cost_comparison"}
+    def get_parameters(self):
+        return {
+            "strategy": "dynamic_cost_comparison",
+            "battery_reserve_grid_cheap": self.battery_reserve_grid_cheap,
+            "battery_reserve_renewable_cheap": self.battery_reserve_renewable_cheap,
+        }
 
     def describe(self) -> str:
         return "cheapest_energy: Cost-optimized dispatch with dynamic LCOE vs grid comparison"
@@ -221,8 +239,11 @@ class CheapestEnergy(BaseEnergyPolicy):
 ENERGY_POLICIES = {
     "all_renewable": PvFirstBatteryGridDiesel,
     "hybrid": PvFirstBatteryGridDiesel,  # Same as all_renewable for now
+    "pv_first_battery_grid_diesel": PvFirstBatteryGridDiesel,  # Direct class name alias
     "all_grid": GridFirst,
+    "grid_first": GridFirst,  # Direct class name alias
     "cost_minimize": CheapestEnergy,
+    "cheapest_energy": CheapestEnergy,  # Direct class name alias
 }
 
 

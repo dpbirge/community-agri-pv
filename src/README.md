@@ -18,15 +18,18 @@ The simulation engine runs a daily time-step loop that:
 ```
 src/
 ├── __init__.py
-├── notebook_plotting.py       # Interactive plotting and tables for Jupyter notebooks
-├── policies/                  # Policy implementations (all 6 domains functional)
+├── plotting/                  # Visualization modules
+│   ├── __init__.py
+│   ├── notebook_plotting.py   # Interactive plotting and tables for Jupyter notebooks
+│   └── validation_plots.py    # Data validation visualizations
+├── policies/                  # Policy implementations (6 domains, 22 policies)
 │   ├── __init__.py            # Policy registry and factory functions
 │   ├── water_policies.py      # 5 water allocation policies
 │   ├── energy_policies.py     # 3 energy dispatch policies
 │   ├── food_policies.py       # 4 food processing policies
 │   ├── crop_policies.py       # 3 crop management policies
 │   ├── economic_policies.py   # 4 economic strategy policies
-│   └── market_policies.py     # 4 market timing policies
+│   └── market_policies.py     # 3 market timing policies
 ├── settings/                  # Configuration utilities
 │   ├── __init__.py
 │   ├── loader.py              # Scenario loader (YAML → dataclasses)
@@ -83,16 +86,20 @@ src/
 - Price and yield variation with configurable CVs
 - Community resilience evaluation under uncertainty
 
-### `notebook_plotting.py` - Interactive visualization
+### `plotting/notebook_plotting.py` - Interactive visualization
 - Summary tables, monthly metric charts, yearly comparison panels
 - Designed for use in Jupyter notebooks with widget-based plot selection
+
+### `plotting/validation_plots.py` - Validation visualization
+
+- Plots for validating data integrity and simulation outputs
 
 ## Usage
 
 ```bash
 # Run simulation with full output
-python src/simulation/results.py settings/mvp-settings.yaml
+python src/simulation/results.py settings/settings.yaml
 
 # Run simulation (console output only)
-python src/simulation/simulation.py settings/mvp-settings.yaml
+python src/simulation/simulation.py settings/settings.yaml
 ```

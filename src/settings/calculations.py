@@ -60,6 +60,31 @@ def _load_csv_with_metadata(file_path: Path) -> pd.DataFrame:
     return pd.read_csv(file_path, skiprows=header_idx)
 
 
+def _load_pump_system_params():
+    """Load pump system parameters from pump_systems CSV.
+
+    Returns dict keyed by parameter name (e.g. 'pump_efficiency') with float values.
+    Falls back to locating the file relative to the wells CSV if the registry
+    key is not yet configured.
+    """
+    if hasattr(_load_pump_system_params, "_cache"):
+        return _load_pump_system_params._cache
+
+    registry = _get_registry()
+    pump_rel = registry.get("equipment", {}).get("pump_systems")
+    if pump_rel:
+        pump_path = _get_project_root() / pump_rel
+    else:
+        wells_path = _get_data_path("equipment", "wells")
+        pump_path = wells_path.parent / "pump_systems-toy.csv"
+
+    df = _load_csv_with_metadata(pump_path)
+    params = {row["parameter"]: float(row["value"]) for _, row in df.iterrows()}
+
+    _load_pump_system_params._cache = params
+    return params
+
+
 def calculate_pv_config(scenario: Scenario) -> Dict[str, Any]:
     """Calculate PV system configuration details.
     
@@ -230,35 +255,45 @@ def calculate_generator_config(scenario: Scenario) -> Dict[str, Any]:
 
 
 def calculate_pumping_energy(
-    well_depth_m: float,
-    flow_rate_m3_day: float,
-    horizontal_distance_km: float = 0.3,
-    pipe_diameter_m: float = 0.1,
-    pump_efficiency: float = 0.60
-) -> Dict[str, float]:
+    well_depth_m,
+    flow_rate_m3_day,
+    horizontal_distance_km=None,
+    pipe_diameter_m=None,
+    pump_efficiency=None,
+):
     """Calculate pumping energy using hydraulic engineering principles.
 
     Energy components:
-    1. Lift energy: E_lift = (ρgh) / (η × 3.6e6) kWh/m³
-       - ρ = water density (~1025 kg/m³ for brackish)
-       - g = 9.81 m/s²
+    1. Lift energy: E_lift = (rho*g*h) / (eta * 3.6e6) kWh/m3
+       - rho = water density (~1025 kg/m3 for brackish)
+       - g = 9.81 m/s2
        - h = total head (m)
-       - η = pump efficiency
+       - eta = pump efficiency
 
     2. Friction losses: Darcy-Weisbach equation for horizontal pipe flow
-       - Head loss = f × (L/D) × (v²/2g)
+       - Head loss = f * (L/D) * (v2/2g)
        - f = friction factor (~0.02 for PVC pipes)
 
     Args:
         well_depth_m: Well depth in meters (vertical lift)
-        flow_rate_m3_day: Flow rate in m³/day
-        horizontal_distance_km: Horizontal pipe distance to treatment/storage
-        pipe_diameter_m: Main pipe diameter in meters
-        pump_efficiency: Combined pump and motor efficiency
+        flow_rate_m3_day: Flow rate in m3/day
+        horizontal_distance_km: Horizontal pipe distance to treatment/storage.
+            Defaults to value from pump_systems CSV (0.3 km).
+        pipe_diameter_m: Main pipe diameter in meters.
+            Defaults to value from pump_systems CSV (0.1 m).
+        pump_efficiency: Combined pump and motor efficiency.
+            Defaults to value from pump_systems CSV (0.60).
 
     Returns:
-        Dict with lift_energy, friction_energy, total_pumping_energy (all kWh/m³)
+        Dict with lift_energy, friction_energy, total_pumping_energy (all kWh/m3)
     """
+    pump_params = _load_pump_system_params()
+    if horizontal_distance_km is None:
+        horizontal_distance_km = pump_params["default_horizontal_distance_km"]
+    if pipe_diameter_m is None:
+        pipe_diameter_m = pump_params["default_pipe_diameter_m"]
+    if pump_efficiency is None:
+        pump_efficiency = pump_params["pump_efficiency"]
     WATER_DENSITY = 1025  # kg/m³ (brackish water)
     GRAVITY = 9.81  # m/s²
     FRICTION_FACTOR = 0.02  # typical for PVC pipes
@@ -331,40 +366,38 @@ def calculate_treatment_unit_sizing(total_capacity_m3_day: float, number_of_unit
 
 def calculate_distances(wells_config, treatment_config, farms) -> Dict[str, float]:
     """Calculate average distances between infrastructure components.
-    
+
     Uses simplified geometric estimation assuming uniform distribution of
     infrastructure across the farm area. Formula based on expected distance
     between uniformly distributed points in a square region:
-    
-        E[d] = (0.52 * sqrt(A)) / sqrt(n)
-    
-    where A = area, n = number of points. Coefficients (0.3, 0.4) are adjusted
+
+        E[d] = coeff * sqrt(A) / sqrt(n)
+
+    Distance coefficients are loaded from pump_systems CSV. Default values
+    (0.3 for well-to-treatment, 0.4 for treatment-to-farm) are adjusted
     for typical rural infrastructure placement patterns.
-    
+
     Args:
         wells_config: Groundwater wells configuration
-        treatment_config: Water treatment configuration  
+        treatment_config: Water treatment configuration
         farms: List of farm objects
-    
+
     Returns:
         Dict with average_well_to_treatment_km, average_treatment_to_farm_km, etc.
     """
+    pump_params = _load_pump_system_params()
+    coeff_well_treatment = pump_params["distance_coeff_well_to_treatment"]
+    coeff_treatment_farm = pump_params["distance_coeff_treatment_to_farm"]
+
     number_of_wells = wells_config.number_of_wells
-    number_of_units = treatment_config.number_of_units
     number_of_farms = len(farms)
-    
-    # Calculate total area
+
     total_area_ha = sum(farm.area_ha for farm in farms)
     total_area_km2 = total_area_ha / 100
-    
-    # Average distance between wells and treatment
-    # Uses 0.3 coefficient (wells tend to be distributed near treatment)
-    avg_well_to_treatment_km = (total_area_km2 ** 0.5) / (number_of_wells ** 0.5) * 0.3
-    
-    # Average distance from treatment to farms
-    # Uses 0.4 coefficient (farms more spread out from central treatment)
-    avg_treatment_to_farm_km = (total_area_km2 ** 0.5) / (number_of_farms ** 0.5) * 0.4
-    
+
+    avg_well_to_treatment_km = (total_area_km2 ** 0.5) / (number_of_wells ** 0.5) * coeff_well_treatment
+    avg_treatment_to_farm_km = (total_area_km2 ** 0.5) / (number_of_farms ** 0.5) * coeff_treatment_farm
+
     return {
         "average_well_to_treatment_km": avg_well_to_treatment_km,
         "average_treatment_to_farm_km": avg_treatment_to_farm_km,
@@ -472,7 +505,9 @@ def _load_equipment_specs():
     return _load_equipment_specs._cache
 
 
-def calculate_processing_category_specs(category_config, expected_category: str) -> Dict[str, Any]:
+def calculate_processing_category_specs(
+    category_config, expected_category: str, equipment_availability=0.90
+) -> Dict[str, Any]:
     """Calculate processing specs for a category from equipment mix.
 
     Looks up each equipment type from CSV, validates category matches,
@@ -481,15 +516,15 @@ def calculate_processing_category_specs(category_config, expected_category: str)
     Args:
         category_config: ProcessingCategoryConfig with equipment list
         expected_category: Expected category name (drying, canning, etc.)
+        equipment_availability: Fraction of time equipment is operational (0-1).
+            Accounts for maintenance downtime, cleaning, and unplanned outages.
+            Per calculations.md section 6.1. Default 0.90 (90% uptime).
+            # TODO: Should eventually come from equipment CSVs per equipment type.
 
     Returns:
         Dict with total_capacity, weighted_energy_kw, weighted_labor_hours_per_kg, etc.
     """
     equipment_specs = _load_equipment_specs()
-
-    # Standard industrial availability factor: accounts for maintenance downtime,
-    # cleaning, and unplanned outages. Per calculations.md §6.1.
-    EQUIPMENT_AVAILABILITY = 0.90  # 90% uptime
 
     total_capacity = 0.0
     weighted_energy = 0.0
@@ -518,7 +553,7 @@ def calculate_processing_category_specs(category_config, expected_category: str)
         energy_kw = eq_data["energy_kw_continuous"]
         labor_per_kg = eq_data["labor_hours_per_kg"]
 
-        total_capacity += capacity * eq.fraction * EQUIPMENT_AVAILABILITY
+        total_capacity += capacity * eq.fraction * equipment_availability
         weighted_energy += energy_kw * eq.fraction
         weighted_labor += labor_per_kg * eq.fraction
 
@@ -704,7 +739,33 @@ def calculate_infrastructure(scenario: Scenario) -> Dict[str, Any]:
 
 logger = logging.getLogger(__name__)
 
-FINANCING_PROFILES = {
+def _load_financing_profiles():
+    """Load financing profiles from CSV registered under economic.financing_profiles.
+
+    Returns dict: {status_name: {capex_mult, has_debt, term_yrs, rate, opex_mult}}.
+    """
+    if hasattr(_load_financing_profiles, "_cache"):
+        return _load_financing_profiles._cache
+
+    path = _get_data_path("economic", "financing_profiles")
+    df = _load_csv_with_metadata(path)
+
+    profiles = {}
+    for _, row in df.iterrows():
+        profiles[row["financing_status"]] = {
+            "capex_mult": float(row["capex_cost_multiplier"]),
+            "has_debt": str(row["has_debt_service"]).lower() == "true",
+            "term_yrs": int(row["loan_term_years"]),
+            "rate": float(row["interest_rate"]),
+            "opex_mult": float(row["opex_cost_multiplier"]),
+        }
+
+    _load_financing_profiles._cache = profiles
+    return profiles
+
+
+# Fallback must stay synchronized with financing_profiles CSV
+_FINANCING_PROFILES_FALLBACK = {
     "existing_owned":    {"capex_mult": 0.0, "has_debt": False, "term_yrs": 0,  "rate": 0.000, "opex_mult": 1.0},
     "grant_full":        {"capex_mult": 0.0, "has_debt": False, "term_yrs": 0,  "rate": 0.000, "opex_mult": 0.0},
     "grant_capex":       {"capex_mult": 0.0, "has_debt": False, "term_yrs": 0,  "rate": 0.000, "opex_mult": 1.0},
@@ -713,10 +774,11 @@ FINANCING_PROFILES = {
     "loan_concessional": {"capex_mult": 0.0, "has_debt": True,  "term_yrs": 15, "rate": 0.035, "opex_mult": 1.0},
 }
 
-DEFAULT_DEPRECIATION_YEARS = 15
+FINANCING_PROFILES = _load_financing_profiles()
 
-
-def calculate_financing_costs(financing_status, capital_cost_usd, annual_om_cost_usd):
+def calculate_financing_costs(
+    financing_status, capital_cost_usd, annual_om_cost_usd, depreciation_years=15
+):
     """Calculate annual financing costs based on financing profile.
 
     For debt-financed infrastructure, uses fixed-rate amortization:
@@ -727,6 +789,8 @@ def calculate_financing_costs(financing_status, capital_cost_usd, annual_om_cost
         financing_status: One of FINANCING_PROFILES keys
         capital_cost_usd: Total capital cost of the infrastructure
         annual_om_cost_usd: Annual O&M cost
+        depreciation_years: Straight-line depreciation period for cash purchases.
+            Default 15. For component-specific lifespans, see equipment_lifespans CSV.
 
     Returns:
         dict with annual_capex_usd, annual_opex_usd, annual_total_usd,
@@ -758,8 +822,8 @@ def calculate_financing_costs(financing_status, capital_cost_usd, annual_om_cost
         annual_capex = monthly_debt_service * 12
 
     elif profile["capex_mult"] > 0:
-        # Cash purchase: straight-line depreciation over default period
-        annual_capex = (capital_cost_usd * profile["capex_mult"]) / DEFAULT_DEPRECIATION_YEARS
+        # Cash purchase: straight-line depreciation
+        annual_capex = (capital_cost_usd * profile["capex_mult"]) / depreciation_years
 
     annual_opex = annual_om_cost_usd * profile["opex_mult"]
 
@@ -771,22 +835,43 @@ def calculate_financing_costs(financing_status, capital_cost_usd, annual_om_cost
     }
 
 
+def _load_reference_costs():
+    """Load reference cost parameters from reference_costs CSV.
+
+    Reads the reference_costs CSV from the data registry (costs.reference).
+    Falls back to locating the file relative to the operating costs CSV
+    if the registry key is not yet configured.
+
+    Returns dict: {subsystem: {capital_cost_key: rate, om_key: rate}}.
+    """
+    if hasattr(_load_reference_costs, "_cache"):
+        return _load_reference_costs._cache
+
+    registry = _get_registry()
+    ref_rel = registry.get("costs", {}).get("reference")
+    if ref_rel:
+        ref_path = _get_project_root() / ref_rel
+    else:
+        # Derive path from operating costs file location
+        operating_path = _get_data_path("costs", "operating")
+        ref_path = operating_path.parent / "reference_costs-toy.csv"
+
+    df = _load_csv_with_metadata(ref_path)
+
+    costs = {}
+    for _, row in df.iterrows():
+        subsystem = row["subsystem"]
+        entry = {row["capital_cost_key"]: float(row["capital_cost_rate"])}
+        entry[row["om_key"]] = float(row["om_rate"])
+        costs[subsystem] = entry
+
+    _load_reference_costs._cache = costs
+    return costs
+
+
 # Reference cost estimates for infrastructure subsystems (USD).
-# Industry-average values used as defaults; can be refined with data files.
-REFERENCE_COSTS = {
-    "wells": {"cost_per_m_depth": 500, "om_per_well_yr": 2000},
-    "water_treatment": {"cost_per_m3_day": 1000, "om_pct": 0.05},
-    "irrigation_storage": {"cost_per_m3": 50, "om_pct": 0.01},
-    "irrigation_system": {"cost_per_ha": 2500, "om_pct": 0.03},
-    "pv": {"cost_per_kw": 1200, "om_per_kw_yr": 15},
-    "wind": {"cost_per_kw": 2500, "om_per_kw_yr": 30},
-    "battery": {"cost_per_kwh": 350, "om_pct": 0.01},
-    "generator": {"cost_per_kw": 800, "om_per_kw_yr": 20},
-    "fresh_packaging": {"cost_per_line": 50000, "om_pct": 0.05},
-    "drying": {"cost_per_unit": 30000, "om_pct": 0.03},
-    "canning": {"cost_per_unit": 80000, "om_pct": 0.05},
-    "packaging": {"cost_per_unit": 20000, "om_pct": 0.03},
-}
+# Loaded from reference_costs CSV; see data/parameters/costs/reference_costs-toy.csv.
+REFERENCE_COSTS = _load_reference_costs()
 
 
 def _zero_cost_entry():
@@ -816,38 +901,90 @@ def _estimate_subsystem(name, capital, annual_om, financing_status):
 # ---------------------------------------------------------------------------
 # Labor Requirements Model
 # ---------------------------------------------------------------------------
-# Reference values from FAO literature for irrigated agriculture in arid climates.
+# Values loaded from CSV data files (labor_requirements-toy.csv and
+# labor_wages-toy.csv) via the data registry. See those files for sources.
 
-LABOR_HOURLY_RATE_USD = 3.50  # Typical Egyptian agricultural labor rate
-LABOR_WORKING_HOURS_PER_DAY = 8
-LABOR_WORKING_DAYS_PER_YEAR = 280
-LABOR_FTE_HOURS = LABOR_WORKING_HOURS_PER_DAY * LABOR_WORKING_DAYS_PER_YEAR  # 2240
 
-# Base field labor: 200 hrs/ha/year for irrigated vegetables
-LABOR_BASE_FIELD_HRS_HA_YR = 200
+def _load_labor_params():
+    """Load labor model parameters from CSV data files. Cached on first call.
 
-# Crop-specific field labor multipliers (relative to base)
-LABOR_CROP_MULTIPLIERS = {
-    "tomato": 1.2,
-    "potato": 0.9,
-    "onion": 0.8,
-    "kale": 0.7,
-    "cucumber": 1.1,
-}
+    Reads labor_requirements and labor_wages CSVs, extracts model-level
+    parameters (rows with unit types like multiplier, fraction, per_year, etc.),
+    and returns them in a flat dict.
+    """
+    if hasattr(_load_labor_params, "_cache"):
+        return _load_labor_params._cache
 
-# Processing labor: hrs per kg of non-fresh processed output
-LABOR_PROCESSING_HRS_PER_KG = 0.02
+    req_path = _get_data_path("labor", "requirements")
+    wages_path = _get_data_path("labor", "wages")
 
-# Infrastructure maintenance hours per year
-LABOR_PV_HRS_PER_100KW = 10        # panel cleaning, inspection
-LABOR_WIND_HRS_PER_100KW = 20      # turbine maintenance
-LABOR_BWRO_HRS_PER_UNIT = 200      # per BWRO treatment unit
-LABOR_WELL_HRS_PER_WELL = 40       # per groundwater well
-LABOR_BATTERY_HRS_PER_UNIT = 10    # per battery bank
-LABOR_GENERATOR_HRS = 30           # per backup generator
+    req_df = pd.read_csv(req_path, comment="#")
+    wages_df = pd.read_csv(wages_path, comment="#")
 
-# Administration overhead as fraction of all other labor
-LABOR_ADMIN_FRACTION = 0.05
+    # Helper to look up a single value from the requirements CSV
+    def _req(activity_type):
+        row = req_df[req_df["activity_type"] == activity_type]
+        if row.empty:
+            raise KeyError(f"Labor parameter '{activity_type}' not found in {req_path}")
+        return row.iloc[0]["hours_per_unit"]
+
+    # Blended agricultural wage rate from wages CSV
+    wage_row = wages_df[wages_df["worker_category"] == "blended_agricultural"]
+    if wage_row.empty:
+        raise KeyError(f"'blended_agricultural' wage category not found in {wages_path}")
+    hourly_rate = float(wage_row.iloc[0]["usd_per_hour"])
+
+    working_hours_per_day = float(_req("working_hours"))
+    working_days_per_year = float(_req("working_days"))
+
+    # Crop multipliers: rows named crop_multiplier_<crop>
+    crop_rows = req_df[req_df["activity_type"].str.startswith("crop_multiplier_")]
+    crop_multipliers = {}
+    for _, row in crop_rows.iterrows():
+        crop_name = row["activity_type"].replace("crop_multiplier_", "")
+        crop_multipliers[crop_name] = float(row["hours_per_unit"])
+
+    params = {
+        "hourly_rate_usd": hourly_rate,
+        "working_hours_per_day": working_hours_per_day,
+        "working_days_per_year": working_days_per_year,
+        "fte_hours": working_hours_per_day * working_days_per_year,
+        "base_field_hrs_ha_yr": float(_req("base_field_labor")),
+        "crop_multipliers": crop_multipliers,
+        "processing_hrs_per_kg": float(_req("processing_labor")),
+        "pv_hrs_per_100kw": float(_req("maint_pv")),
+        "wind_hrs_per_100kw": float(_req("maint_wind")),
+        "bwro_hrs_per_unit": float(_req("maint_bwro")),
+        "well_hrs_per_well": float(_req("maint_well")),
+        "battery_hrs_per_unit": float(_req("maint_battery")),
+        "generator_hrs": float(_req("maint_generator")),
+        "admin_fraction": float(_req("admin_overhead")),
+        "harvest_multiplier": float(_req("harvest_multiplier")),
+    }
+
+    _load_labor_params._cache = params
+    return params
+
+
+# Module-level constants loaded from CSV data files.
+# These preserve the existing public interface so that other modules
+# (e.g., metrics.py) can import them by name.
+_lp = _load_labor_params()
+LABOR_HOURLY_RATE_USD = _lp["hourly_rate_usd"]
+LABOR_WORKING_HOURS_PER_DAY = _lp["working_hours_per_day"]
+LABOR_WORKING_DAYS_PER_YEAR = _lp["working_days_per_year"]
+LABOR_FTE_HOURS = _lp["fte_hours"]
+LABOR_BASE_FIELD_HRS_HA_YR = _lp["base_field_hrs_ha_yr"]
+LABOR_CROP_MULTIPLIERS = _lp["crop_multipliers"]
+LABOR_PROCESSING_HRS_PER_KG = _lp["processing_hrs_per_kg"]
+LABOR_PV_HRS_PER_100KW = _lp["pv_hrs_per_100kw"]
+LABOR_WIND_HRS_PER_100KW = _lp["wind_hrs_per_100kw"]
+LABOR_BWRO_HRS_PER_UNIT = _lp["bwro_hrs_per_unit"]
+LABOR_WELL_HRS_PER_WELL = _lp["well_hrs_per_well"]
+LABOR_BATTERY_HRS_PER_UNIT = _lp["battery_hrs_per_unit"]
+LABOR_GENERATOR_HRS = _lp["generator_hrs"]
+LABOR_ADMIN_FRACTION = _lp["admin_fraction"]
+del _lp  # Clean up temporary variable
 
 
 def calculate_labor_requirements(
@@ -933,7 +1070,7 @@ def compute_peak_labor_demand(
     Returns:
         dict: {month: labor_hours} for the peak year (month is 1-12).
     """
-    HARVEST_MULTIPLIER = 3.0
+    HARVEST_MULTIPLIER = _load_labor_params()["harvest_multiplier"]
 
     # Get base labor breakdown from scenario (no processing output estimate)
     base_labor = calculate_labor_requirements(scenario)

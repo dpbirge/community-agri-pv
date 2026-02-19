@@ -8,6 +8,8 @@
 import yaml
 from pathlib import Path
 
+from src.simulation.data_loader import load_pv_density_coverage
+
 
 def _get_project_root():
     """Get project root directory (parent of settings/)."""
@@ -119,7 +121,7 @@ def validate_scenario(scenario_path):
                 errors.append(f"PV percent_over_crops must be between 0 and 1, got {pct}")
             if "density" in pv:
                 density = pv["density"]
-                density_coverage = {"low": 0.30, "medium": 0.50, "high": 0.80}.get(density, 0.50)
+                density_coverage = load_pv_density_coverage().get(density, 0.50)
                 if density_coverage * pct > 1.0:
                     errors.append(f"PV density × percent_over_crops ({density_coverage} × {pct} = {density_coverage * pct}) must be ≤ 1.0")
 

@@ -14,12 +14,16 @@ weather:
 # Crop parameters
 crops:
   coefficients: data/parameters/crops/crop_coefficients-toy.csv
+  # alt: data/parameters/crops/crop_coefficients-research.csv  (FAO-56, empirical Kc and growth parameters)
   growth_stages: data/parameters/crops/growth_stages-toy.csv
   processing_specs: data/parameters/crops/processing_specs-research.csv
   yield_response_factors: data/parameters/crops/yield_response_factors-research.csv
-  post_harvest_losses: data/parameters/crops/post_harvest_losses-research.csv
+  handling_loss_rates: data/parameters/crops/handling_loss_rates-research.csv
   planting_windows: data/parameters/crops/planting_windows-research.csv
-  spoilage_rates: data/parameters/crops/spoilage_rates-toy.csv
+  storage_spoilage_rates: data/parameters/crops/storage_spoilage_rates-toy.csv
+  storage_costs: data/parameters/crops/food_storage_costs-toy.csv
+  salinity_tolerance: data/parameters/crops/crop_salinity_tolerance-toy.csv
+  microclimate_yield_effects: data/parameters/crops/microclimate_yield_effects-research.csv
 
 # Irrigation demand (m³/ha/day by crop)
 irrigation:
@@ -46,6 +50,7 @@ power:
 water_treatment:
   energy: data/precomputed/water_treatment/treatment_kwh_per_m3-toy.csv
   equipment: data/parameters/equipment/water_treatment-toy.csv
+  # alt: data/parameters/equipment/water_treatment-research.csv  (empirical BWRO energy and recovery rates)
 
 # Microclimate effects
 microclimate:
@@ -63,6 +68,7 @@ equipment:
   irrigation_systems: data/parameters/equipment/irrigation_systems-toy.csv
   storage_systems: data/parameters/equipment/storage_systems-toy.csv
   generators: data/parameters/equipment/generators-toy.csv
+  pump_systems: data/parameters/equipment/pump_systems-toy.csv
   fresh_packaging: data/parameters/equipment/fresh_packaging-toy.csv
   processed_packaging: data/parameters/equipment/processed_packaging-toy.csv
 
@@ -85,6 +91,12 @@ prices_processed:
   packaged_onion: data/prices/processed/historical_packaged_onion_prices-toy.csv
   packaged_kale: data/prices/processed/historical_packaged_kale_prices-toy.csv
   packaged_cucumber: data/prices/processed/historical_packaged_cucumber_prices-toy.csv
+  dried_potato: data/prices/processed/historical_dried_potato_prices-toy.csv
+  dried_onion: data/prices/processed/historical_dried_onion_prices-toy.csv
+  dried_cucumber: data/prices/processed/historical_dried_cucumber_prices-toy.csv
+  canned_potato: data/prices/processed/historical_canned_potato_prices-toy.csv
+  canned_kale: data/prices/processed/historical_canned_kale_prices-toy.csv
+  canned_cucumber: data/prices/processed/historical_canned_cucumber_prices-toy.csv
   pickled_cucumber: data/prices/processed/historical_pickled_cucumber_prices-toy.csv
 
 # Prices - utilities
@@ -94,21 +106,29 @@ prices_utilities:
   municipal_water: data/prices/water/historical_municipal_water_prices-toy.csv
   diesel: data/prices/diesel/historical_diesel_prices-toy.csv
 
+# Prices - farming inputs
+prices_inputs:
+  fertilizer_costs: data/prices/inputs/historical_fertilizer_costs-toy.csv
+
 # Costs
 costs:
   capital: data/parameters/costs/capital_costs-research.csv
   # alt: data/parameters/costs/capital_costs-toy.csv  (synthetic cost estimates)
   operating: data/parameters/costs/operating_costs-toy.csv
   # alt: data/parameters/costs/operating_costs-research.csv  (wind O&M from Bergey field study + NREL benchmarks)
+  reference: data/parameters/costs/reference_costs-toy.csv
 
 # Economic parameters
 economic:
-  financing_profiles: data/parameters/economic/financing_profiles.csv
+  financing_profiles: data/parameters/economic/financing_profiles-toy.csv
+  equipment_lifespans: data/parameters/economic/equipment_lifespans-toy.csv
+  monte_carlo_defaults: data/parameters/economic/monte_carlo_defaults-toy.csv
 
 # Labor
 labor:
   requirements: data/parameters/labor/labor_requirements-toy.csv
   wages: data/parameters/labor/labor_wages-toy.csv
+  # alt: data/parameters/labor/labor_wages-research.csv  (Egyptian agricultural wage survey data)
 
 # Community
 community:

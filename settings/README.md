@@ -7,7 +7,7 @@ Simulation configuration for the Community Agri-PV model.
 ```
 settings/
 ├── data_registry.yaml       # Single source of truth for data file paths
-└── mvp-settings.yaml        # MVP scenario configuration
+└── settings.yaml            # Active scenario configuration
 ```
 
 ## Data Registry
@@ -19,7 +19,7 @@ All data file paths are defined in `data_registry.yaml`. Scenarios reference thi
 python src/settings/validation.py --registry
 
 # Validate a specific scenario
-python src/settings/validation.py settings/mvp-settings.yaml
+python src/settings/validation.py settings/settings.yaml
 ```
 
 ## Loading Scenarios
@@ -27,7 +27,7 @@ python src/settings/validation.py settings/mvp-settings.yaml
 ```python
 from src.settings.loader import load_scenario
 
-scenario = load_scenario("settings/mvp-settings.yaml")
+scenario = load_scenario("settings/settings.yaml")
 # scenario.farms, scenario.infrastructure, scenario.water_pricing, etc.
 ```
 
@@ -39,9 +39,9 @@ All six policy types are implemented in `src/policies/`:
 |--------|----------|------|
 | **Water** | `always_groundwater`, `always_municipal`, `cheapest_source`, `conserve_groundwater`, `quota_enforced` | `water_policies.py` |
 | **Energy** | `pv_first_battery_grid_diesel`, `grid_first`, `cheapest_energy` | `energy_policies.py` |
-| **Food** | `all_fresh`, `maximize_storage`, `balanced`, `market_responsive` | `food_policies.py` |
+| **Food** | `all_fresh`, `maximize_storage`, `balanced_mix`, `market_responsive` | `food_policies.py` |
 | **Crop** | `fixed_schedule`, `deficit_irrigation`, `weather_adaptive` | `crop_policies.py` |
-| **Economic** | `balanced`, `aggressive_growth`, `conservative`, `risk_averse` | `economic_policies.py` |
+| **Economic** | `balanced_finance`, `aggressive_growth`, `conservative`, `risk_averse` | `economic_policies.py` |
 | **Market** | `sell_immediately`, `hold_for_peak`, `adaptive` | `market_policies.py` |
 
 ## Policy Usage
@@ -65,7 +65,7 @@ result = policy.allocate_water(ctx)
 
 ## Adding Scenarios
 
-1. Copy `mvp-settings.yaml` as template
+1. Copy `settings.yaml` as template
 2. Modify farms, policies, and parameters
 3. Validate: `python src/settings/validation.py settings/your-scenario.yaml`
 4. Run: `python src/simulation/results.py settings/your-scenario.yaml`

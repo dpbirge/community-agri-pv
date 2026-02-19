@@ -7,6 +7,8 @@
 from datetime import date, timedelta
 from pathlib import Path
 
+import pandas as pd
+
 from src.policies import WaterPolicyContext, WaterAllocation
 from src.policies.food_policies import FoodProcessingContext, ProcessingAllocation
 from src.settings.calculations import calculate_pumping_energy, estimate_infrastructure_costs, calculate_household_demand
@@ -27,8 +29,26 @@ from src.simulation.state import (
 )
 
 
-# Default maintenance cost per m3 of groundwater treatment (USD)
-DEFAULT_GW_MAINTENANCE_PER_M3 = 0.05
+def _load_gw_maintenance_per_m3():
+    """Load groundwater maintenance cost (USD/m3) from operating_costs CSV.
+
+    Reads the 'groundwater_maintenance' row from the operating costs file
+    registered under costs.operating in the data registry.
+    """
+    import yaml
+    root = Path(__file__).parent.parent.parent
+    with open(root / "settings" / "data_registry.yaml") as f:
+        registry = yaml.safe_load(f)
+    csv_path = root / registry["costs"]["operating"]
+    df = pd.read_csv(csv_path, comment="#")
+    row = df[df["equipment_type"] == "groundwater_maintenance"]
+    if row.empty:
+        raise KeyError("'groundwater_maintenance' not found in operating_costs CSV")
+    return float(row.iloc[0]["usd_per_unit"])
+
+
+# Maintenance cost per m3 of groundwater treatment (USD), loaded from operating_costs CSV
+DEFAULT_GW_MAINTENANCE_PER_M3 = _load_gw_maintenance_per_m3()
 
 
 def calculate_system_constraints(scenario):
@@ -169,9 +189,9 @@ def build_water_policy_context(
             pv_kwh_per_kw = data_loader.get_pv_kwh_per_kw(
                 current_date, density_variant=scenario.infrastructure.pv.density
             )
-            # Apply panel degradation: ~0.5%/yr for mono-crystalline Si (IEC 61215).
+            # Apply panel degradation from PV equipment CSV (IEC 61215).
             # Cumulative output loss is (1 - rate)^years from commissioning date.
-            degradation_rate = 0.005  # 0.5%/yr
+            degradation_rate = data_loader.get_pv_degradation_rate(scenario.infrastructure.pv.density)
             years_since_start = (current_date - scenario.metadata.start_date).days / 365.25
             degradation_factor = (1 - degradation_rate) ** years_since_start
             daily_pv_kwh = pv_kw * pv_kwh_per_kw * degradation_factor
@@ -371,7 +391,7 @@ def process_harvests(farm_state, current_date, data_loader, farm_config=None):
     - Ky (yield response factors): yield_response_factors CSV
     - Weight loss by pathway: processing_specs CSV
     - Value-add multipliers: processing_specs CSV
-    - Post-harvest loss by pathway: post_harvest_losses CSV
+    - Post-harvest loss by pathway: handling_loss_rates CSV
 
     When farm_config is None or has no food_policy, defaults to AllFresh behavior
     (100% fresh sale).
@@ -449,7 +469,7 @@ def process_harvests(farm_state, current_date, data_loader, farm_config=None):
                 weight_loss_frac = data_loader.get_weight_loss_fraction(crop.crop_name, pathway)
                 output_kg = raw_kg * (1 - weight_loss_frac)
 
-                # Post-harvest loss (spoilage, damage, rejection) — from post_harvest_losses CSV
+                # Post-harvest loss (spoilage, damage, rejection) — from handling_loss_rates CSV
                 loss_frac = data_loader.get_post_harvest_loss_fraction(crop.crop_name, pathway)
                 sellable_kg = output_kg * (1.0 - loss_frac)
 
@@ -548,31 +568,42 @@ def reset_farm_for_new_year(farm_state):
     farm_state.cumulative_post_harvest_loss_kg = 0.0
 
 
-def initialize_energy_state(scenario):
-    """Initialize EnergyState from scenario infrastructure configuration.
+def initialize_energy_state(scenario, data_loader):
+    """Initialize EnergyState from scenario infrastructure config and CSV equipment params.
 
     Creates an EnergyState with PV/wind/battery/generator capacities from
-    the scenario. Battery starts at 50% SOC per architecture spec.
+    the scenario. Battery operational parameters (SOC limits, efficiencies,
+    initial SOC) and generator fuel model coefficients are loaded from
+    equipment CSV files via data_loader.
 
     Args:
         scenario: Loaded Scenario with energy infrastructure config
+        data_loader: SimulationDataLoader with equipment parameter data
 
     Returns:
         EnergyState
     """
+    # Load battery operational params from batteries CSV
+    # TODO: battery_type should come from scenario config; hardcoded to match existing behavior
+    battery_params = data_loader.get_battery_params("lithium_iron_phosphate_medium")
+
+    # Load generator fuel model params from generators CSV
+    gen_capacity = scenario.infrastructure.diesel_backup.capacity_kw
+    generator_params = data_loader.get_generator_params(gen_capacity)
+
     return EnergyState(
         pv_capacity_kw=scenario.infrastructure.pv.sys_capacity_kw,
         wind_capacity_kw=scenario.infrastructure.wind.sys_capacity_kw,
         battery_capacity_kwh=scenario.infrastructure.battery.sys_capacity_kwh,
-        battery_soc=0.5,
-        battery_soc_min=0.10,
-        battery_soc_max=0.90,
-        battery_charge_efficiency=0.95,
-        battery_discharge_efficiency=0.95,
-        generator_capacity_kw=scenario.infrastructure.diesel_backup.capacity_kw,
-        generator_min_load_fraction=0.30,
-        generator_sfc_a=0.06,
-        generator_sfc_b=0.20,
+        battery_soc=battery_params["initial_soc"],
+        battery_soc_min=battery_params["soc_min"],
+        battery_soc_max=battery_params["soc_max"],
+        battery_charge_efficiency=battery_params["charge_efficiency"],
+        battery_discharge_efficiency=battery_params["discharge_efficiency"],
+        generator_capacity_kw=gen_capacity,
+        generator_min_load_fraction=generator_params["min_load_fraction"],
+        generator_sfc_a=generator_params["sfc_coefficient_a"],
+        generator_sfc_b=generator_params["sfc_coefficient_b"],
     )
 
 
@@ -634,13 +665,13 @@ def dispatch_energy(energy_state, total_demand_kwh, current_date, data_loader, s
         pv_kwh_per_kw = data_loader.get_pv_kwh_per_kw(
             current_date, density_variant=scenario.infrastructure.pv.density
         )
-        # Panel degradation: 0.5%/yr for mono-crystalline Si (IEC 61215)
+        # Panel degradation from PV equipment CSV (IEC 61215)
+        degradation_rate = data_loader.get_pv_degradation_rate(scenario.infrastructure.pv.density)
         years_since_start = (current_date - scenario.metadata.start_date).days / 365.25
-        degradation_factor = (1 - 0.005) ** years_since_start
+        degradation_factor = (1 - degradation_rate) ** years_since_start
 
-        # Shading factor by agri-PV density (annual average, from calculations.md)
-        shading_factors = {"low": 0.95, "medium": 0.90, "high": 0.85}
-        shading_factor = shading_factors.get(scenario.infrastructure.pv.density, 0.90)
+        # Shading factor by agri-PV density from PV equipment CSV
+        shading_factor = data_loader.get_pv_shading_factor(scenario.infrastructure.pv.density)
 
         pv_kwh = (
             energy_state.pv_capacity_kw
@@ -837,8 +868,8 @@ def run_simulation(scenario, data_loader=None, verbose=False):
         current_level_m3=storage_capacity * 0.5,
     )
 
-    # Initialize community energy system state from scenario config
-    state.energy = initialize_energy_state(scenario)
+    # Initialize community energy system state from scenario config and equipment CSVs
+    state.energy = initialize_energy_state(scenario, data_loader)
 
     if verbose:
         print(f"Starting simulation: {state.start_date} to {state.end_date}")

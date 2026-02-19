@@ -47,3 +47,25 @@ logistics_loading,per_kg,0.002,unskilled,year_round
 logistics_unloading,per_kg,0.002,unskilled,year_round
 logistics_transport,per_day,8,semi-skilled,year_round
 logistics_inventory,per_day,3,semi-skilled,year_round
+#
+# MODEL PARAMETERS: Aggregate constants used by the labor requirements model
+# in src/settings/calculations.py. These are not activity-level detail rows;
+# they parameterize the cost/FTE estimation functions.
+#
+base_field_labor,per_hectare_per_year,200,mixed,year_round
+working_days,per_year,280,mixed,year_round
+working_hours,per_day,8,mixed,year_round
+crop_multiplier_tomato,multiplier,1.2,mixed,seasonal
+crop_multiplier_potato,multiplier,0.9,mixed,seasonal
+crop_multiplier_onion,multiplier,0.8,mixed,seasonal
+crop_multiplier_kale,multiplier,0.7,mixed,seasonal
+crop_multiplier_cucumber,multiplier,1.1,mixed,seasonal
+processing_labor,per_kg,0.02,semi-skilled,seasonal
+maint_pv,per_100kw_per_year,10,skilled,year_round
+maint_wind,per_100kw_per_year,20,skilled,year_round
+maint_bwro,per_unit_per_year,200,skilled,year_round
+maint_well,per_well_per_year,40,skilled,year_round
+maint_battery,per_unit_per_year,10,skilled,year_round
+maint_generator,per_unit_per_year,30,skilled,year_round
+admin_overhead,fraction,0.05,skilled,year_round
+harvest_multiplier,multiplier,3.0,mixed,seasonal

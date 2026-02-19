@@ -222,10 +222,10 @@ Water_demand = (ET_crop × Area × 10) / η_irrigation
 
 **Dependencies:**
 
-- Precomputed data:`data/precomputed/irrigation/crop_water_requirements-toy.csv`
+- Precomputed data:`data/precomputed/irrigation_demand/irrigation_m3_per_ha_<crop>-toy.csv`
 - Configuration:`water_system.irrigation_system.type`
 - Configuration:`farms[].crops[].area_fraction`
-- Parameter file:`data/parameters/crops/crop_parameters-toy.csv` (K_c values)
+- Parameter file:`data/parameters/crops/crop_coefficients-toy.csv` (K_c values)
 
 **Sources:**
 
@@ -310,7 +310,7 @@ Self_sufficiency_pct = (groundwater_m3 / total_water_m3) × 100
 
 ### Water Allocation Policies
 
-> **MVP implementation note:** The water simulation implements water allocation policies in `src/policies/water_policies.py`. Each policy class inherits from `BaseWaterPolicy` and implements `allocate_water(ctx: WaterPolicyContext) → WaterAllocation`. See `policies.md` Section 2 for full policy specifications. The policies are:
+> **MVP implementation note:** The water simulation implements water allocation policies in `src/policies/water_policies.py`. Each policy class inherits from `BaseWaterPolicy` and implements `allocate_water(ctx: WaterPolicyContext) → WaterAllocation`. See `policies.md` Water Policies for full policy specifications. The policies are:
 >
 > 1. **`max_groundwater`** — 100% groundwater, municipal fallback if constrained
 > 2. **`max_municipal`** — 100% municipal, no treatment energy needed
@@ -326,18 +326,17 @@ Self_sufficiency_pct = (groundwater_m3 / total_water_m3) × 100
 >
 > All policies apply physical infrastructure constraints (well capacity, treatment throughput, energy availability) and track decision metadata for visualization. For calculation details of groundwater cost, see Water Cost Calculation in Section 5.
 >
-> **TDS Blending Formula (`min_water_quality`):**
+> **TDS Blending Formula (****`min_water_quality`****):**
 >
-> The `min_water_quality` policy targets a maximum TDS by mixing groundwater and municipal water. The required groundwater fraction is:
+> The `min_water_quality` policy targets a maximum TDS by mixing groundwater and municipal water. The canonical formula solves for the required municipal fraction (consistent with `policies.md` `min_water_quality` policy):
 >
 > ```
-> gw_fraction = (target_tds - municipal_tds) / (groundwater_tds - municipal_tds)
-> gw_fraction = clip(gw_fraction, 0, 1)
+> required_municipal_fraction = (groundwater_tds - target_tds) / (groundwater_tds - municipal_tds)
+> required_municipal_fraction = clip(required_municipal_fraction, 0, 1)
+> gw_fraction = 1 - required_municipal_fraction
 > ```
 >
-> [OWNER: verify TDS blending formula]
->
-> Where `target_tds` is the maximum acceptable TDS for the mixed water (set per policy instance), `municipal_tds` is the TDS of municipal supply, and `groundwater_tds` is the TDS of raw groundwater. If groundwater TDS is below the target, groundwater is used preferentially (gw_fraction = 1.0). If groundwater is too saline for any blending to achieve the target, 100% municipal is used (gw_fraction = 0.0). Physical constraints (well capacity, treatment throughput) may further reduce the groundwater fraction, which always improves water quality (municipal water is the cleaner source). See `policies.md` Section 2.3 for full pseudocode.
+> Where `target_tds` is the maximum acceptable TDS for the mixed water (set per policy instance), `municipal_tds` is the TDS of municipal supply, and `groundwater_tds` is the TDS of raw groundwater. If groundwater TDS is below the target, groundwater is used preferentially (gw_fraction = 1.0, municipal_fraction = 0.0). If groundwater is too saline for any blending to achieve the target, 100% municipal is used (municipal_fraction = 1.0). Physical constraints (well capacity, treatment throughput) may further reduce the groundwater fraction, which always improves water quality (municipal water is the cleaner source). The `gw_fraction` is used for aquifer drawdown tracking and self-sufficiency metrics. See `policies.md` `min_water_quality` policy for full pseudocode.
 
 ### Aquifer Depletion Rate
 
@@ -565,7 +564,7 @@ Current implementation uses a static density-based approximation. Note: actual s
 
 **Dependencies:**
 
-- Precomputed data:`data/precomputed/power/pv_power_output_normalized-toy.csv`
+- Precomputed data:`data/precomputed/pv_power/pv_normalized_kwh_per_kw_daily-toy.csv`
 - Precomputed data: daily temperature and irradiance from weather data (for temp derating)
 - Configuration:`energy_system.pv.sys_capacity_kw`
 - Configuration:`energy_system.pv.density`
@@ -621,13 +620,13 @@ For this project, either approach is defensible. The log-law is recommended if r
 - `hub_height_m`: Hub height in meters
 - α: Wind shear exponent = 0.143 (power law), or z_0: surface roughness length (log law)
 
-> **Note on hub_height_m:** This is **not a user-configurable parameter**. The user selects a wind turbine `type` (small, medium, or large) in the scenario YAML. The `hub_height_m` is then looked up from the wind turbine equipment data file (`data/parameters/equipment/wind_turbines-toy.csv`) based on the selected turbine type. Configuration reference is for documentation purposes only.
+> **Note on hub\_height\_m:** This is **not a user-configurable parameter**. The user selects a wind turbine `type` (small, medium, or large) in the scenario YAML. The `hub_height_m` is then looked up from the wind turbine equipment data file (`data/parameters/equipment/wind_turbines-toy.csv`) based on the selected turbine type. Configuration reference is for documentation purposes only.
 
 **Output:** P_wind in kW at each time step
 
 **Dependencies:**
 
-- Precomputed data:`data/precomputed/power/wind_power_output_normalized-toy.csv`
+- Precomputed data:`data/precomputed/wind_power/wind_normalized_kwh_per_kw_daily-toy.csv`
 - Configuration:`energy_system.wind.sys_capacity_kw`
 - Configuration:`energy_system.wind.hub_height_m`
 
@@ -752,11 +751,11 @@ Where:
 Effective SFC = (a × P_rated + b × P_gen) / P_gen = a / load_fraction + b
 
 | Load Fraction | Constant SFC Model | Willans Line Model | Error |
-| ------------- | ------------------ | ------------------ | ----- |
-| 100%          | 0.25 L/kWh        | 0.26 L/kWh        | -4%   |
-| 75%           | 0.25 L/kWh        | 0.28 L/kWh        | -11%  |
-| 50%           | 0.25 L/kWh        | 0.32 L/kWh        | -22%  |
-| 25%           | 0.25 L/kWh        | 0.44 L/kWh        | -43%  |
+| --- | --- | --- | --- |
+| 100% | 0.25 L/kWh | 0.26 L/kWh | -4% |
+| 75% | 0.25 L/kWh | 0.28 L/kWh | -11% |
+| 50% | 0.25 L/kWh | 0.32 L/kWh | -22% |
+| 25% | 0.25 L/kWh | 0.44 L/kWh | -43% |
 
 At 25% load, the constant SFC model underestimates fuel consumption by ~43%. This matters significantly in hybrid renewable systems where the generator often runs at partial load to cover small deficits.
 
@@ -778,6 +777,7 @@ P_gen(t) = max(P_rated × 0.30, deficit)   otherwise
 - SFC: Specific fuel consumption = 0.25 L/kWh (MVP constant, equivalent to Willans at ~100% load)
 - Δt: Time step (hours)
 - min_load_fraction: Minimum load = 0.30 (30%)
+- `max_runtime_hours`: Maximum daily generator runtime from `energy_system.backup_generator.max_runtime_hours` (default 18; reserves 6h for maintenance/cooling). Generator energy output in a single day cannot exceed `P_rated × max_runtime_hours`.
 
 **Output:** Fuel consumption in liters
 
@@ -794,7 +794,7 @@ P_gen(t) = max(P_rated × 0.30, deficit)   otherwise
 
 ### Energy Dispatch (Load Balance)
 
-> **Status: Implemented** — `src/simulation/simulation.py:dispatch_energy()` (lines 578-751). The dispatch function must consume the boolean flags returned by the energy policy object to determine which sources are available. See `policies.md` Section 5 for the full policy specifications.
+> **Status: Implemented** — `src/simulation/simulation.py:dispatch_energy()` (lines 578-751). The dispatch function must consume the boolean flags returned by the energy policy object to determine which sources are available. See `policies.md` Energy Policies for the full policy specifications.
 
 **Purpose:** Determine how generation sources meet demand at each time step, including battery charge/discharge decisions, grid import/export, and curtailment. The dispatch algorithm is parameterized by the energy policy's boolean flags (`use_renewables`, `use_battery`, `grid_import`, `grid_export`, `use_generator`, `sell_renewables_to_grid`).
 
@@ -828,7 +828,7 @@ E_renewable(t) [kWh] = P_pv(t) [kWh] + P_wind(t) [kWh]
 
 The energy policy returns boolean flags that control the dispatch algorithm. Each policy type produces a different merit order:
 
-**`microgrid` policy** — PV -> Wind -> Battery -> Generator (NO grid connection)
+**`microgrid`**** policy** — PV -> Wind -> Battery -> Generator (NO grid connection)
 
 Flags: `use_renewables=true`, `use_battery=true`, `grid_import=false`, `grid_export=false`, `use_generator=true`, `sell_renewables_to_grid=false`
 
@@ -860,7 +860,7 @@ Curtailment(t) [kWh] = surplus - Battery_charge(t)
 Unmet_demand(t) [kWh] = remaining_demand
 ```
 
-**`renewable_first` policy** — PV -> Wind -> Battery -> Grid import (standard merit order)
+**`renewable_first`**** policy** — PV -> Wind -> Battery -> Grid import (standard merit order)
 
 Flags: `use_renewables=true`, `use_battery=true`, `grid_import=true`, `grid_export=true`, `use_generator=false`, `sell_renewables_to_grid=false`
 
@@ -890,7 +890,7 @@ Generator(t) = 0
 Curtailment(t) = 0
 ```
 
-**`all_grid` policy** — Grid import for all demand; renewables exported
+**`all_grid`**** policy** — Grid import for all demand; renewables exported
 
 Flags: `use_renewables=false`, `use_battery=false`, `grid_import=true`, `grid_export=true`, `use_generator=false`, `sell_renewables_to_grid=true`
 
@@ -912,7 +912,7 @@ Generator(t) = 0
 Curtailment(t) = 0
 ```
 
-**Battery SOC update (applies when `use_battery=true`):**
+**Battery SOC update (applies when \****`use_battery=true`**\*\*):**
 
 > **Note:** Dispatch uses kWh values directly (dt is absorbed into the energy values since the simulation uses a daily time step where dt = 1 day and all generation/demand values are already in kWh/day).
 
@@ -961,7 +961,7 @@ E_demand(t) [kWh/day] = E_pump(t) + E_treatment(t) + E_convey(t)
 - `E_processing(t) [kWh/day]`: Food processing energy = processing_kwh_per_kg x processed_kg (Section 6)
 - `E_irrigation_pump(t) [kWh/day]`: Pressurization energy for drip irrigation system
 
-**All 6 components must be included in the dispatch Total_demand calculation.** The dispatch section (above) references this full formula.
+**All 6 components must be included in the dispatch Total\_demand calculation.** The dispatch section (above) references this full formula.
 
 **Current implementation:**
 
@@ -1095,12 +1095,12 @@ LCOE_renewable = (annual_infrastructure_cost_pv + annual_infrastructure_cost_win
 The simulation supports dual electricity pricing regimes — one for agricultural use (water pumping, processing) and one for domestic use (households, community buildings). Each regime is configured independently in the scenario YAML under `energy_pricing`. See `structure.md` Pricing Configuration for the canonical schema.
 
 1. **Agricultural regime** (`energy_pricing.agricultural.pricing_regime`):
-   - `subsidized`: Uses preferential agricultural/irrigation electricity tariffs. Based on Egyptian agricultural rates (~15% discount vs commercial). Data: `historical_grid_electricity_prices-research.csv` (200 pt/kWh Aug 2024). Appropriate for communities with agricultural electricity access.
-   - `unsubsidized`: Uses full-cost commercial/industrial tariffs without subsidy. Approximately 16.5% higher than subsidized agricultural rates. Data: `historical_grid_electricity_prices_unsubsidized-research.csv` (233 pt/kWh Aug 2024).
+  - `subsidized`: Uses preferential agricultural/irrigation electricity tariffs. Based on Egyptian agricultural rates (~15% discount vs commercial). Data: `historical_grid_electricity_prices-research.csv` (200 pt/kWh Aug 2024). Appropriate for communities with agricultural electricity access.
+  - `unsubsidized`: Uses full-cost commercial/industrial tariffs without subsidy. Approximately 16.5% higher than subsidized agricultural rates. Data: `historical_grid_electricity_prices_unsubsidized-research.csv` (233 pt/kWh Aug 2024).
 
 2. **Domestic regime** (`energy_pricing.domestic.pricing_regime`):
-   - `subsidized`: Flat rate for domestic electricity (households, community buildings).
-   - `unsubsidized`: Full-cost domestic electricity tariff.
+  - `subsidized`: Flat rate for domestic electricity (households, community buildings).
+  - `unsubsidized`: Full-cost domestic electricity tariff.
 
 The pricing regime for each consumer type is specified in scenario configuration and determines which price dataset is loaded during simulation initialization. The simulation resolves the applicable price upstream based on consumer type before passing it to energy and water policies.
 
@@ -1149,14 +1149,14 @@ Y_actual = Y_potential × (1 - K_y × (1 - ET_actual / ET_crop))
 - ET_actual: Actual evapotranspiration achieved
 - ET_crop: Crop water requirement
 
-**K_y values by crop (FAO-33, single-season):**
+**K\_y values by crop (FAO-33, single-season):**
 
-| Crop     | K_y  | Notes |
-| -------- | ---- | ----- |
-| Tomato   | 1.05 | FAO-33; sensitive to deficit during flowering |
-| Potato   | 1.10 | FAO-33; tuber formation is water-critical |
-| Onion    | 1.10 | FAO-33; shallow root system amplifies stress |
-| Kale     | 0.95 | Approximate; based on leafy green analogues (lettuce/spinach) |
+| Crop | K_y | Notes |
+| --- | --- | --- |
+| Tomato | 1.05 | FAO-33; sensitive to deficit during flowering |
+| Potato | 1.10 | FAO-33; tuber formation is water-critical |
+| Onion | 1.10 | FAO-33; shallow root system amplifies stress |
+| Kale | 0.95 | Approximate; based on leafy green analogues (lettuce/spinach) |
 | Cucumber | 0.90 | FAO-33; moderate tolerance to short deficits |
 
 K_y > 1.0 means a given percentage of water deficit causes a *larger* percentage of yield loss (amplified response). These values are hardcoded in `simulation.py:process_harvests()` as `KY_VALUES`. The water ratio proxy `ET_actual / ET_crop` is computed as `cumulative_water_m3 / expected_total_water_m3`, clamped to [0, 1].
@@ -1165,7 +1165,7 @@ K_y > 1.0 means a given percentage of water deficit causes a *larger* percentage
 
 **Dependencies:**
 
-- Precomputed data:`data/precomputed/yields/crop_yields-toy.csv`
+- Precomputed data:`data/precomputed/crop_yields/yield_kg_per_ha_<crop>-toy.csv`
 - Configuration:`farms[].crops[].area_fraction`
 - Configuration:`farms[].yield_factor` (farm management quality)
 
@@ -1193,15 +1193,15 @@ Y_salinity / Y_potential = 0                                      when ECe ≥ E
 
 **Crop salinity tolerance parameters (FAO-29):**
 
-| Crop     | ECe Threshold (dS/m) | Slope b (%/dS/m) | ECe at Zero Yield (dS/m) |
-| -------- | -------------------- | ----------------- | ------------------------ |
-| Tomato   | 2.5                  | 9.9               | 12.6                     |
-| Potato   | 1.7                  | 12.0              | 10.0                     |
-| Onion    | 1.2                  | 16.0              | 7.5                      |
-| Kale     | 1.8*                 | 12.0*             | 10.2*                    |
-| Cucumber | 2.5                  | 13.0              | 10.2                     |
+| Crop | ECe Threshold (dS/m) | Slope b (%/dS/m) | ECe at Zero Yield (dS/m) |
+| --- | --- | --- | --- |
+| Tomato | 2.5 | 9.9 | 12.6 |
+| Potato | 1.7 | 12.0 | 10.0 |
+| Onion | 1.2 | 16.0 | 7.5 |
+| Kale | 1.8* | 9.7* | 12.1* |
+| Cucumber | 2.5 | 13.0 | 10.2 |
 
-*Kale values estimated from leafy green analogues (lettuce/spinach); crop-specific data limited.
+*Kale uses cabbage (Brassica oleracea) as proxy -- same species. Values from FAO-29 Table 4 (cabbage: ECe=1.8, b=9.7).
 
 **Root zone salinity accumulation model:**
 
@@ -1261,7 +1261,7 @@ salinity_factor = max(0, 1 - b × max(0, ECe - ECe_threshold) / 100)
 
 **Duration:** Crop and climate-specific (from parameter files)
 
-**K_c by Stage (example for tomato):**
+**K\_c by Stage (example for tomato):**
 
 - Initial: 0.6
 - Development: 0.6 → 1.15 (linear increase)
@@ -1270,7 +1270,7 @@ salinity_factor = max(0, 1 - b × max(0, ECe - ECe_threshold) / 100)
 
 **Dependencies:**
 
-- Parameter file:`data/parameters/crops/crop_parameters-toy.csv`
+- Parameter file:`data/parameters/crops/crop_coefficients-toy.csv`
 - Configuration:`farms[].crops[].planting_dates`
 
 **Sources:**
@@ -1298,7 +1298,7 @@ Loss_pct = loss_rate × 100
 **Parameters:**
 
 - `loss_rate`: Default = 0.10 (10%) for fresh produce, 0.04 (4%) for processed. The 10-15% range for fresh losses reflects variation by crop type and supply chain quality, but the simulation uses 10% as the single default.
-- Crop-specific loss rates may be defined in `data/parameters/crops/crop_parameters-toy.csv`
+- Crop-specific loss rates may be defined in `data/parameters/crops/crop_coefficients-toy.csv`
 
 **Output:** Loss in kg/yr and as percentage of harvest
 
@@ -1316,15 +1316,15 @@ Loss_pct = loss_rate × 100
 Processed_output_kg = raw_input_kg × (1 - weight_loss_pct / 100)
 ```
 
-**Per-crop, per-processing-type weight loss (from `data/parameters/crops/processing_specs-toy.csv`):**
+**Per-crop, per-processing-type weight loss (from \****`data/parameters/crops/processing_specs-toy.csv`**\*\*):**
 
-| Crop     | Fresh | Packaged | Canned | Dried |
-| -------- | ----- | -------- | ------ | ----- |
-| Tomato   | 0%    | 3%       | 15%    | 88%   |
-| Potato   | 0%    | 3%       | 15%    | 78%   |
-| Onion    | 0%    | 3%       | 15%    | 80%   |
-| Kale     | 0%    | 3%       | 15%    | 82%   |
-| Cucumber | 0%    | 3%       | 15%    | 92%   |
+| Crop | Fresh | Packaged | Canned | Dried |
+| --- | --- | --- | --- | --- |
+| Tomato | 0% | 3% | 15% | 88% |
+| Potato | 0% | 3% | 15% | 78% |
+| Onion | 0% | 3% | 15% | 80% |
+| Kale | 0% | 3% | 15% | 82% |
+| Cucumber | 0% | 3% | 15% | 92% |
 
 **Value-add multiplier** (processed price = fresh price × multiplier):
 
@@ -1334,11 +1334,11 @@ Processed_output_kg = raw_input_kg × (1 - weight_loss_pct / 100)
 
 **Allocation logic:**
 
-The food processing policy determines what fraction of each crop goes to each processing pathway. See `policies.md` Section 3 for full allocation rules for all four policies (`all_fresh`, `maximize_storage`, `balanced`, `market_responsive`), including capacity clipping logic and the forced-sale umbrella rule.
+The food processing policy determines what fraction of each crop goes to each processing pathway. See `policies.md` Food Processing Policies for full allocation rules for all four policies (`all_fresh`, `maximize_storage`, `balanced_mix`, `market_responsive`), including capacity clipping logic and the forced-sale umbrella rule.
 
 **Policy-specific allocation fractions:**
 
-See `policies.md` Section 3 for the authoritative fraction tables for all policies (`all_fresh`, `maximize_storage`, `balanced`, `market_responsive`), including the `market_responsive` price-trigger logic (Section 3.4). Fractions are not duplicated here to avoid divergence.
+See `policies.md` Food Processing Policies for the authoritative fraction tables for all policies (`all_fresh`, `maximize_storage`, `balanced_mix`, `market_responsive`), including the `market_responsive` price-trigger logic. Fractions are not duplicated here to avoid divergence.
 
 **Dependencies:**
 
@@ -1485,21 +1485,21 @@ Monthly_payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 
 **Parameters by Financing Category:**
 
-| Category          | CAPEX Mult. | Debt? | Term (yrs) | Rate  | OPEX Mult. |
-| ----------------- | ----------- | ----- | ---------- | ----- | ---------- |
-| existing_owned    | 0.0         | No    | 0          | 0.000 | 1.0        |
-| grant_full        | 0.0         | No    | 0          | 0.000 | 0.0        |
-| grant_capex       | 0.0         | No    | 0          | 0.000 | 1.0        |
-| purchased_cash    | 1.0         | No    | 0          | 0.000 | 1.0        |
-| loan_standard     | 0.0         | Yes   | 10         | 0.060 | 1.0        |
-| loan_concessional | 0.0         | Yes   | 15         | 0.035 | 1.0        |
+| Category | CAPEX Mult. | Debt? | Term (yrs) | Rate | OPEX Mult. |
+| --- | --- | --- | --- | --- | --- |
+| existing_owned | 0.0 | No | 0 | 0.000 | 1.0 |
+| grant_full | 0.0 | No | 0 | 0.000 | 0.0 |
+| grant_capex | 0.0 | No | 0 | 0.000 | 1.0 |
+| purchased_cash | 1.0 | No | 0 | 0.000 | 1.0 |
+| loan_standard | 0.0 | Yes | 10 | 0.060 | 1.0 |
+| loan_concessional | 0.0 | Yes | 15 | 0.035 | 1.0 |
 
 **Output:** Annual cost in USD per infrastructure subsystem
 
 **Dependencies:**
 
 - Configuration:`[system].[subsystem].financing_status`
-- Parameter file:`data/parameters/economic/financing_profiles.csv`
+- Parameter file:`data/parameters/economic/financing_profiles-toy.csv`
 - Capital costs: From equipment parameter files or capital_costs.csv
 - O&M costs: From operating_costs.csv
 
@@ -1510,7 +1510,7 @@ Monthly_payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 **Component lifespans and replacement costs:**
 
 | Component | Typical Lifespan | Replacement Cost (% of original CAPEX) | Replacements in 15-yr Sim |
-| --------- | ---------------- | --------------------------------------- | ------------------------- |
+| --- | --- | --- | --- |
 | RO membranes | 5-7 years | 30-40% | 2-3 |
 | Pumps (submersible) | 10-15 years | 60-80% | 0-1 |
 | Drip emitters/lines | 5-10 years | 20-30% of irrigation CAPEX | 1-2 |
@@ -1715,9 +1715,9 @@ Payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 **Dependencies:**
 
 - Configuration: `[system].[subsystem].financing_status` — per-subsystem financing category (determines whether debt service applies)
-- Parameter file: `data/parameters/economic/financing_profiles.csv` — contains principal amounts, loan terms, and interest rates per financing profile
+- Parameter file: `data/parameters/economic/financing_profiles-toy.csv` — contains principal amounts, loan terms, and interest rates per financing profile
 
-> **MVP simplification:** Debt service is fixed monthly payments per financing profile. No accelerated repayment or debt pay-down policies in MVP. There is no single `economics.debt` configuration — debt parameters are resolved per subsystem from `financing_status` and `financing_profiles.csv`.
+> **MVP simplification:** Debt service is fixed monthly payments per financing profile. No accelerated repayment or debt pay-down policies in MVP. There is no single `economics.debt` configuration — debt parameters are resolved per subsystem from `financing_status` and `financing_profiles-toy.csv`.
 
 ### Diesel Fuel Cost
 
@@ -2131,7 +2131,7 @@ Capacity = Σ(equipment_capacity_i × fraction_i × availability)
 **Dependencies:**
 
 - Configuration:`food_processing_system.[type].equipment`
-- Parameter file:`data/parameters/processing/food_processing_equipment-toy.csv`
+- Parameter file:`data/parameters/equipment/processing_equipment-toy.csv`
 
 ### Processing Energy Requirements
 
@@ -2146,7 +2146,7 @@ Capacity = Σ(equipment_capacity_i × fraction_i × availability)
 
 **Dependencies:**
 
-- Parameter file:`data/parameters/processing/food_processing_equipment-toy.csv`
+- Parameter file:`data/parameters/equipment/processing_equipment-toy.csv`
 - Configuration:`food_processing_system.[type].equipment`
 
 **Sources:**
@@ -2175,7 +2175,7 @@ Field_labor = Σ (base_hrs_per_ha × crop_multiplier × crop_area_ha)  for each 
 ```
 
 | Parameter | Value | Source |
-|---|---|---|
+| --- | --- | --- |
 | base_hrs_per_ha | 200 hrs/ha/yr | FAO estimates for irrigated agriculture |
 | tomato multiplier | 1.3 | High-labor crop (staking, pruning, multiple harvests) |
 | potato multiplier | 0.9 | Mechanizable harvest |
@@ -2192,7 +2192,7 @@ Processing_labor = processed_output_kg × 0.02 hrs/kg
 **Maintenance labor (per infrastructure unit):**
 
 | Infrastructure | Hours/yr | Notes |
-|---|---|---|
+| --- | --- | --- |
 | PV (per 100 kW) | 40 | Panel cleaning, inverter checks |
 | Wind (per 100 kW) | 60 | Mechanical inspection |
 | BWRO (per unit) | 200 | Membrane maintenance, chemical dosing |
@@ -2310,21 +2310,21 @@ Aggregate via compute_monte_carlo_summary():
 **Default stochastic parameters (coefficient of variation):**
 
 | Parameter | CV | Notes |
-|---|---|---|
+| --- | --- | --- |
 | municipal_water | 0.15 | ±15% water price volatility |
 | electricity | 0.20 | ±20% electricity price volatility |
 | diesel | 0.25 | ±25% diesel price volatility (global oil) |
 | fertilizer | 0.15 | ±15% fertilizer cost volatility |
 | crop_tomato | 0.25 | ±25% crop price volatility |
-| crop_potato | 0.20 | |
-| crop_onion | 0.20 | |
-| crop_kale | 0.15 | |
-| crop_cucumber | 0.25 | |
+| crop_potato | 0.20 |  |
+| crop_onion | 0.20 |  |
+| crop_kale | 0.15 |  |
+| crop_cucumber | 0.25 |  |
 | yield_factor | 0.10 | ±10% yield variation (weather, pests) |
 
 **Sampling method:** Normal distribution with mean 1.0 and standard deviation = CV. Multipliers floored at 0.5 to prevent unrealistically low values. Yield factors floored at 0.1.
 
-**Output from `compute_monte_carlo_summary()`:**
+**Output from \****`compute_monte_carlo_summary()`**\*\*:**
 
 - `n_runs`: Number of runs executed
 - `survival_rate_pct`: % of runs with final cash reserves >= 0
@@ -2446,7 +2446,7 @@ Drawdown = max(Peak_cash - Trough_cash)  over all peak-to-trough sequences
 **Parameters tested:**
 
 | Parameter | Label |
-|-----------|-------|
+| --- | --- |
 | `municipal_water` | Municipal Water Price |
 | `electricity` | Grid Electricity Price |
 | `diesel` | Diesel Fuel Price |

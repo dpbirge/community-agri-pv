@@ -17,6 +17,66 @@ def load_data_registry(registry_path="settings/data_registry.yaml"):
         return yaml.safe_load(f)
 
 
+def derive_crop_list_from_registry(registry):
+    """Derive the list of simulated crops from registry keys.
+
+    Extracts crop names from the 'irrigation' section of the data registry,
+    where each key is a crop name (e.g. tomato, potato). Returns a sorted
+    list for deterministic ordering.
+
+    Args:
+        registry: Data registry dict as loaded by load_data_registry().
+
+    Returns:
+        Sorted list of crop name strings, e.g. ["cucumber", "kale", "onion", "potato", "tomato"].
+    """
+    # Cache result on the function object to avoid repeated scanning
+    cache_key = id(registry)
+    if not hasattr(derive_crop_list_from_registry, "_cache"):
+        derive_crop_list_from_registry._cache = {}
+    if cache_key in derive_crop_list_from_registry._cache:
+        return derive_crop_list_from_registry._cache[cache_key]
+
+    # TODO: If irrigation section is ever restructured, update this to use
+    # an alternative section (yields, prices_crops) as the canonical source.
+    crops = sorted(registry["irrigation"].keys())
+    derive_crop_list_from_registry._cache[cache_key] = crops
+    return crops
+
+
+def _get_project_root():
+    """Get project root directory (parent of src/simulation/)."""
+    return Path(__file__).parent.parent.parent
+
+
+def load_pv_density_coverage():
+    """Load PV density-to-ground-coverage-fraction mapping from pv_systems CSV.
+
+    Reads pv_systems-toy.csv via the data registry, extracts the
+    ground_coverage_pct column for each density level (low/medium/high),
+    and returns a dict mapping density name to coverage fraction (0-1).
+
+    Returns:
+        Dict like {"low": 0.30, "medium": 0.50, "high": 0.80}
+    """
+    if hasattr(load_pv_density_coverage, "_cache"):
+        return load_pv_density_coverage._cache
+
+    project_root = _get_project_root()
+    registry_path = project_root / "settings" / "data_registry.yaml"
+    registry = load_data_registry(str(registry_path))
+    filepath = project_root / registry["equipment"]["pv_systems"]
+
+    df = pd.read_csv(filepath, comment="#")
+    coverage_map = dict(zip(
+        df["density_name"],
+        df["ground_coverage_pct"] / 100.0,
+    ))
+
+    load_pv_density_coverage._cache = coverage_map
+    return coverage_map
+
+
 def _skip_metadata_rows(filepath):
     """Count number of comment rows at start of CSV file."""
     filepath = Path(filepath)
@@ -385,6 +445,30 @@ def get_fertilizer_cost(costs_df, target_date):
     return row["usd_per_ha"]
 
 
+def load_equipment_params(registry, equipment_key, index_col, project_root=None):
+    """Load an equipment parameter CSV from the data registry.
+
+    Generic loader for equipment CSVs (batteries, generators, pv_systems, etc.)
+    that skips metadata comment rows and indexes by the specified column.
+
+    Args:
+        registry: Data registry dict with file paths
+        equipment_key: Key under registry["equipment"] (e.g. "batteries", "generators")
+        index_col: Column name to use as the DataFrame index
+        project_root: Optional path to project root
+
+    Returns:
+        DataFrame indexed by index_col
+    """
+    filepath = registry["equipment"][equipment_key]
+    if project_root:
+        filepath = Path(project_root) / filepath
+    skip_rows = _skip_metadata_rows(filepath)
+    df = pd.read_csv(filepath, skiprows=skip_rows)
+    df = df.set_index(index_col)
+    return df
+
+
 def load_processing_specs(registry, project_root=None):
     """Load processing specifications (weight loss, value multipliers) for all crops.
 
@@ -435,7 +519,7 @@ def load_post_harvest_losses(registry, project_root=None):
     Returns:
         DataFrame multi-indexed by (crop_name, pathway) with column: loss_pct
     """
-    filepath = registry["crops"]["post_harvest_losses"]
+    filepath = registry["crops"]["handling_loss_rates"]
     if project_root:
         filepath = Path(project_root) / filepath
     skip_rows = _skip_metadata_rows(filepath)
@@ -611,7 +695,7 @@ def load_crop_prices(crop_name, use_research=True, project_root=None):
         Indexed by date
     """
     if use_research:
-        filepath = f"data/prices/crops/{crop_name}_prices-research.csv"
+        filepath = f"data/prices/crops/historical_{crop_name}_prices-research.csv"
     else:
         filepath = f"data/prices/crops/historical_{crop_name}_prices-toy.csv"
     
@@ -679,14 +763,17 @@ class SimulationDataLoader:
         self.electricity_pricing_regime = electricity_pricing_regime
         self.project_root = Path(project_root) if project_root else Path.cwd()
 
+        # Derive crop list from registry (sorted, deterministic)
+        self.crops = derive_crop_list_from_registry(self.registry)
+
         # Load irrigation demand for all crops
         self.irrigation = {}
-        for crop in ["tomato", "potato", "onion", "kale", "cucumber"]:
+        for crop in self.crops:
             self.irrigation[crop] = load_irrigation_demand(crop, self.registry, self.project_root)
 
         # Load yield data for all crops
         self.yields = {}
-        for crop in ["tomato", "potato", "onion", "kale", "cucumber"]:
+        for crop in self.crops:
             self.yields[crop] = load_yield_data(crop, self.registry, self.project_root)
 
         # Load price data
@@ -706,7 +793,7 @@ class SimulationDataLoader:
 
         # Load crop prices
         self.crop_prices = {}
-        for crop in ["tomato", "potato", "onion", "kale", "cucumber"]:
+        for crop in self.crops:
             self.crop_prices[crop] = load_crop_prices(crop, use_research_prices, self.project_root)
 
         # Load precomputed power generation data
@@ -724,6 +811,17 @@ class SimulationDataLoader:
 
         # Load labor costs
         self._load_labor_costs()
+
+        # Load equipment parameters (battery, generator, PV system specs)
+        self.battery_params = load_equipment_params(
+            self.registry, "batteries", "battery_type", self.project_root
+        )
+        self.generator_params = load_equipment_params(
+            self.registry, "generators", "capacity_kw", self.project_root
+        )
+        self.pv_system_params = load_equipment_params(
+            self.registry, "pv_systems", "density_name", self.project_root
+        )
 
     def _load_labor_costs(self):
         """Load labor requirement and wage data, compute annual labor cost per hectare.
@@ -954,3 +1052,75 @@ class SimulationDataLoader:
     def get_labor_cost_usd_ha_month(self):
         """Get monthly labor cost per hectare (annual ÷ 12)."""
         return (self._labor_cost_usd_per_ha_year / 12.0) * self.price_multipliers.get("labor", 1.0)
+
+    def get_battery_params(self, battery_type="lithium_iron_phosphate_medium"):
+        """Get battery operational parameters for the simulation.
+
+        Args:
+            battery_type: Battery type key from batteries CSV index
+
+        Returns:
+            dict with keys: soc_min, soc_max, charge_efficiency,
+                discharge_efficiency, initial_soc
+        """
+        row = self.battery_params.loc[battery_type]
+        return {
+            "soc_min": float(row["soc_min"]),
+            "soc_max": float(row["soc_max"]),
+            "charge_efficiency": float(row["charge_efficiency"]),
+            "discharge_efficiency": float(row["discharge_efficiency"]),
+            "initial_soc": float(row["initial_soc"]),
+        }
+
+    def get_generator_params(self, capacity_kw):
+        """Get generator operational parameters for the Willans line fuel model.
+
+        Looks up by generator capacity (kW). Uses closest available capacity
+        if exact match not found.
+
+        Args:
+            capacity_kw: Generator rated capacity in kW
+
+        Returns:
+            dict with keys: min_load_fraction, sfc_coefficient_a, sfc_coefficient_b
+        """
+        if capacity_kw in self.generator_params.index:
+            row = self.generator_params.loc[capacity_kw]
+        else:
+            # Find closest capacity
+            available = self.generator_params.index.tolist()
+            closest = min(available, key=lambda c: abs(c - capacity_kw))
+            row = self.generator_params.loc[closest]
+        # If multiple rows match (duplicate index), take the first
+        if hasattr(row, 'iloc') and len(row.shape) > 1:
+            row = row.iloc[0]
+        return {
+            "min_load_fraction": float(row["min_load_fraction"]),
+            "sfc_coefficient_a": float(row["sfc_coefficient_a"]),
+            "sfc_coefficient_b": float(row["sfc_coefficient_b"]),
+        }
+
+    def get_pv_degradation_rate(self, density="medium"):
+        """Get annual PV degradation rate from equipment parameters.
+
+        Args:
+            density: PV density variant ('low', 'medium', 'high')
+
+        Returns:
+            float: Annual degradation rate (e.g. 0.005 for 0.5%/yr)
+        """
+        return float(self.pv_system_params.loc[density, "degradation_rate_per_year"])
+
+    def get_pv_shading_factor(self, density="medium"):
+        """Get PV shading factor for an agri-PV density level.
+
+        Shading factor represents the fraction of PV output retained after
+        inter-row shading losses from agri-PV installation geometry.
+
+        Args:
+            density: PV density variant ('low', 'medium', 'high')
+
+        Returns:
+            float: Shading factor (0-1), e.g. 0.90 means 10% shading loss
+        """
+        return float(self.pv_system_params.loc[density, "shading_factor"])

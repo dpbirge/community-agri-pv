@@ -33,6 +33,7 @@ Before the daily loop begins, the simulation performs one-time setup:
 8. Set initial water storage to 50% of capacity
 9. Set initial battery SOC to 50% of capacity
 10. Compute infrastructure annual costs from financing profiles
+11. Set E_processing = 0 for Day 1 (no previous-day processing energy to dispatch)
 
 ### Daily Loop (For Each Day in Simulation Period)
 
@@ -82,10 +83,10 @@ FOR each day in simulation_period:
         E_convey = sum of conveyance energy across all farms
         E_irrigation_pump = sum of irrigation pressurization energy
         E_processing = sum of food processing energy (from Step 4, previous day)
-        E_household = daily household electricity demand
-        E_other = community buildings, industrial
+        E_household = daily household electricity demand (from precomputed `household.energy`)
+        E_community_bldg = daily community building electricity demand (from precomputed `community_buildings.energy`, scaled by building areas in settings)
         total_demand_kwh = E_desal + E_pump + E_convey + E_irrigation_pump
-                         + E_processing + E_household + E_other
+                         + E_processing + E_household + E_community_bldg
 
     FOR each farm (or community if override):
         Assemble EnergyPolicyContext
@@ -123,12 +124,9 @@ FOR each day in simulation_period:
     # --- Step 5: Market Policy (Per Farm) ---
     FOR each farm:
         FOR each product_type in storage (after forced sales):
-            IF economic_policy.sell_inventory == true:
-                sell_fraction = 1.0  (economic override)
-            ELSE:
-                Assemble MarketPolicyContext
-                Call market_policy.decide(ctx) -> MarketDecision
-                sell_fraction = MarketDecision.sell_fraction
+            Assemble MarketPolicyContext
+            Call market_policy.decide(ctx) -> MarketDecision
+            sell_fraction = MarketDecision.sell_fraction
             Execute sale: revenue = sell_kg * current_price_per_kg
             Update storage inventory
             Record revenue by crop and product type
@@ -140,7 +138,6 @@ FOR each day in simulation_period:
             Assemble EconomicPolicyContext with previous month's data
             Call economic_policy.decide(ctx) -> EconomicDecision
             Store sell_inventory flag for use in Step 5 next month
-            Store investment_allowed flag (reserved for future use)
 
     # --- Step 7: Daily Accounting ---
     FOR each farm:
@@ -192,7 +189,7 @@ Data files containing EGP values (notably tiered water pricing and grid electric
 Every water and energy demand is classified by consumer type before price resolution:
 
 | Consumer Type | Applies To | Water Regime | Energy Regime |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `agricultural` | Farm irrigation, groundwater treatment, food processing | `water_pricing.agricultural` | `energy_pricing.agricultural` |
 | `domestic` | Households, community buildings, shared facilities | `water_pricing.domestic` | `energy_pricing.domestic` |
 
@@ -206,10 +203,13 @@ resolve_water_price(consumer_type, cumulative_monthly_m3):
     IF consumer_type == "agricultural":
         config = water_pricing.agricultural
         IF config.pricing_regime == "subsidized":
-            RETURN config.subsidized.price_usd_per_m3  (flat rate)
+            base = config.subsidized.price_usd_per_m3
+            escalation = config.subsidized.annual_escalation_pct  # 0 = flat
+            years_elapsed = current_year - simulation.start_date.year
+            RETURN base * (1 + escalation / 100) ^ years_elapsed
         ELSE:  # unsubsidized
             base = config.unsubsidized.base_price_usd_m3
-            years_elapsed = current_year - base_year
+            years_elapsed = current_year - simulation.start_date.year
             RETURN base * (1 + config.unsubsidized.annual_escalation_pct / 100) ^ years_elapsed
 
     IF consumer_type == "domestic":
@@ -219,13 +219,15 @@ resolve_water_price(consumer_type, cumulative_monthly_m3):
             RETURN get_marginal_tier_price(cumulative_monthly_m3, config.subsidized.tier_pricing)
         ELSE:  # unsubsidized
             base = config.unsubsidized.base_price_usd_m3
-            years_elapsed = current_year - base_year
+            years_elapsed = current_year - simulation.start_date.year
             RETURN base * (1 + config.unsubsidized.annual_escalation_pct / 100) ^ years_elapsed
 ```
 
 **Key behaviors:**
 
-- Agricultural water: Always a flat rate (subsidized or unsubsidized with escalation). No tiered pricing.
+- Price escalation uses `years_elapsed = current_year - simulation.start_date.year`. No separate `base_year` parameter.
+- `annual_escalation_pct = 0` means government-fixed flat pricing (no escalation). `annual_escalation_pct > 0` models inflation-adjusted price increases. This applies consistently to both water and energy pricing.
+- Agricultural water: Flat rate with optional escalation (subsidized or unsubsidized). No tiered pricing.
 - Domestic water (subsidized): Uses Egyptian-style progressive tiered brackets with monthly consumption tracking. The `cumulative_monthly_m3` counter resets on the first day of each month. The `get_marginal_tier_price()` function returns the price of the NEXT unit of consumption, which is the relevant price for policy cost comparisons.
 - Domestic water (unsubsidized): Flat rate with annual escalation.
 - Wastewater surcharge applies to domestic tiered pricing only: `total_cost *= (1 + wastewater_surcharge_pct / 100)`.
@@ -239,21 +241,29 @@ resolve_energy_price(consumer_type):
     IF consumer_type == "agricultural":
         config = energy_pricing.agricultural
         IF config.pricing_regime == "subsidized":
-            RETURN config.subsidized.price_usd_per_kwh
+            base = config.subsidized.price_usd_per_kwh
+            escalation = config.subsidized.annual_escalation_pct  # 0 = flat
         ELSE:
-            RETURN config.unsubsidized.price_usd_per_kwh
+            base = config.unsubsidized.price_usd_per_kwh
+            escalation = config.unsubsidized.annual_escalation_pct
 
     IF consumer_type == "domestic":
         config = energy_pricing.domestic
         IF config.pricing_regime == "subsidized":
-            RETURN config.subsidized.price_usd_per_kwh
+            base = config.subsidized.price_usd_per_kwh
+            escalation = config.subsidized.annual_escalation_pct
         ELSE:
-            RETURN config.unsubsidized.price_usd_per_kwh
+            base = config.unsubsidized.price_usd_per_kwh
+            escalation = config.unsubsidized.annual_escalation_pct
+
+    years_elapsed = current_year - simulation.start_date.year
+    RETURN base * (1 + escalation / 100) ^ years_elapsed
 ```
 
 **Key behaviors:**
 
-- Both agricultural and domestic energy pricing are flat rates (subsidized or unsubsidized).
+- Energy pricing follows the same escalation pattern as water pricing: `annual_escalation_pct = 0` for government-fixed flat rates, `> 0` for inflation-adjusted increases.
+- Both agricultural and domestic energy pricing are flat base rates with optional annual escalation.
 - Agricultural and domestic pricing regimes are independent.
 - The energy price passed to the water policy context is always the agricultural rate (since farm water treatment is an agricultural activity).
 - The energy price used for household demand is the domestic rate.
@@ -282,7 +292,7 @@ Diesel is not split by consumer type. A single price applies to all generator fu
 
 ## 4. Food Processing, Market, and Revenue Chain
 
-This section documents the complete end-to-end flow from harvest to revenue, consolidating logic from `policies.md` Sections 3-4 and `calculations.md` Sections 4-5. The chain must be followed exactly to avoid double-counting revenue or mishandling weight loss.
+This section documents the complete end-to-end flow from harvest to revenue, consolidating logic from `policies.md` Food Processing Policies and Market Policies, and `calculations.md` Sections 4-5. The chain must be followed exactly to avoid double-counting revenue or mishandling weight loss.
 
 ### 4.1 Chain Overview
 
@@ -322,7 +332,7 @@ ProcessingAllocation:
     packaged_fraction   # e.g., 0.20
     canned_fraction     # e.g., 0.15
     dried_fraction      # e.g., 0.15
-    decision_reason     # e.g., "balanced_default"
+    decision_reason     # e.g., "balanced_mix_default"
 ```
 
 ### 4.4 Capacity Clipping (Shared Post-Processing)
@@ -363,7 +373,7 @@ FOR each pathway:
 Weight loss values (examples from data):
 
 | Crop | Fresh | Packaged | Canned | Dried |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Tomato | 0% | 3% | 15% | 88% |
 | Potato | 0% | 3% | 15% | 78% |
 
@@ -394,7 +404,7 @@ StorageTranche:
     sell_price_at_entry: float  # price at time of storage (for tracking, not for sale)
 ```
 
-- `shelf_life_days` is loaded from `spoilage_rates-toy.csv` (per crop, per product type).
+- `shelf_life_days` is loaded from `storage_spoilage_rates-toy.csv` (per crop, per product type).
 - Tranches are stored in a list per farm, ordered by `harvest_date` (oldest first = FIFO).
 - `expiry_date = harvest_date + timedelta(days=shelf_life_days)`
 
@@ -508,7 +518,7 @@ EnergyAllocation:
 
 The dispatch function MUST respect the allocation flags. The merit order is determined by the combination of flags:
 
-**`microgrid` (use_renewables=T, use_battery=T, grid_import=F, grid_export=F, use_generator=T):**
+**`microgrid`**** (use\_renewables=T, use\_battery=T, grid\_import=F, grid\_export=F, use\_generator=T):**
 
 ```
 Merit order: PV -> Wind -> Battery discharge -> Generator
@@ -516,7 +526,7 @@ Surplus: Battery charge -> Curtailment (no grid export)
 Unmet after generator: Record as unmet_demand_kwh
 ```
 
-**`renewable_first` (use_renewables=T, use_battery=T, grid_import=T, grid_export=T, use_generator=F):**
+**`renewable_first`**** (use\_renewables=T, use\_battery=T, grid\_import=T, grid\_export=T, use\_generator=F):**
 
 ```
 Merit order: PV -> Wind -> Battery discharge -> Grid import
@@ -524,7 +534,7 @@ Surplus: Battery charge -> Grid export
 Generator: Not dispatched (grid_import=T makes it unnecessary)
 ```
 
-**`all_grid` (use_renewables=F, use_battery=F, grid_import=T, grid_export=T, sell_renewables_to_grid=T):**
+**`all_grid`**** (use\_renewables=F, use\_battery=F, grid\_import=T, grid\_export=T, sell\_renewables\_to\_grid=T):**
 
 ```
 All demand met from grid import
@@ -566,13 +576,16 @@ dispatch_energy(total_demand_kwh, ..., allocation):
 
     # --- Generator ---
     IF allocation.use_generator AND remaining_demand > 0:
-        generator_capacity_kwh = generator_capacity_kw * hours_per_day
+        max_runtime_hours = scenario.energy_system.backup_generator.max_runtime_hours  # default 18
+        generator_capacity_kwh = generator_capacity_kw * max_runtime_hours
+        min_load_kwh = generator_capacity_kw * 0.30 * max_runtime_hours
         gen_output = min(remaining_demand, generator_capacity_kwh)
-        # Enforce minimum load constraint
-        IF gen_output < generator_capacity_kw * 0.30 * hours_per_day:
-            gen_output = 0  # Too small to run generator efficiently
+        # Minimum load constraint: run at 30% minimum if demand is below threshold
+        IF gen_output < min_load_kwh AND gen_output > 0:
+            gen_output = min_load_kwh  # Run at minimum load; excess is curtailed
         generator_used = gen_output
-        remaining_demand -= generator_used
+        remaining_demand -= min(remaining_demand, generator_used)
+        generator_curtailed = max(0, generator_used - remaining_demand)  # Fuel burned but not useful
 
     # --- Surplus handling ---
     IF allocation.sell_renewables_to_grid:
@@ -606,23 +619,31 @@ dispatch_energy(total_demand_kwh, ..., allocation):
 
 ### 5.5 Total Energy Demand Components
 
-All six demand components MUST flow into the dispatch:
+All seven demand components MUST flow into the dispatch:
 
 ```
 total_demand_kwh = E_desal + E_convey + E_pump + E_irrigation_pump
-                 + E_processing + E_household + E_other
+                 + E_processing + E_household + E_community_bldg
 
 WHERE:
     E_desal = groundwater_m3 * treatment_kwh_per_m3
     E_pump = groundwater_m3 * pumping_kwh_per_m3
-    E_convey = groundwater_m3 * conveyance_kwh_per_m3  (default 0.2 kWh/m3)
+    E_convey = groundwater_m3 * conveyance_kwh_per_m3  (from settings: water_system.conveyance_kwh_per_m3, default 0.2)
     E_irrigation_pump = total_irrigation_m3 * irrigation_pressure_kwh_per_m3
-        irrigation_pressure_kwh_per_m3 = (P_bar * 100000) / (eta_pump * 3600000)
-        # At 1.5 bar, eta=0.75: ~0.056 kWh/m3
+        irrigation_pressure_kwh_per_m3 = 0.056 kWh/m3  (hardcoded constant: drip irrigation at 1.5 bar, eta=0.75)
     E_processing = sum(throughput_kg * energy_per_kg) by pathway (from previous day)
-    E_household = daily_household_kwh (constant, computed pre-loop)
-    E_other = community_buildings + industrial (from precomputed data or scenario config)
+    E_household = from precomputed data: registry `household.energy` (daily time-series, per household type)
+    E_community_bldg = from precomputed data: registry `community_buildings.energy` (per-m² daily time-series,
+                       scaled by building areas from settings: community_structure.community_buildings)
 ```
+
+**Community building types** (configured in `community_structure.community_buildings` in settings YAML):
+- `office_admin_m2` — administration, management offices
+- `storage_warehouse_m2` — equipment and supply storage
+- `meeting_hall_m2` — community gathering space
+- `workshop_maintenance_m2` — equipment repair and maintenance
+
+Precomputed data files provide energy (kWh/m²/day) and water (m³/m²/day) per building type with temperature-adjusted seasonal variation. The simulation multiplies these per-m² rates by the configured building areas to get daily totals.
 
 ---
 
@@ -688,55 +709,55 @@ Community-level net income = sum of all farm net incomes.
 Operations triggered on the first simulation day of each month:
 
 1. **Economic policy execution:**
-    - Compute `months_of_reserves` using trailing 12-month average operating costs:
-      ```
+  - Compute `months_of_reserves` using trailing 12-month average operating costs:
+```
       avg_monthly_opex = sum(opex for last 12 months) / min(12, months_elapsed)
       months_of_reserves = cash_reserves_usd / avg_monthly_opex
-      ```
-    - For the first year (months_elapsed < 12), use the available months as the denominator.
-    - Assemble `EconomicPolicyContext` with PREVIOUS month's aggregated revenue and costs.
-    - Call `economic_policy.decide(ctx)` and store the resulting flags.
+```
+  - For the first year (months_elapsed < 12), use the available months as the denominator.
+  - Assemble `EconomicPolicyContext` with PREVIOUS month's aggregated revenue and costs.
+  - Call `economic_policy.decide(ctx)` and store the resulting flags.
 
 2. **Domestic water tier reset:**
-    - Reset `cumulative_monthly_domestic_water_m3` to 0 for tiered pricing calculation.
+  - Reset `cumulative_monthly_domestic_water_m3` to 0 for tiered pricing calculation.
 
 3. **Monthly metrics snapshot:**
-    - Aggregate daily records for the completed month.
-    - Compute monthly totals for water, energy, revenue, and costs.
+  - Aggregate daily records for the completed month.
+  - Compute monthly totals for water, energy, revenue, and costs.
 
 ### 7.2 Yearly Boundaries (First Day of Each Year)
 
 Operations triggered on the first simulation day of each new year:
 
 1. **Yearly metrics snapshot:**
-    - Compute all metrics defined in `structure.md` Section 4 (water, energy, crop, economic, resilience).
-    - Store as `YearlyFarmMetrics` per farm and community-level aggregates.
+  - Compute all metrics defined in `structure.md` Section 4 (water, energy, crop, economic, resilience).
+  - Store as `YearlyFarmMetrics` per farm and community-level aggregates.
 
 2. **Aquifer state update:**
-    - Compute net annual depletion:
-      ```
+  - Compute net annual depletion:
+```
       net_depletion = annual_gw_extraction - aquifer_recharge_rate_m3_yr
       remaining_volume -= net_depletion
-      ```
-    - Update effective pumping head (drawdown feedback):
-      ```
+```
+  - Update effective pumping head (drawdown feedback):
+```
       fraction_depleted = cumulative_extraction / aquifer_exploitable_volume_m3
       drawdown_m = max_drawdown_m * fraction_depleted
       effective_head_m = well_depth_m + drawdown_m
-      ```
-    - Recompute `pumping_kwh_per_m3` with new effective head.
+```
+  - Recompute `pumping_kwh_per_m3` with new effective head.
 
 3. **Equipment degradation:**
-    - PV: `degradation_factor *= (1 - 0.005)` (0.5%/yr)
-    - Battery: Update effective capacity per calendar + cycle aging model.
+  - PV: `degradation_factor *= (1 - 0.005)` (0.5%/yr)
+  - Battery: Update effective capacity per calendar + cycle aging model.
 
 4. **Crop reinitialization:**
-    - Reset crop states for new planting schedule.
-    - Reset cumulative water tracking per crop.
+  - Reset crop states for new planting schedule.
+  - Reset cumulative water tracking per crop.
 
 5. **Reset yearly accumulators:**
-    - Reset `cumulative_gw_year_m3` to 0.
-    - Reset yearly energy accumulators (PV, wind, grid, generator, curtailment).
+  - Reset `cumulative_gw_year_m3` to 0.
+  - Reset yearly energy accumulators (PV, wind, grid, generator, curtailment).
 
 ---
 
@@ -744,22 +765,29 @@ Operations triggered on the first simulation day of each new year:
 
 ### 8.1 Household Demand Calculation
 
-Household demand is computed once before the simulation loop and treated as a daily constant:
+Household and community building demands are loaded from precomputed daily time-series:
 
 ```
-household_water_m3_day = community_population * per_capita_water_L_day / 1000
-household_energy_kwh_day = community_population * per_capita_energy_kwh_day
-    + community_buildings_m2 * energy_per_m2_day
-    + industrial_buildings_m2 * energy_per_m2_day
+E_household(date) = lookup from registry `household.energy` for date
+    (provides per-household-type kWh/day and total_community_kwh)
+
+E_community_bldg(date) = SUM over building_types:
+    lookup per-m² rate from registry `community_buildings.energy` for date
+    × configured area from settings (e.g., office_admin_m2, storage_warehouse_m2, etc.)
+
+household_water_m3_day(date) = lookup from registry `household.water` for date
+community_bldg_water_m3_day(date) = SUM over building_types:
+    lookup per-m² rate from registry `community_buildings.water` for date
+    × configured area from settings
 ```
 
-Per-capita values are loaded from `data/precomputed/household/household_demand-toy.csv` (or research variant). These values account for seasonal variation if the data file includes monthly profiles.
+Both demand categories are loaded as daily time-series with temperature-adjusted seasonal variation. Community building data is stored as per-m² rates so building sizes can be adjusted through the settings YAML without regenerating data files.
 
 ### 8.2 Household Water Policy
 
 Household water demand uses the domestic pricing regime and a restricted set of water policies:
 
-- **Available policies:** `max_groundwater`, `max_municipal`, `microgrid`
+- **Available policies:** `max_groundwater`, `max_municipal`
 - **Configured in:** `household_policies.water_policy` in scenario YAML
 - **Pricing:** Domestic water pricing regime (tiered if subsidized, flat if unsubsidized)
 - **Infrastructure:** Shares the same wells and treatment infrastructure as farms (capacity is shared via area-proportional allocation, with households treated as a single "virtual farm" for allocation purposes)
@@ -909,34 +937,29 @@ These checks run every day during development. They can be disabled for producti
 
 The following items were unclear, potentially inconsistent, or require decisions that fall outside the scope of the source documents. Each is marked for owner input.
 
-### [NEEDS OWNER INPUT] 10.1 Processing Energy Timing
+### [RESOLVED] ~~10.1 Processing Energy Timing~~
 
-E_processing is computed during food processing (Step 4) but enters energy dispatch in Step 3. This specification uses a one-day lag (today's processing energy is dispatched tomorrow). Alternative: compute E_processing from the market policy's storage decisions and add it to today's demand. The one-day lag is simpler and adequate at a daily time-step, but the owner should confirm this is acceptable.
+Resolved: One-day lag is accepted as the default. E_processing computed in Step 4 enters energy dispatch in Step 3 of the next day. This avoids circular dependency and is adequate at a daily time-step.
 
-### [NEEDS OWNER INPUT] 10.2 Household Infrastructure Capacity Share
+### [RESOLVED] ~~10.2 Household Infrastructure Capacity Share~~
 
-Section 8.2 proposes treating households as a "virtual farm" for infrastructure sharing. This means household water demand competes with farm water demand for well and treatment capacity. Alternative: reserve a fixed fraction of capacity for households (e.g., 10%). The owner should decide whether households share the same capacity pool as farms or have a dedicated allocation.
+Resolved: Households share the same capacity pool as farms (treated as a "virtual farm"). Household water demand is small relative to farm demand, so capacity contention is unlikely.
 
 ### [NEEDS OWNER INPUT] 10.3 Energy Policy Conflict Resolution
 
-Section 8.4 proposes that when farm and household energy policies differ, the dispatch uses the most permissive combination of flags. This means a single household choosing `all_grid` could enable grid import for the entire community even if all farms chose `microgrid`. Alternative: dispatch farm and household energy demand separately. The owner should decide whether energy dispatch is truly community-wide or can be split.
+Section 8.4 proposes that when farm and household energy policies differ, the dispatch uses the most permissive combination of flags. This means a single household choosing `all_grid` could enable grid import for the entire community even if all farms chose `microgrid`. Alternative: the community has ONE energy policy set at the community level, and households use whatever the community uses. The owner should decide.
 
-### [NEEDS OWNER INPUT] 10.4 Economic Policy sell_inventory Override Scope
+### [RESOLVED] ~~10.4 Economic Policy sell\_inventory Override Scope~~
 
-Section 2 (Step 5) specifies that when `economic_policy.sell_inventory == true`, the market policy is overridden with `sell_fraction = 1.0`. Two open questions:
+Resolved: The `sell_inventory` override has been removed from Step 5. Market policy `sell_fraction` output alone governs selling behavior. Economic policy `sell_inventory` remains as an internal flag but does not override market policy decisions.
 
-1. Does this apply to ALL stored inventory across all product types and crops, or only to specific product types?
-2. Does the override last for one month (until the next economic policy evaluation) or until the economic policy revokes it?
+### [RESOLVED] ~~10.5 Forced Sales vs. Market Policy on Same Day~~
 
-This specification assumes: all inventory, lasting one month. Owner should confirm.
-
-### [NEEDS OWNER INPUT] 10.5 Forced Sales vs. Market Policy on Same Day
-
-On harvest days, new tranches are added (Step 4), forced sales execute (Step 4b), then market policy runs (Step 5). If both forced sales and market policy sell inventory on the same day, should forced sales revenue be counted separately from voluntary sales for metrics and reporting purposes? This specification assumes yes (tagged with `decision_reason = "forced_expiry"` or `"forced_overflow"`), but the owner should confirm.
+Resolved: Forced sales are tagged separately from voluntary sales with `decision_reason = "forced_expiry"` or `"forced_overflow"` and counted separately in metrics and reporting.
 
 ### [NEEDS OWNER INPUT] 10.6 Community-Override Policy vs. Farm-Level Policy YAML Schema
 
-The specification references community-override policies but the YAML schema for how overrides are expressed is not defined in any source document. Proposed schema:
+The specification references community-override policies but the YAML schema for how overrides are expressed is not defined in any source document. Deferred for MVP — per-farm policies are sufficient. Proposed schema for future:
 
 ```yaml
 community_policies:
@@ -948,23 +971,29 @@ community_policies:
     economic_policy: null
 ```
 
-If `community_policies.<domain>` is non-null, it overrides all individual farm selections for that domain. Owner should confirm this schema.
+### [RESOLVED] ~~10.7 Storage Cost Data Source~~
 
-### [NEEDS OWNER INPUT] 10.7 Storage Cost Data Source
+Resolved: Created `data/parameters/crops/food_storage_costs-toy.csv` with columns `product_type, storage_condition, cost_per_kg_per_day_usd`. Registered in `data_registry.yaml` under `crops.storage_costs`. Values based on industry benchmarks for food warehousing in developing regions.
 
-Section 4.10 references `storage_cost_per_kg_per_day` by product type, but no CSV file currently exists for this data. The review (issue 4.5) recommends creating one. Values need to be researched and added to the data registry. Suggested file: `data/parameters/crops/storage_costs-toy.csv` with columns: `product_type, cost_per_kg_per_day_usd`.
+### [RESOLVED] ~~10.8 E\_other Demand Component~~
 
-### [NEEDS OWNER INPUT] 10.8 E_other Demand Component
+Resolved: `E_other` is renamed to `E_community_bldg`. It is loaded from the precomputed data file registered under `community_buildings.energy` (per-m² daily time-series), then scaled by building areas from `community_structure.community_buildings` in the settings YAML. Building types: `office_admin`, `storage_warehouse`, `meeting_hall`, `workshop_maintenance`. Household demand (`E_household`) comes from a separate registry entry (`household.energy`) and covers residential use only. See Section 5.5.
 
-Section 5.5 includes `E_other` (community buildings, industrial) as an energy demand component. No source document specifies how this is calculated or where the data comes from. It may be bundled into `E_household` via `calculate_household_demand()`, or it may need its own calculation. Owner should clarify whether community/industrial building energy is part of household demand or a separate category.
+### [RESOLVED] ~~10.9 Generator Minimum Load Behavior~~
 
-### [NEEDS OWNER INPUT] 10.9 Generator Minimum Load Behavior
+Resolved: The generator always runs when there is unmet demand under the `microgrid` policy, even if demand is below the 30% minimum load threshold. When demand is below the minimum load, the generator runs at minimum load (30% of capacity) and the excess generation above what's needed is curtailed. This wastes some fuel but ensures no unmet demand when the community has no grid fallback. See Section 5.4.
 
-The dispatch algorithm (Section 5.4) skips the generator entirely if the remaining demand is below the 30% minimum load threshold. This means small deficits go unmet under the `microgrid` policy. Alternative: run the generator at minimum load and curtail the excess. The owner should decide which behavior is correct. The current specification uses skip-if-too-small, which means `microgrid` policy may report non-zero `unmet_demand_kwh`.
+### [RESOLVED] ~~10.10 Multiple Planting Dates per Crop~~
 
-### [NEEDS OWNER INPUT] 10.10 Multiple Planting Dates per Crop
+Resolved: For MVP, each crop uses 100% of its `area_fraction` for each planting. Multiple `planting_dates` represent successive plantings on the same field area (sequential cropping). The planting date gaps allow for fallow time or cover crops (not modeled). Only one growth cycle is active at a time per crop per farm — the next planting begins only after the previous cycle completes (harvest). Water tracking (`cumulative_water_received`) resets for each new planting cycle. Precomputed yield data (`Y_potential`) is per-planting, not per-year.
 
-`structure.md` allows `planting_dates` as a list of MM-DD strings (e.g., `["02-15", "11-01"]`). This implies multiple plantings of the same crop per year on the same farm. No source document specifies how area is split across plantings, whether harvests overlap, or how water tracking works across concurrent growth cycles of the same crop. This specification does not address multi-planting logic. The owner should clarify the intended behavior before implementation.
+### [RESOLVED] ~~10.11 Simulation Start Date Requirement~~
+
+Added: The simulation `start_date` must be far enough into the historical price data to allow all policies to compute required inputs (e.g., `avg_price_per_kg` for the `adaptive` and `hold_for_peak` market policies). The `avg_price_per_kg` context field is computed from historical price data files loaded at initialization (which have multi-year time series starting 2015-01-01), not from runtime sales history. This eliminates cold-start problems. Price escalation uses `years_elapsed = current_year - start_date.year` (no separate `base_year` parameter).
+
+### [RESOLVED] ~~10.12 Harvest Overflow Edge Case~~
+
+Added: When new harvest tranches alone exceed storage capacity (first harvest into empty storage that instantly overflows), the capacity clipping step in Section 4.4 redirects the excess to fresh. Fresh product has no storage capacity limit — it is sold immediately via the umbrella rule or market policy. The overflow check in Section 4.8 handles storage overflow of already-stored tranches; it does not need to handle the case where today's production exceeds capacity because capacity clipping prevents that upstream.
 
 ---
 
