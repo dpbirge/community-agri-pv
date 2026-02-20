@@ -155,6 +155,15 @@ class ProcessingAllocation:
     dried_fraction: float = 0.0
     policy_name: str = ""
 
+    def __post_init__(self):
+        total = self.fresh_fraction + self.packaged_fraction + self.canned_fraction + self.dried_fraction
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(
+                f"Processing fractions must sum to 1.0, got {total:.4f} "
+                f"(fresh={self.fresh_fraction}, packaged={self.packaged_fraction}, "
+                f"canned={self.canned_fraction}, dried={self.dried_fraction})"
+            )
+
 
 class BaseFoodPolicy:
     """Base class for food processing policies.

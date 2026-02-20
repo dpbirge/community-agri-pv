@@ -60,6 +60,7 @@ class DieselBackupConfig:
     """Diesel backup generator configuration."""
     capacity_kw: float
     type: str
+    max_runtime_hours: float = 18.0
     financing_status: str = "existing_owned"
 
 
@@ -82,6 +83,7 @@ class WaterTreatmentConfig:
     number_of_units: int
     salinity_level: str
     tds_ppm: float
+    conveyance_kwh_per_m3: float = 0.2
     financing_status: str = "existing_owned"
 
 
@@ -421,6 +423,7 @@ def _load_infrastructure(data):
         diesel_backup=DieselBackupConfig(
             capacity_kw=diesel.get("capacity_kw", 0.0),
             type=diesel.get("type", "diesel_generator"),
+            max_runtime_hours=diesel.get("max_runtime_hours", 18.0),
             financing_status=diesel.get("financing_status", "existing_owned"),
         ),
         groundwater_wells=GroundwaterWellsConfig(
@@ -437,6 +440,7 @@ def _load_infrastructure(data):
             number_of_units=number_of_units,
             salinity_level=_require(water_treatment, "salinity_level", "water_system.water_treatment"),
             tds_ppm=_require(water_treatment, "tds_ppm", "water_system.water_treatment"),
+            conveyance_kwh_per_m3=water_infra.get("conveyance_kwh_per_m3", 0.2),
             financing_status=water_treatment.get("financing_status", "existing_owned"),
         ),
         irrigation_storage=IrrigationStorageConfig(

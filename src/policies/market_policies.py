@@ -55,6 +55,14 @@ class MarketDecision:
     decision_reason: str = ""
     policy_name: str = ""
 
+    def __post_init__(self):
+        total = self.sell_fraction + self.store_fraction
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(
+                f"Market fractions must sum to 1.0, got {total:.4f} "
+                f"(sell={self.sell_fraction}, store={self.store_fraction})"
+            )
+
 
 class BaseMarketPolicy:
     """Base class for market/sales policies."""

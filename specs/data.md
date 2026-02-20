@@ -33,7 +33,7 @@ Scenario configurations live in:
 ```
 settings/
 ├── data_registry.yaml # Central registry mapping data keys to file paths
-└── mvp-settings.yaml  # MVP scenario configuration
+└── settings.yaml      # Active scenario configuration
 ```
 
 Policy implementations live in the source code:
@@ -126,17 +126,17 @@ date,temp_max_c,temp_min_c,solar_irradiance_kwh_m2,wind_speed_ms,precip_mm,weath
 #### PV Power File Format Example
 
 ```csv
-# SOURCE: pvlib calculations with synthetic weather data
-# DATE: 2026-02-02
-# DESCRIPTION: Normalized daily PV output per kW installed capacity
-# UNITS: kwh_per_kw_per_day (kWh/kW/day)
-# LOGIC: pvlib.ModelChain with fixed-tilt system, standard modules, temperature derating
-# DEPENDENCIES: precomputed/weather/daily_weather_scenario_001-toy.csv, parameters/equipment/pv_systems-toy.csv
-# ASSUMPTIONS: Fixed tilt 25°, azimuth 180° (south-facing), system losses 14%, temperature coefficient -0.4%/°C
-weather_scenario_id,date,kwh_per_kw_per_day,capacity_factor
-001,2024-01-01,4.2,0.175
-001,2024-01-02,4.5,0.188
-001,2024-01-03,4.1,0.171
+# SOURCE: Computed from weather data using simplified PV model
+# DATE: 2026-02-06
+# DESCRIPTION: Normalized daily PV power output per kW of installed capacity for three agri-PV density variants (low/medium/high ground coverage)
+# UNITS: date=YYYY-MM-DD, density_variant=text, kwh_per_kw_per_day=kWh/kW/day, capacity_factor=dimensionless(0-1)
+# LOGIC: PV output = solar_irradiance * tilt_factor(1.05) * temp_factor * (1-system_losses). Temp factor uses cell temp model: T_cell = T_avg + 25C + density_adjustment. Temperature coefficient = -0.4%/C from 25C reference. System losses = 15%.
+# DEPENDENCIES: data/precomputed/weather/daily_weather_scenario_001-toy.csv
+# ASSUMPTIONS: Fixed-tilt 28deg south-facing panels. Module efficiency ~19%. High density panels run 2C cooler (shading effect), low density run 2C hotter. All panels receive full irradiance (panels above crops, not shaded by each other).
+weather_scenario_id,date,density_variant,kwh_per_kw_per_day,capacity_factor
+001,2010-01-01,low,3.4202,0.1425
+001,2010-01-01,medium,3.4499,0.1437
+001,2010-01-01,high,3.4796,0.145
 ```
 
 #### Irrigation Demand File Format Example
@@ -146,16 +146,16 @@ weather_scenario_id,date,kwh_per_kw_per_day,capacity_factor
 # DATE: 2026-02-02
 # DESCRIPTION: Daily irrigation demand for tomatoes per hectare
 # CROP: Tomato (Solanum lycopersicum)
-# UNITS: m3_per_ha_per_day (cubic meters per hectare per day)
+# UNITS: m3_per_ha_per_day (cubic meters per hectare per day), calendar_date (YYYY-MM-DD), etc_mm (mm/day)
 # LOGIC: Irrigation = ET0 * Kc * 10 (to convert mm to m³/ha)
 # DEPENDENCIES: precomputed/weather/daily_weather_scenario_001-toy.csv, parameters/crops/crop_coefficients-toy.csv
 # GROWTH_STAGES: initial (0-20 days), development (21-40), mid (41-100), late (101-130)
-weather_scenario_id,planting_date,crop_day,growth_stage,kc,et0_mm,irrigation_m3_per_ha_per_day
-001,2024-01-01,1,initial,0.60,5.2,31.2
-001,2024-01-01,2,initial,0.60,5.4,32.4
-001,2024-01-01,25,development,0.85,5.8,49.3
-001,2024-01-01,50,mid,1.15,6.2,71.3
-001,2024-01-01,110,late,0.80,5.5,44.0
+weather_scenario_id,planting_date,crop_day,calendar_date,growth_stage,kc,et0_mm,etc_mm,irrigation_m3_per_ha_per_day
+001,2010-01-01,1,2010-01-01,initial,0.60,5.2,3.12,34.7
+001,2010-01-01,2,2010-01-02,initial,0.60,5.4,3.24,36.0
+001,2010-01-01,25,2010-01-25,development,0.85,5.8,4.93,54.8
+001,2010-01-01,50,2010-02-19,mid,1.15,6.2,7.13,79.2
+001,2010-01-01,110,2010-04-20,late,0.80,5.5,4.40,48.9
 ```
 
 ---
@@ -237,7 +237,7 @@ parameters/
 # DEPENDENCIES: None (reference data)
 # NOTES: Kc_initial for dry soil after planting, Kc_mid at full canopy, Kc_end at harvest
 crop_name,kc_initial,kc_mid,kc_end,root_depth_m,season_length_days,water_stress_sensitivity
-tomato,0.60,1.15,0.80,0.7,130,high
+tomato,0.60,1.15,0.80,0.7,135,high
 potato,0.50,1.15,0.75,0.4,120,high
 onion,0.70,1.05,0.75,0.3,150,high
 kale,0.70,1.00,0.95,0.4,90,medium
@@ -283,15 +283,21 @@ prices/
 │   └── historical_cucumber_prices-research.csv
 │
 ├── processed/
-│   ├── historical_canned_tomato_prices-toy.csv
+│   ├── historical_canned_cucumber_prices-toy.csv
+│   ├── historical_canned_kale_prices-toy.csv
 │   ├── historical_canned_onion_prices-toy.csv
-│   ├── historical_dried_tomato_prices-toy.csv
+│   ├── historical_canned_potato_prices-toy.csv
+│   ├── historical_canned_tomato_prices-toy.csv
+│   ├── historical_dried_cucumber_prices-toy.csv
 │   ├── historical_dried_kale_prices-toy.csv
-│   ├── historical_packaged_tomato_prices-toy.csv
-│   ├── historical_packaged_potato_prices-toy.csv
-│   ├── historical_packaged_onion_prices-toy.csv
-│   ├── historical_packaged_kale_prices-toy.csv
+│   ├── historical_dried_onion_prices-toy.csv
+│   ├── historical_dried_potato_prices-toy.csv
+│   ├── historical_dried_tomato_prices-toy.csv
 │   ├── historical_packaged_cucumber_prices-toy.csv
+│   ├── historical_packaged_kale_prices-toy.csv
+│   ├── historical_packaged_onion_prices-toy.csv
+│   ├── historical_packaged_potato_prices-toy.csv
+│   ├── historical_packaged_tomato_prices-toy.csv
 │   └── historical_pickled_cucumber_prices-toy.csv
 │
 ├── electricity/
@@ -320,7 +326,7 @@ prices/
 - `prices_utilities.municipal_water` → municipal water prices
 - `prices_utilities.diesel` → diesel fuel prices
 
-**Electricity pricing note:** The simulation supports dual pricing regimes (subsidized/unsubsidized) for both agricultural and domestic consumers. The registry maps to separate files for each regime. See `structure.md` Pricing Configuration and `simulation_flow.md` Section 3 for resolution logic.
+**Electricity pricing note:** The simulation supports dual pricing regimes (subsidized/unsubsidized) for both agricultural and community consumers. The registry maps to separate files for each regime. See `structure.md` Pricing Configuration and `simulation_flow.md` Section 4 for resolution logic.
 
 #### Crop Price File Format Example
 
@@ -387,7 +393,7 @@ Scenario and policy configurations live outside `data/` in the `settings/` folde
 
 The settings folder contains the scenario YAML file and the central data registry. Scenarios define infrastructure, community, policies, and are loaded by `src/settings/loader.py` into structured dataclasses.
 
-**Current scenario file**: `settings/mvp-settings.yaml`
+**Current scenario file**: `settings/settings.yaml`
 
 The scenario YAML structure uses `_system` suffixes for infrastructure sections (`water_system`, `energy_system`, `food_processing_system`) and references policies by name. See `structure.md` for the full schema.
 
@@ -465,7 +471,7 @@ This table tracks all datasets in the model. Status columns: T = toy exists, R =
 | Post-harvest losses | x | x | `crops.handling_loss_rates` | By crop and pathway |
 | Planting windows | | x | `crops.planting_windows` | Valid planting dates for Sinai |
 | Crop processing specifications | x | x | `crops.processing_specs` | Weight loss, value-add, energy |
-| Microclimate yield effects | | x | (not in registry) | PV shade effects by density |
+| Microclimate yield effects | | x | `crops.microclimate_yield_effects` | PV shade effects by density |
 | Spoilage rates / shelf life | x | | `crops.storage_spoilage_rates` | FIFO tranche tracking |
 | PV system specifications | x | | `equipment.pv_systems` | |
 | Battery specifications | x | | `equipment.batteries` | |
@@ -496,28 +502,18 @@ This table tracks all datasets in the model. Status columns: T = toy exists, R =
 | Dataset | T | R | Registry Key | Notes |
 |---|---|---|---|---|
 | Historical crop prices (5 crops) | x | x | `prices_crops.<crop>` | FAO/USDA-based Egyptian farmgate |
-| Historical processed product prices (10 products) | x | | `prices_processed.<product>` | Packaged, canned, dried variants |
+| Historical processed product prices (16 products) | x | | `prices_processed.<product>` | All crop-product combinations: 5 packaged, 5 canned, 4 dried, 1 pickled, 1 additional |
 | Historical electricity prices (subsidized) | x | x | `prices_utilities.electricity_subsidized` | Egyptian agricultural tariffs |
 | Historical electricity prices (unsubsidized) | x | x | `prices_utilities.electricity_unsubsidized` | Commercial/industrial tariffs |
 | Historical municipal water prices | x | x | `prices_utilities.municipal_water` | Egyptian HCWW tiered pricing |
 | Historical diesel prices | x | x | `prices_utilities.diesel` | Egyptian diesel prices |
-| Historical fertilizer costs | x | | (not in registry) | Per-hectare aggregate |
-
-### Planned Datasets (Not Yet Created)
-
-These datasets are referenced in the architecture docs but do not yet exist. They are needed for future simulation features.
-
-| Dataset | Referenced In | Purpose |
-|---|---|---|
-| `parameters/crops/crop_salinity_tolerance.csv` | `calculations.md` Section 4 | FAO-29 salinity yield reduction thresholds (ECe, slope b) |
-| `parameters/economic/equipment_lifespans.csv` | `calculations.md` Section 5 | Component lifespans for replacement cost calculations |
-| `parameters/crops/storage_costs-toy.csv` | `simulation_flow.md` Section 10.7 | Daily storage cost per kg by product type |
+| Historical fertilizer costs | x | | `prices_inputs.fertilizer_costs` | Per-hectare aggregate |
 
 ### Settings (Configuration)
 
 | Component | Status | Notes |
 |---|---|---|
-| Scenario YAML (`mvp-settings.yaml`) | Complete | Full infrastructure, community, policy selections |
+| Scenario YAML (`settings.yaml`) | Complete | Full infrastructure, community, policy selections |
 | Data registry (`data_registry.yaml`) | Complete | Maps all data keys to file paths |
 | Policy implementations (6 domains) | Complete | 23 total policies in `src/policies/` |
 | Monte Carlo configuration | In code | Default CVs in `monte_carlo.py`, overridable at runtime |
@@ -760,7 +756,7 @@ Model includes:
 
 ### Grid Reliability
 - **Modeling**: Price variations only (no brownouts/outages in initial model)
-- **Tariff structure**: Dual agricultural/domestic regimes, subsidized and unsubsidized options
+- **Tariff structure**: Dual agricultural/community regimes, subsidized and unsubsidized options
 - **Future**: Can add outage modeling in later phases
 
 ### Monte Carlo Configuration
@@ -773,10 +769,12 @@ Model includes:
 
 ## References
 
-- Community Farm Model Specifications: `docs/arch/overview.md`
-- Configuration Schema: `docs/arch/structure.md`
-- Calculation Methodologies: `docs/arch/calculations.md`
-- Policy Specifications: `docs/arch/policies.md`
-- Simulation Flow: `docs/arch/simulation_flow.md`
+- Community Farm Model Specifications: `specs/overview.md`
+- Configuration Schema: `specs/structure.md`
+- Calculation Methodologies: `specs/calculations.md`
+- Policy Specifications: `specs/policies.md`
+- Simulation Flow: `specs/simulation_flow.md`
+- Metrics and Reporting: `specs/metrics_and_reporting.md`
+- Data Catalog: `specs/data.md`
 - FAO Irrigation and Drainage Paper 56: http://www.fao.org/3/x0490e/x0490e00.htm
 - NREL PV Performance Data: https://www.nrel.gov/grid/solar-resource/

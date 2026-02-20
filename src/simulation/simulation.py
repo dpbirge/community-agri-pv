@@ -11,7 +11,7 @@ import pandas as pd
 
 from src.policies import WaterPolicyContext, WaterAllocation
 from src.policies.food_policies import FoodProcessingContext, ProcessingAllocation
-from src.settings.calculations import calculate_pumping_energy, estimate_infrastructure_costs, calculate_household_demand
+from src.settings.calculations import calculate_pumping_energy, estimate_infrastructure_costs, calculate_household_demand, FINANCING_PROFILES
 from src.simulation.data_loader import SimulationDataLoader
 from src.simulation.state import (
     SimulationState,
@@ -219,8 +219,8 @@ def build_water_policy_context(
     )
     pumping_kwh_per_m3 = pumping["total_pumping_energy_kwh_per_m3"]
 
-    # Fixed conveyance energy per architecture spec
-    conveyance_kwh_per_m3 = 0.2
+    # Conveyance energy from scenario config (well -> treatment -> storage)
+    conveyance_kwh_per_m3 = scenario.infrastructure.water_treatment.conveyance_kwh_per_m3
 
     return WaterPolicyContext(
         demand_m3=demand_m3,
@@ -566,6 +566,7 @@ def reset_farm_for_new_year(farm_state):
     farm_state.cumulative_processed_revenue_usd = 0.0
     farm_state.cumulative_processed_output_kg = 0.0
     farm_state.cumulative_post_harvest_loss_kg = 0.0
+    farm_state.cumulative_energy_demand_kwh = 0.0
 
 
 def initialize_energy_state(scenario, data_loader):
@@ -746,7 +747,8 @@ def dispatch_energy(energy_state, total_demand_kwh, current_date, data_loader, s
         # --- 6. Run generator (only if deficit remains after grid import) ---
         if deficit > 0 and energy_state.generator_capacity_kw > 0:
             P_rated = energy_state.generator_capacity_kw
-            max_gen_kwh = P_rated * 24.0  # Maximum energy in one day at full load
+            max_runtime = scenario.infrastructure.diesel_backup.max_runtime_hours
+            max_gen_kwh = P_rated * max_runtime  # Maximum energy per day (limited by runtime)
             generator_kwh = min(deficit, max_gen_kwh)
 
             # Willans line fuel model: run at full rated load for shortest time
@@ -832,6 +834,21 @@ def run_simulation(scenario, data_loader=None, verbose=False):
     try:
         infra_costs = estimate_infrastructure_costs(scenario)
         initial_cash = sum(f.starting_capital_usd for f in scenario.farms)
+
+        # Step 12b: Validate starting capital covers cash CAPEX
+        capex_cash_outflow = sum(
+            c["capital_usd"] * FINANCING_PROFILES.get(
+                c.get("financing_status", "existing_owned"), {}
+            ).get("capex_mult", 0.0)
+            for c in infra_costs.values()
+        )
+        if capex_cash_outflow > initial_cash:
+            raise ValueError(
+                f"Insufficient starting capital (${initial_cash:,.0f}) "
+                f"to cover cash CAPEX (${capex_cash_outflow:,.0f}). "
+                f"Consider loan financing or increasing starting_capital_usd."
+            )
+
         total_annual_infra = sum(c["annual_total_usd"] for c in infra_costs.values())
         total_annual_debt = sum(
             c["monthly_debt_service_usd"] * 12

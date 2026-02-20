@@ -1,23 +1,10 @@
-# Financing Profile Definitions
-# =============================
-# This file defines financial parameters for different infrastructure financing categories.
-# Each category represents a complete financing profile that determines both CAPEX and OPEX costs to the community.
-#
-# Fields:
-# - financing_status: Categorical identifier used in scenario configurations
-# - description: Brief explanation of the financing category
-# - capex_cost_multiplier: Fraction of capital costs paid by community (0.0 = none, 1.0 = full)
-# - has_debt_service: Whether this category includes loan repayment (true/false)
-# - loan_term_years: Duration of loan repayment (0 if no loan)
-# - interest_rate: Annual interest rate for loan (0.0 if no loan)
-# - opex_cost_multiplier: Fraction of O&M costs paid by community (0.0 = none, 1.0 = full)
-# - notes: Additional context about the financing category
-#
-# Data source: Typical financing structures for community infrastructure projects
-# Author: David Birge
-# Date: 2026-02-05
-# Version: 0.1.0
-# Status: toy
+# SOURCE: Typical financing structures for community infrastructure projects in developing regions (toy estimates)
+# DATE: 2026-02-05
+# DESCRIPTION: Financial parameters for infrastructure financing categories determining CAPEX and OPEX cost allocation to the community
+# UNITS: capex_cost_multiplier (fraction 0-1), has_debt_service (boolean), loan_term_years (years), interest_rate (annual fraction 0-1), opex_cost_multiplier (fraction 0-1)
+# LOGIC: Each financing_status represents a complete profile. capex_cost_multiplier=0 means community pays no capital cost (grant or loan covers it). has_debt_service=true adds loan repayment obligations. opex_cost_multiplier=0 means donor covers O&M (grant_full only).
+# DEPENDENCIES: Referenced by all equipment subsystems via financing_status field in settings.yaml
+# ASSUMPTIONS: Loan terms and interest rates reflect typical development finance for community-scale infrastructure. Concessional loans assume development bank rates (3.5%). Standard loans assume commercial bank rates (6%).
 
 financing_status,description,capex_cost_multiplier,has_debt_service,loan_term_years,interest_rate,opex_cost_multiplier,notes
 existing_owned,Already owned/depreciated assets,0.0,false,0,0.000,1.0,Community already owns; only O&M costs apply

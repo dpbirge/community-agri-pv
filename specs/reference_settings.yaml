@@ -1,0 +1,509 @@
+# ============================================================================
+# REFERENCE SETTINGS FILE
+# ============================================================================
+#
+# Complete reference for all scenario configuration parameters.
+# Copy this file to settings/settings.yaml and modify for your scenario.
+#
+# Conventions:
+#   [option1, option2]  = valid options
+#   (note)              = clarifying note
+#   Default: X          = value used if key is omitted (where loader allows)
+#
+# Key names MUST match what src/settings/loader.py expects.
+# Extra keys (e.g., community_area_km2) are ignored by the loader but
+# preserved here for documentation and future use.
+#
+# Location context: Sinai Peninsula, Red Sea coast, Egypt (~28N, 34E)
+# Climate: Hot arid, negligible rainfall, year-round irrigation
+# ============================================================================
+
+# ============================================================================
+# SCENARIO METADATA
+# ============================================================================
+scenario:
+  name: reference_scenario                                  # unique scenario identifier
+  description: "Reference scenario with all parameters"     # human-readable description
+  version: "0.1.0"                                          # semver scenario version
+  location: "Sinai Peninsula, Red Sea coast, Egypt (~28N, 34E)"  # informational only; not parsed by loader
+  author: "Community Agri-PV Project"                       # informational only; not parsed by loader
+
+simulation:
+  start_date: "2015-01-01"          # YYYY-MM-DD; simulation start (inclusive)
+  end_date: "2020-12-31"            # YYYY-MM-DD; simulation end (inclusive)
+  time_step: daily                  # [daily] (only daily supported in MVP)
+  weather_scenario: "001"           # weather data scenario ID; maps to precomputed weather files
+
+# ============================================================================
+# WATER SYSTEM
+# ============================================================================
+water_system:
+
+  groundwater_wells:
+    well_depth_m: 50                        # meters; depth of each well
+    salinity_level: moderate                 # [low, moderate, high]; must match rows in treatment_kwh_per_m3-toy.csv
+    well_flow_rate_m3_day: 100              # m3/day per well; maximum extraction rate
+    number_of_wells: 5                      # integer > 0; total wells serving the community
+    aquifer_exploitable_volume_m3: 500000   # m3; estimated exploitable aquifer volume. Default: 0.0
+    aquifer_recharge_rate_m3_yr: 5000       # m3/year; natural recharge rate (negligible in arid Sinai). Default: 0.0
+    max_drawdown_m: 30                      # meters; max allowable drawdown at full depletion (for pumping energy feedback). Default: 0.0
+    financing_status: existing_owned        # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  water_treatment:
+    treatment_type: bwro                    # DEFERRED: [bwro, swro, ro, none]; documented in structure.md, not yet used by simulation
+    system_capacity_m3_day: 2000            # m3/day; total treatment capacity across all units
+    number_of_units: 4                      # integer > 0; number of treatment units
+    salinity_level: moderate                # [low, moderate, high]; used for treatment energy lookup
+    tds_ppm: 6500                           # ppm; raw groundwater TDS (REQUIRED by loader as single field)
+    groundwater_tds_ppm: 6500              # ppm; raw groundwater salinity (not parsed by loader; informational)
+    municipal_tds_ppm: 300                 # ppm; municipal supply salinity (not parsed by loader; informational)
+    financing_status: loan_concessional     # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  conveyance_kwh_per_m3: 0.2               # kWh/m3; fixed energy for pipe conveyance (well->treatment->storage). Default: 0.2
+
+  irrigation_water_storage:
+    capacity_m3: 500                        # m3; total storage capacity
+    type: reservoir                         # [reservoir, tank, pond]
+    financing_status: existing_owned        # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  irrigation_system:
+    type: drip_irrigation                   # [drip_irrigation, sprinkler, surface, subsurface_drip]
+    financing_status: grant_capex           # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+# ============================================================================
+# ENERGY SYSTEM
+# ============================================================================
+energy_system:
+
+  pv:
+    sys_capacity_kw: 500                    # kW; total PV system capacity. Default: 0.0
+    tilt_angle: 28                          # degrees; fixed-tilt angle (latitude-matched for Sinai). Default: 28.0
+    percent_over_crops: 0.50                # 0.0-1.0; fraction of PV placed over crop area. Default: 0.0
+    density: medium                         # [low, medium, high]; panel density (affects ground coverage ratio). Default: medium
+    height_m: 3                             # meters; panel mounting height (affects microclimate). Default: 3.0
+    financing_status: grant_full            # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  wind:
+    sys_capacity_kw: 100                    # kW; total wind turbine capacity. Default: 0.0
+    type: small                             # [small, medium, large]. Default: small
+    financing_status: grant_full            # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  battery:
+    sys_capacity_kwh: 200                   # kWh; total battery storage capacity. Default: 0.0
+    units: 2                                # integer > 0; number of battery units. Default: 1
+    chemistry: LFP                          # [LFP, NMC, lead_acid]. Default: lithium_iron_phosphate (loader default)
+    financing_status: loan_standard         # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  backup_generator:
+    capacity_kw: 50                         # kW; generator capacity. Default: 0.0
+    type: diesel                            # [diesel]. Default: diesel_generator (loader default)
+    max_runtime_hours: 18                   # hours/day; max daily runtime (reserves rest for maintenance). Default: 18.0
+    financing_status: purchased_cash        # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+# ============================================================================
+# FOOD PROCESSING SYSTEM
+# ============================================================================
+#
+# Each category has:
+#   equipment: list of {type, fraction} where fractions must sum to 1.0
+#   storage_capacity_kg_total: kg; total storage for this product type
+#   shelf_life_days: days; storage life before forced sale
+#   financing_status: financing profile
+#
+food_processing_system:
+
+  fresh_food_packaging:
+    equipment:
+      - type: washing_sorting_line          # [washing_sorting_line, simple_wash_station]
+        fraction: 1.0                       # 0.0-1.0; all fractions in equipment list must sum to 1.0
+    storage_capacity_kg_total: 20000        # kg
+    shelf_life_days: 3                      # days; short duration (3-7 typical)
+    financing_status: loan_standard         # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  drying:
+    equipment:
+      - type: solar_tunnel_dryer            # [solar_tunnel_dryer, simple_dehydrator, electric_dryer]
+        fraction: 0.6
+      - type: simple_dehydrator
+        fraction: 0.4
+    storage_capacity_kg_total: 20000        # kg
+    shelf_life_days: 180                    # days; long duration (180-365 typical for dried products)
+    financing_status: grant_full            # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  canning:
+    equipment:
+      - type: simple_retort                 # [simple_retort, pressure_canner, industrial_retort]
+        fraction: 1.0
+    storage_capacity_kg_total: 20000        # kg
+    shelf_life_days: 365                    # days; very long duration (365-1095 typical for canned products)
+    financing_status: loan_standard         # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+  packaging:
+    equipment:
+      - type: packaged                      # [packaged, vacuum_sealed, modified_atmosphere]
+        fraction: 1.0
+    storage_capacity_kg_total: 20000        # kg
+    shelf_life_days: 14                     # days; moderate duration (14-56 typical depending on technology)
+    financing_status: existing_owned        # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
+
+# ============================================================================
+# COMMUNITY STRUCTURE
+# ============================================================================
+community_structure:
+  community_area_km2: 1000                  # km2; total community land area (not parsed by loader; informational)
+  total_farms: 3                            # integer; total number of farms (must match farms list length)
+  total_farming_area_ha: 300                # ha; total crop-plantable area across all farms (loader also accepts total_area_ha)
+  total_area_ha: 300                        # ha; fallback key for total_farming_area_ha (loader requires one of these)
+  community_population: 80                  # integer; total community population
+  houses: 25                                # integer; number of houses (not parsed by loader; informational)
+
+  # Community building areas used to scale precomputed per-m2 energy/water demands
+  community_buildings:                      # informational breakdown; loader reads aggregate community_buildings_m2 below
+    office_admin_m2: 500                    # m2; administrative offices
+    storage_warehouse_m2: 1000              # m2; shared storage and warehousing
+    meeting_hall_m2: 300                    # m2; community meetings, training
+    workshop_maintenance_m2: 200            # m2; equipment repair, maintenance
+
+  # Loader-compatible aggregate fields (loader reads these flat fields)
+  community_buildings_m2: 2000              # m2; total community building area. Default: 0.0
+  industrial_buildings_m2: 0.0              # m2; total industrial/processing facility area. Default: 0.0
+
+  cost_allocation_method: equal             # DEFERRED: [equal, area_proportional, usage_proportional]; how shared OPEX splits across farms
+
+  # ---------------------------------------------------------------------------
+  # COLLECTIVE FARM OVERRIDE (DEFAULT policy assignment)
+  # ---------------------------------------------------------------------------
+  # The primary mechanism for setting policies. At load time, each policy here
+  # is copied into every farm's policy slot, overriding any per-farm setting
+  # for that domain. This is the standard configuration — most scenarios set
+  # all six domains here.
+  #
+  # Valid water policies:  [max_groundwater, max_municipal, min_water_quality, cheapest_source, conserve_groundwater, quota_enforced]
+  # Valid energy policies: [microgrid, renewable_first, all_grid]
+  # Valid food policies:   [all_fresh, maximize_storage, balanced_mix, market_responsive]
+  # Valid crop policies:   [fixed_schedule, deficit_irrigation, weather_adaptive]
+  # Valid market policies: [sell_all_immediately, hold_for_peak, adaptive]
+  # Valid economic policies: [balanced_finance, aggressive_growth, conservative, risk_averse]
+  # ---------------------------------------------------------------------------
+  collective_farm_override:
+    policies:
+      water: cheapest_source                # all farms use cost-optimized water sourcing
+      energy: renewable_first               # all farms prioritize renewables with grid backup
+      food: balanced_mix                    # all farms use diversified processing split
+      crop: fixed_schedule                  # all farms use standard irrigation schedule
+      market: hold_for_peak                 # community sells pooled inventory when prices peak
+      economic: balanced_finance            # all farms use adaptive financial management
+
+  # ---------------------------------------------------------------------------
+  # FARMS -- at least one farm required; three shown for heterogeneity
+  # ---------------------------------------------------------------------------
+  # Required per farm: id, name, area_ha, yield_factor, starting_capital_usd, crops
+  #
+  # Policies are set at the collective_farm_override level above and apply to
+  # all farms uniformly. Farms differ in their agricultural plans (crop
+  # selection, area allocation, planting dates) and physical characteristics
+  # (area, soil quality, starting capital).
+  #
+  # Per-farm policy override (unusual):
+  #   If a specific farm needs a different policy for one domain, add a
+  #   policies: block to that farm with only the overriding domain(s).
+  #   However, the collective_farm_override always wins when both are set
+  #   for the same domain. To allow a farm-level override, remove that
+  #   domain from collective_farm_override.policies.
+  #
+  # Crop names: [tomato, potato, onion, kale, cucumber]
+  # area_fraction values across all crops on a farm should sum to 1.0
+  # planting_dates: list of MM-DD strings for each planting window per year
+  # percent_planted: 0.0-1.0; fraction of allocated area actually planted
+  # ---------------------------------------------------------------------------
+  farms:
+
+    - id: farm_1
+      name: "Valley Farm"
+      area_ha: 150                          # ha; plantable area — largest farm, broad river valley
+      yield_factor: 1.0                     # multiplier relative to reference yield (1.0 = average soil)
+      starting_capital_usd: 50000           # USD; initial working capital
+
+      # Balanced crop plan: even allocation across all five crops, two seasons each
+      crops:
+        - name: tomato
+          area_fraction: 0.25
+          planting_dates: ["02-15", "11-01"]    # winter-spring + fall-winter (two seasons)
+          percent_planted: 0.90
+        - name: potato
+          area_fraction: 0.25
+          planting_dates: ["09-15", "01-15"]    # fall + winter-spring
+          percent_planted: 0.85
+        - name: onion
+          area_fraction: 0.20
+          planting_dates: ["01-15", "12-01"]    # winter + fall-winter
+          percent_planted: 0.90
+        - name: kale
+          area_fraction: 0.15
+          planting_dates: ["10-01", "02-01"]    # fall + winter-spring
+          percent_planted: 0.85
+        - name: cucumber
+          area_fraction: 0.15
+          planting_dates: ["02-15", "09-01"]    # winter-spring + fall
+          percent_planted: 0.80
+
+    - id: farm_2
+      name: "Hillside Farm"
+      area_ha: 80                           # ha; smaller hillside terraces
+      yield_factor: 0.85                    # poorer, thinner soil on slopes
+      starting_capital_usd: 35000
+
+      # Tomato-heavy specialist: focuses on high-value crop, fewer planting windows
+      crops:
+        - name: tomato
+          area_fraction: 0.40
+          planting_dates: ["02-15", "11-01"]
+          percent_planted: 0.90
+        - name: potato
+          area_fraction: 0.20
+          planting_dates: ["09-15"]             # single fall planting window
+          percent_planted: 0.85
+        - name: onion
+          area_fraction: 0.15
+          planting_dates: ["01-15"]             # single winter planting window
+          percent_planted: 0.90
+        - name: kale
+          area_fraction: 0.15
+          planting_dates: ["10-01"]             # single fall planting
+          percent_planted: 0.80
+        - name: cucumber
+          area_fraction: 0.10
+          planting_dates: ["02-15"]             # single spring planting
+          percent_planted: 0.75
+
+    - id: farm_3
+      name: "Coastal Farm"
+      area_ha: 70                           # ha; smallest farm, near coast
+      yield_factor: 1.15                    # excellent microclimate, coastal moisture
+      starting_capital_usd: 60000           # higher capital from prior fishing income
+
+      # Diversified high-intensity plan: all crops, aggressive planting
+      crops:
+        - name: tomato
+          area_fraction: 0.20
+          planting_dates: ["02-15", "08-01", "11-01"]   # three seasons
+          percent_planted: 0.95
+        - name: potato
+          area_fraction: 0.20
+          planting_dates: ["09-15", "01-15"]
+          percent_planted: 0.90
+        - name: onion
+          area_fraction: 0.20
+          planting_dates: ["01-15", "12-01"]
+          percent_planted: 0.90
+        - name: cucumber
+          area_fraction: 0.25
+          planting_dates: ["02-15", "09-01"]
+          percent_planted: 0.90
+        - name: kale
+          area_fraction: 0.15
+          planting_dates: ["10-01", "02-01"]
+          percent_planted: 0.85
+
+# ============================================================================
+# POST-HARVEST PARAMETERS
+# ============================================================================
+post_harvest:
+  # Physical losses between harvest and processing intake (bruising, transport damage, rejects).
+  # 0.05 (5%) reflects reduced losses from on-site processing.
+  # FAO estimates 10-15% for typical developing-economy supply chains.
+  # Applied uniformly to all crops before the food processing split.
+  post_harvest_handling_loss_rate: 0.05     # DEFERRED: 0.0-1.0; fraction lost before processing intake. Default: 0.05
+
+# ============================================================================
+# COMMUNITY POLICY PARAMETERS
+# ============================================================================
+# All configurable policy parameters keyed by policy name.
+# Policies with no configurable parameters (e.g., max_groundwater,
+# max_municipal, all_fresh, fixed_schedule, balanced_finance,
+# sell_all_immediately) do not need entries here. Missing entries = use defaults.
+#
+# Parameter names must exactly match the policy constructor keyword arguments.
+#
+# These parameters are GLOBAL: they apply to a policy regardless of whether
+# that policy was set at the collective_farm_override level or at an individual
+# farm level. All farms using the same policy name receive the same parameters.
+# ============================================================================
+community_policy_parameters:
+
+  # --- Water policies ---
+  # cheapest_source: include_energy_cost (bool). Default: true
+  cheapest_source:
+    include_energy_cost: true               # true/false; include treatment energy in cost comparison. Default: true
+
+  conserve_groundwater:
+    price_threshold_multiplier: 1.5         # float; use GW only when municipal price > GW price * this. Default: 1.5
+    max_gw_ratio: 0.30                      # 0.0-1.0; max fraction of demand from groundwater. Default: 0.30
+
+  quota_enforced:
+    annual_quota_m3: 20000                  # m3/year; hard annual groundwater extraction limit
+    monthly_variance_pct: 0.15              # 0.0-1.0; allowed monthly variance around uniform monthly allocation. Default: 0.15
+
+  min_water_quality:
+    target_tds_ppm: 1500                    # ppm; target blended water TDS. Default: 1500
+
+  # --- Crop policies ---
+  deficit_irrigation:
+    deficit_fraction: 0.80                  # 0.0-1.0; fraction of full irrigation applied during mid/late season. Default: 0.80
+
+  weather_adaptive:
+    extreme_heat_threshold: 40              # Celsius; temp above which extreme heat multiplier applies. Default: 40
+    hot_threshold: 35                       # Celsius; temp above which hot multiplier applies. Default: 35
+    cool_threshold: 20                      # Celsius; temp below which cool multiplier applies. Default: 20
+    extreme_heat_multiplier: 1.15           # multiplier on irrigation demand for extreme heat days. Default: 1.15
+    hot_multiplier: 1.05                    # multiplier for hot days. Default: 1.05
+    cool_multiplier: 0.85                   # multiplier for cool days. Default: 0.85
+
+  # --- Food processing policies ---
+  # Processing splits (fresh/packaged/canned/dried fractions) are NOT configurable
+  # parameters. They are fixed allocation logic defined in each policy's pseudocode
+  # in policies.md. The YAML specifies a policy name (via collective_farm_override
+  # or per-farm policies.food), and the policy implementation determines the split.
+
+  # maximize_storage: no configurable parameters. Splits defined in policies.md.
+  # balanced_mix: no configurable parameters. Splits defined in policies.md.
+
+  market_responsive:
+    price_threshold: 0.80                   # 0.0-1.0; fraction of reference price that triggers the low-price processing split. Default: 0.80
+
+  # --- Energy policies ---
+  # microgrid: battery_reserve_fraction. Default: 0.20
+  microgrid:
+    battery_reserve_fraction: 0.20          # 0.0-1.0; fraction of battery reserved for critical loads. Default: 0.20
+
+  # renewable_first uses the same battery_reserve_fraction as microgrid (defined above)
+
+  # --- Market policies ---
+  hold_for_peak:
+    price_threshold_multiplier: 1.20        # float; sell when price > avg_price * this. Default: 1.20
+
+  adaptive:
+    midpoint: 1.0                           # sigmoid midpoint (price ratio). Default: 1.0
+    steepness: 5.0                          # sigmoid steepness. Default: 5.0
+    min_sell: 0.2                           # 0.0-1.0; minimum sell fraction. Default: 0.2
+    max_sell: 1.0                           # 0.0-1.0; maximum sell fraction. Default: 1.0
+
+  # --- Economic policies ---
+  aggressive_growth:
+    min_cash_months: 1                      # integer; months of operating costs as cash reserve. Default: 1
+    max_inventory_months: 6                 # integer; max months of inventory to hold. Default: 6
+
+  conservative:
+    min_cash_months: 6                      # Default: 6
+
+  risk_averse:
+    min_cash_months: 3                      # Default: 3
+
+# ============================================================================
+# HOUSEHOLD POLICIES (COMMUNITY LEVEL)
+# ============================================================================
+# Community-level policies for non-farm operations only. These govern water
+# and energy for residential households and shared community buildings.
+# They do NOT affect farm operations (crop irrigation, processing, etc.),
+# which are governed by the collective_farm_override or per-farm policies.
+#
+# This is the third tier of the policy hierarchy:
+#   1. Farm level        — per-farm policies (unusual; override must be absent)
+#   2. Collective level  — collective_farm_override (default for farm policies)
+#   3. Community level   — household_policies (this section; non-farm only)
+# ============================================================================
+household_policies:
+  water_policy: max_municipal               # DEFERRED: [max_groundwater, max_municipal]; household water source preference
+  energy_policy: renewable_first            # DEFERRED: [microgrid, renewable_first, all_grid]; household energy source preference
+
+# ============================================================================
+# ECONOMICS
+# ============================================================================
+economics:
+  currency: USD                             # [USD, EGP, EUR]; reporting currency
+  exchange_rate_egp_per_usd: 49.5           # DEFERRED: fixed for simulation run; EGP values converted to USD at load time
+  discount_rate: 0.06                       # 0.0-1.0; annual discount rate for NPV calculations
+
+  # Debt section required by loader. Infrastructure-specific debt is tracked
+  # via financing_status on each subsystem. This section captures community-level
+  # aggregate debt parameters.
+  debt:
+    principal_usd: 0                        # USD; total community-level debt principal
+    term_years: 10                          # years; loan term
+    interest_rate: 0.05                     # 0.0-1.0; annual interest rate
+
+# ============================================================================
+# WATER PRICING
+# ============================================================================
+# Agricultural and community water have independent pricing regimes.
+# Both support subsidized (flat rate) and unsubsidized (escalating) options.
+# Price escalation is applied relative to simulation.start_date.year.
+# Set annual_escalation_pct to 0 for flat government-fixed pricing.
+# ============================================================================
+water_pricing:
+  municipal_source: seawater_desalination   # [seawater_desalination, piped_groundwater]; source of municipal water supply
+
+  agricultural:
+    pricing_regime: unsubsidized            # [subsidized, unsubsidized]; active pricing regime for agricultural water
+    subsidized:
+      price_usd_per_m3: 0.75               # USD/m3; flat rate. Default: 0.75
+      annual_escalation_pct: 0.0            # percent/year; 0 = flat government-fixed. Default: 0.0
+    unsubsidized:
+      base_price_usd_m3: 0.75              # USD/m3; base price (year 0). Default: 0.75
+      annual_escalation_pct: 3.0            # percent/year; annual increase. Default: 3.0
+
+  community:
+    pricing_regime: subsidized              # [subsidized, unsubsidized]; active pricing regime for community water (households + community buildings)
+    subsidized:
+      # Egyptian 5-tier increasing block tariff (2018 decree, EGP values)
+      # Converted to USD at load time via economics.exchange_rate_egp_per_usd
+      # Note: tier_pricing is not parsed by the loader in MVP; the loader reads
+      # a flat price_usd_per_m3 for community subsidized pricing.
+      price_usd_per_m3: 0.45               # USD/m3; flat community subsidized rate. Default: 0.45
+      tier_pricing:                         # informational; not parsed by loader
+        - tier: 1
+          max_m3_per_month: 10
+          price_egp_per_m3: 0.65
+        - tier: 2
+          max_m3_per_month: 20
+          price_egp_per_m3: 1.60
+        - tier: 3
+          max_m3_per_month: 30
+          price_egp_per_m3: 2.25
+        - tier: 4
+          max_m3_per_month: 40
+          price_egp_per_m3: 2.75
+        - tier: 5
+          max_m3_per_month: null            # unlimited above tier 4
+          price_egp_per_m3: 3.15
+      wastewater_surcharge_pct: 75          # DEFERRED: percent; applied to water bill total
+    unsubsidized:
+      base_price_usd_m3: 0.75              # USD/m3; base price. Default: 0.75
+      annual_escalation_pct: 3.0            # percent/year; annual increase. Default: 3.0
+
+# ============================================================================
+# ENERGY PRICING
+# ============================================================================
+# Agricultural and community energy have independent pricing regimes.
+# Set annual_escalation_pct to 0 for flat government-fixed pricing.
+# ============================================================================
+energy_pricing:
+  net_metering_ratio: 0.70                  # DEFERRED: 0.0-1.0; export_price = grid_import_price * this. Default: 0.70
+
+  agricultural:
+    pricing_regime: subsidized              # [subsidized, unsubsidized]; active pricing regime for agricultural electricity
+    subsidized:
+      price_usd_per_kwh: 0.12              # USD/kWh; flat rate for water pumping, processing. Default: 0.12
+      annual_escalation_pct: 0.0            # DEFERRED: percent/year; 0 = flat government-fixed
+    unsubsidized:
+      price_usd_per_kwh: 0.15              # USD/kWh; market rate. Default: 0.15
+      annual_escalation_pct: 3.0            # DEFERRED: percent/year; annual increase
+
+  community:
+    pricing_regime: subsidized              # [subsidized, unsubsidized]; active pricing regime for community electricity (households + community buildings)
+    subsidized:
+      price_usd_per_kwh: 0.10              # USD/kWh; flat rate for households, community buildings. Default: 0.10
+      annual_escalation_pct: 0.0            # DEFERRED: percent/year; 0 = flat government-fixed
+    unsubsidized:
+      price_usd_per_kwh: 0.15              # USD/kWh; market rate. Default: 0.15
+      annual_escalation_pct: 3.0            # DEFERRED: percent/year; annual increase

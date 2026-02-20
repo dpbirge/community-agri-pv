@@ -227,6 +227,9 @@ class FarmState:
     cumulative_processed_output_kg: float = 0.0
     cumulative_post_harvest_loss_kg: float = 0.0
 
+    # Per-farm energy tracking for usage-proportional cost allocation (yearly reset)
+    cumulative_energy_demand_kwh: float = 0.0
+
     # Monthly consumption tracking for tiered pricing
     monthly_consumption: MonthlyConsumptionTracker = None
 
@@ -365,6 +368,9 @@ class EnergyState:
     generator_min_load_fraction: float = 0.30
     generator_sfc_a: float = 0.06  # No-load fuel coefficient (L/kWh)
     generator_sfc_b: float = 0.20  # Incremental fuel coefficient (L/kWh)
+
+    # Food processing energy (one-day lag: computed in Step 4, used in Step 3 next day)
+    e_processing_kwh: float = 0.0
 
     # Yearly tracking accumulators (reset at year boundaries)
     cumulative_pv_kwh: float = 0.0
