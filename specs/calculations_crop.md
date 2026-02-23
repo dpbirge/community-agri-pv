@@ -49,9 +49,9 @@ Y_actual / Y_potential = Π_i (1 - Ky_i × (1 - ETa_i / ETc_i))
 
 Where i = each growth stage (initial, development, mid-season, late). This matters because water stress during flowering (high Ky) has a much larger yield impact than the same deficit during vegetative growth (low Ky). Stage-specific Ky values are available in FAO-33 Table 2 for the modeled crops.
 
-## 2. Soil Salinity Yield Reduction
+## 2. Soil Salinity Yield Reduction (FAO-29) — DEFERRED
 
-> **MVP status:** This calculation is fully specified but excluded from the MVP simulation loop by default (simulation_flow.md Section 4.2). For MVP, salinity_factor = 1.0 (no salinity reduction). The user can enable salinity modeling by setting `enable_salinity_model: true` in `settings.yaml`. Include when simulation horizon exceeds 5 years or when evaluating groundwater-heavy water policies. This feature is deferred because the current data infrastructure does not yet support validated, site-specific salinity accumulation rates.
+> **Status: Removed from MVP simulation loop. This section is retained as reference for future enhancement. The active yield formula (§ 1) does not include salinity_factor.**
 
 **Purpose:** Account for progressive salt accumulation in the root zone when irrigating with imperfectly desalinated water. This is a critical long-range concern for any arid-climate system using brackish groundwater, even after BWRO treatment.
 
@@ -161,7 +161,7 @@ handling_loss_kg = raw_yield_kg × handling_loss_rate
 harvest_available_kg = raw_yield_kg - handling_loss_kg
 ```
 
-`harvest_available_kg` is the quantity that enters the food processing pipeline (Section 4.3 of simulation_flow.md). The food policy split, capacity clipping, and processing weight loss all operate on `harvest_available_kg`, not `raw_yield_kg`.
+`harvest_available_kg` is the quantity that enters the food processing pipeline (simulation_flow.md § 3, Step 4). The food policy split, capacity clipping, and processing weight loss all operate on `harvest_available_kg`, not `raw_yield_kg`.
 
 **Handling loss rate:**
 
@@ -215,7 +215,7 @@ Processed_output_kg = raw_input_kg × (1 - weight_loss_pct / 100)
 
 **Allocation logic:**
 
-The food processing policy determines what fraction of each crop goes to each processing pathway. See `policies.md` Food Processing Policies for full allocation rules for all four policies (`all_fresh`, `maximize_storage`, `balanced_mix`, `market_responsive`), including capacity clipping logic and the forced-sale umbrella rule.
+The food processing policy determines what fraction of each crop goes to each processing pathway. See `policies.md` Food Processing Policies for full allocation rules for all four policies (`all_fresh`, `maximize_storage`, `balanced_mix`, `market_responsive`), including the forced-sale umbrella rule.
 
 **Policy-specific allocation fractions:**
 
@@ -224,39 +224,16 @@ See `policies.md` Food Processing Policies for the authoritative fraction tables
 **Dependencies:**
 
 - Parameter file:`data/parameters/crops/processing_specs-toy.csv` (weight loss, value multipliers)
-- Configuration:`food_processing_system.[type].equipment` (processing capacity limits)
+- Configuration:`food_processing_system.[type].equipment` (energy and cost calculations only; processing throughput is unlimited)
 - Food processing policy selection (allocation fractions)
 - Crop yield output from simulation
 
 **Notes:**
 
 - Current data is toy-grade; research plan for processed product data is pending (see `future_improvements.md`)
-- Processing capacity constrains throughput — if harvest exceeds capacity, excess goes to fresh sale or spoils
+- Processing throughput is unlimited; storage capacity is the binding constraint on inventory
 
-## 6. Processing Utilization
-
-**Purpose:** Measure how much of available processing capacity is actually used
-
-**Formula:**
-
-```
-Processing_utilization_pct = (actual_throughput_kg_day / processing_capacity_kg_day) × 100
-```
-
-**Where:**
-
-- `actual_throughput_kg_day`: Raw harvest available for processing on a given day
-- `processing_capacity_kg_day`: From processing capacity calculation (see [calculations_economic.md](calculations_economic.md) Processing Capacity)
-
-**Output:** Percentage (0–100%) per processing category, averaged over the period
-
-**Notes:**
-
-- Utilization varies seasonally — high during harvest months, near zero between harvests
-- Storage capacity acts as a buffer, smoothing throughput vs harvest peaks
-- Can be reported per processing type (drying, canning, fresh packaging, packaging)
-
-## 7. Crop Diversity Index
+## 6. Crop Diversity Index
 
 **Purpose:** Quantify the diversity of crops grown as a measure of revenue resilience
 
@@ -292,7 +269,7 @@ Crop_count = count of crops with area_fraction > 0
 
 > **MVP implementation note:** The current implementation in `metrics.py:_compute_spec_metrics()` computes the Shannon index using **area-based proportions** (`p_i = crop_area_ha / total_area_ha`), aggregated across all farms for each year. This is simpler and more stable than yield-based or revenue-based weighting, since area is known at planting time regardless of harvest outcomes. Yield-weighted and revenue-weighted variants are planned as future enhancements for economic resilience analysis.
 
-## 8. PV Microclimate Yield Protection
+## 7. PV Microclimate Yield Protection
 
 > **Status: TBD** — Requires crop-specific heat stress thresholds and agri-PV microclimate data. Research plan for microclimate yield effects is pending (see `future_improvements.md`). Target data file: `data/parameters/crops/microclimate_yield_effects-research.csv`.
 

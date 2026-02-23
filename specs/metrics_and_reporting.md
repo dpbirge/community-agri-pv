@@ -13,7 +13,7 @@ Metrics are computed at daily, monthly, and yearly granularity. Farm-level and c
 - Municipal water use [m³/yr, m³/kg-yield]
 - Water use efficiency [m³/kg-yield] — total water per kg crop output
 - Water self-sufficiency [%] — groundwater / total water × 100 *(resilience)*
-- Aquifer depletion rate [m³/yr drawdown, estimated years remaining] *(resilience)* — Tracked for reporting only; does not trigger allocation changes in MVP.
+- Cumulative groundwater extraction [m³/yr, m³ lifetime] *(resilience)*
 - Days without municipal water [days/yr] — days farm operated on groundwater only *(resilience)*
 - Water treatment energy [kWh/yr, kWh/m³]
 - Water storage utilization [%] — average storage level / capacity
@@ -40,7 +40,6 @@ Metrics are computed at daily, monthly, and yearly granularity. Farm-level and c
 - Crop revenue by type [$/yr per crop]
 - Post-harvest losses [kg/yr, % of harvest]
 - Processed product output [kg/yr by processing type]
-- Processing utilization [%] — actual throughput / processing capacity
 - Crop diversity index [count of crops, Shannon index] *(resilience)*
 - PV microclimate yield protection [%] — fraction of yield shielded from extreme heat *(resilience)*
 
@@ -182,16 +181,17 @@ ELSE:
 
 Interest rates and loan terms come from `financing_profiles-toy.csv`.
 
-**Labor cost components (daily):**
+**Labor cost (daily, event-driven model):**
 
 ```text
-daily_overhead_cost = annual_admin_labor_cost / 365  # management, bookkeeping
-daily_field_cost = labor_hours_per_ha_per_day * wage_per_hour * total_active_ha
-daily_harvest_cost = harvest_labor_hours_per_kg * wage_per_hour * harvest_kg_today
-daily_processing_cost = processing_labor_hours_per_kg * wage_per_hour * processed_kg_today
+daily_labor_cost = SUM over all active events on this day:
+    event_hours(event, farm) x wage_rate(event.skill_level)
+
+Event categories: field operations, processing, management, maintenance, logistics.
+MVP uses blended wage rate of $3.50/hr for all categories.
 ```
 
-Labor rates loaded from `data/parameters/labor/` CSV files (see data registry).
+See `calculations_economic.md` § 27 for the full event-driven labor model, event timing tables, per-crop harvesting hours, and wage rates. Labor rates loaded from `data/parameters/labor/` CSV files (see data registry).
 
 **Input costs (fertilizer, seeds, chemicals):**
 
@@ -241,10 +241,10 @@ All four input prices (water, electricity, diesel, fertilizer) normalized to a b
 
 **Data sources and normalization:**
 
-- Municipal water price: `resolve_water_price("agricultural", 0)` for each year (see `simulation_flow.md` Section 4.3)
-- Grid electricity price: `resolve_energy_price("agricultural")` for each year (see `simulation_flow.md` Section 4.4)
-- Diesel price: historical diesel price from `data/prices/diesel/` for each year
-- Fertilizer cost: annual input cost from `data/parameters/costs/` for each year
+- Municipal water price: from `data/prices/water/historical_municipal_water_prices-research.csv` for each year
+- Grid electricity price: from `data/prices/electricity/historical_grid_electricity_prices-research.csv` for each year
+- Diesel price: from `data/prices/diesel/historical_diesel_prices-research.csv` for each year
+- Fertilizer cost: annual input cost from `data/parameters/costs/input_costs-toy.csv` for each year
 - Normalization: base-year index = 100, where base year = `simulation.start_date.year`. Index for year t = `price_t / price_base_year * 100`.
 
 **Plot 2 — Effective vs. Market Input Cost (paired bar or dual-line chart)**  
@@ -273,8 +273,8 @@ One row per year. Columns: year, self-owned water cost, government water cost, s
 **Counterfactual calculation:** The "government-purchased" baseline represents what the community would pay if it had no self-owned infrastructure and purchased all water and energy from external suppliers:
 
 ```text
-government_water_cost = total_water_m3 * resolve_water_price("agricultural", cumulative_m3)
-government_energy_cost = total_energy_kwh * resolve_energy_price("agricultural")
+government_water_cost = total_water_m3 * water_price_from_csv(current_date)
+government_energy_cost = total_energy_kwh * energy_price_from_csv(current_date)
 savings_water_pct = (government_water_cost - actual_water_cost) / government_water_cost * 100
 savings_energy_pct = (government_energy_cost - actual_energy_cost) / government_energy_cost * 100
 ```

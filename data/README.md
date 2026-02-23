@@ -72,4 +72,4 @@ python data/scripts/generate_missing_processed_prices.py
 ```
 
 
-See [docs/arch/data.md](../docs/arch/data.md) for complete data specifications.
+See [specs/data.md](../specs/data.md) for complete data specifications.

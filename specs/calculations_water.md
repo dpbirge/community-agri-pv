@@ -43,7 +43,7 @@ E_pump_daily [kWh/day] = E_pump [kWh/m³] × flow_rate_m3_day
 
 **Parameters:**
 
-- `h` (`well_depth_m`): Total dynamic head in meters — includes static water level depth plus drawdown (from config; see Aquifer Drawdown Feedback for time-varying component)
+- `h` (`well_depth_m`): Total dynamic head in meters — static water level depth (from config)
 - `flow_rate_m3_day` (`well_flow_rate_m3_day`): Well flow rate in m³/day (from config)
 - ρ: Water density = 1025 kg/m³ (brackish groundwater; fresh water is 1000 kg/m³)
 - g: Gravitational acceleration = 9.81 m/s²
@@ -364,100 +364,9 @@ Self_sufficiency_pct = (groundwater_m3 / total_water_m3) × 100
 > gw_fraction = 1 - required_municipal_fraction
 > ```
 >
-> Where `target_tds` is the maximum acceptable TDS for the mixed water (set per policy instance), `municipal_tds` is the TDS of municipal supply, and `groundwater_tds` is the TDS of raw groundwater. If groundwater TDS is below the target, groundwater is used preferentially (gw_fraction = 1.0, municipal_fraction = 0.0). If groundwater is too saline for any blending to achieve the target, 100% municipal is used (municipal_fraction = 1.0). Physical constraints (well capacity, treatment throughput) may further reduce the groundwater fraction, which always improves water quality (municipal water is the cleaner source). The `gw_fraction` is used for aquifer drawdown tracking and self-sufficiency metrics. See `policies.md` `min_water_quality` policy for full pseudocode.
+> Where `target_tds` is the maximum acceptable TDS for the mixed water (set per policy instance), `municipal_tds` is the TDS of municipal supply, and `groundwater_tds` is the TDS of raw groundwater. If groundwater TDS is below the target, groundwater is used preferentially (gw_fraction = 1.0, municipal_fraction = 0.0). If groundwater is too saline for any blending to achieve the target, 100% municipal is used (municipal_fraction = 1.0). Physical constraints (well capacity, treatment throughput) may further reduce the groundwater fraction, which always improves water quality (municipal water is the cleaner source). The `gw_fraction` is used for groundwater extraction tracking and self-sufficiency metrics. See `policies.md` `min_water_quality` policy for full pseudocode.
 
-## 10. Aquifer Depletion Rate
-
-> **MVP simplification:** Aquifer depletion is tracked for reporting and resilience analysis but does not trigger allocation changes or modify water policy behavior in MVP. The aquifer drawdown feedback (below) affects pumping energy costs only.
-
-**Purpose:** Estimate the rate of groundwater drawdown and remaining aquifer lifespan, with feedback to pumping energy costs
-
-**Formula (volume balance — base model):**
-
-```
-Annual_extraction_m3 = Σ daily_groundwater_use  over one year
-Net_depletion_m3_yr = Annual_extraction_m3 - aquifer_recharge_rate_m3_yr
-Remaining_volume_m3(t) = aquifer_exploitable_volume_m3 - Σ Net_depletion_m3_yr(y)  for y = 1..t
-Years_remaining = Remaining_volume_m3 / Net_depletion_m3_yr
-```
-
-## 11. Aquifer Drawdown Feedback
-
-**Purpose:** Model the increasing pumping depth (and therefore energy cost) as the water table drops over years of extraction. This creates a critical positive feedback loop: extraction → deeper water table → higher energy cost per m³ → higher operating expenses.
-
-**Simplified drawdown model (linearized):**
-
-```
-Cumulative_extraction_m3(year) = Σ Annual_extraction_m3(y)  for y = 1..year
-Fraction_depleted(year) = Cumulative_extraction_m3(year) / aquifer_exploitable_volume_m3
-
-Drawdown_m(year) = max_drawdown_m × Fraction_depleted(year)
-Effective_head_m(year) = well_depth_m + Drawdown_m(year)
-```
-
-This feeds back into pumping energy (see Groundwater Pumping Energy above):
-
-```
-E_pump(year) [kWh/m³] = (ρ × g × Effective_head_m(year)) / (η_pump × 3,600,000)
-```
-
-(Using ρ = 1025 kg/m³, g = 9.81, η_pump = 0.60 per the updated pumping energy parameters.)
-
-**Parameters:**
-
-- `aquifer_exploitable_volume_m3`: Total exploitable groundwater volume accessible to the community's wells (from config)
-- `aquifer_recharge_rate_m3_yr`: Natural recharge rate — negligible in arid Sinai but configurable for other locations (from config)
-- `max_drawdown_m`: Maximum expected drawdown at full depletion (from config or estimated as aquifer thickness)
-- `Annual_extraction_m3`: Computed from simulation daily groundwater records
-
-**Advanced drawdown model (Cooper-Jacob approximation — future):**
-
-For scenarios requiring more physical accuracy, the Cooper-Jacob equation provides drawdown as a function of aquifer hydraulic properties:
-
-```
-s(t) = (Q / (4π T)) × ln(2.25 T t / (r_w² S))
-```
-
-Where:
-
-- s: Drawdown at the well (m)
-- Q: Pumping rate (m³/day)
-- T: Aquifer transmissivity (m²/day) — typically 50-500 m²/day for fractured rock in Sinai
-- S: Storativity (dimensionless) — typically 0.001-0.1
-- r_w: Well radius (m)
-- t: Time since pumping began
-
-This model also captures well interference (multiple wells creating overlapping cones of depression), which reduces effective yield when wells are close together.
-
-**Output:**
-
-- Net depletion rate in m³/yr
-- Estimated years remaining at current extraction rate
-- Remaining volume as percentage of initial
-- Effective pumping head per year (for energy cost feedback)
-
-**Dependencies:**
-
-- Configuration:`water_system.groundwater_wells.aquifer_exploitable_volume_m3`
-- Configuration:`water_system.groundwater_wells.aquifer_recharge_rate_m3_yr`
-- Configuration:`water_system.groundwater_wells.max_drawdown_m` (new parameter)
-- Simulation output: daily groundwater allocation records
-
-**Assumptions:**
-
-- Exploitable volume is a fixed estimate configured per scenario — not a dynamic hydrogeological model
-- Recharge is treated as a constant annual rate (no seasonal variation)
-- No interaction with neighboring aquifer users or saltwater intrusion effects
-- Linearized drawdown assumes uniform aquifer geometry (adequate for community-scale planning)
-- For research-grade data, see `docs/research/aquifer_parameters.md`
-
-**Notes:**
-
-- This is a *(resilience)* metric
-- If`Net_depletion_m3_yr ≤ 0` (recharge exceeds extraction), aquifer is sustainable and`Years_remaining = ∞`
-- The exploitable volume is intentionally a simple scalar — the community likely cannot survey a full aquifer model, but can get a rough volume estimate from a hydrogeological assessment
-- The energy feedback loop is the key long-range planning insight: even modest drawdown (10-20m over 15 years) can increase pumping costs by 20-40%
-- For MVP: Use the linearized drawdown model; Cooper-Jacob is a future enhancement for scenarios that require well-spacing optimization
+*Sections 10-11 (Aquifer Depletion Rate, Aquifer Drawdown Feedback) removed. Aquifer level modeling is deferred to a future phase. Pumping energy uses a static `well_depth_m` value. Cumulative groundwater extraction is tracked on SimulationState for reporting.*
 
 ## 12. Days Without Municipal Water
 

@@ -2,6 +2,8 @@
 
 Extracted from the consolidated calculations specification. For other domain calculations see: [calculations_water.md](calculations_water.md), [calculations_energy.md](calculations_energy.md), [calculations_crop.md](calculations_crop.md). For the index, units, references, and resilience/Monte Carlo calculations see: [calculations.md](calculations.md).
 
+> **Simplification:** Economic policies (e.g., `balanced_finance`, `growth_oriented`, `risk_averse`, `subsistence_first`) are **DEFERRED** and not active in the current simulation. The economic calculations below describe cost tracking and metrics computation only -- no policy-driven economic interventions, forced sales, or inventory liquidation occur during the simulation loop. All aggregated metrics (monthly, yearly) are computed post-simulation from daily records, not within the daily loop.
+
 ## 1. Infrastructure Financing Costs
 
 **Purpose:** Calculate annual costs to community for infrastructure based on financing category
@@ -45,62 +47,29 @@ Monthly_payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 - Capital costs: From equipment parameter files or capital_costs.csv
 - O&M costs: From operating_costs.csv
 
-## 2. Equipment Replacement Costs
+## 2. Equipment Replacement Reserve
 
-**Purpose:** Account for mid-simulation replacement of components with shorter lifespans than the simulation horizon. Critical for any simulation longer than ~5 years.
-
-**Component lifespans and replacement costs:**
-
-| Component | Typical Lifespan | Replacement Cost (% of original CAPEX) | Replacements in 15-yr Sim |
-| --- | --- | --- | --- |
-| RO membranes | 5-7 years | 30-40% | 2-3 |
-| Pumps (submersible) | 10-15 years | 60-80% | 0-1 |
-| Drip emitters/lines | 5-10 years | 20-30% of irrigation CAPEX | 1-2 |
-| Battery pack | 10-15 years | 50-70% (declining with technology cost curves) | 0-1 |
-| PV panels | 25-30 years | N/A (outlasts simulation) | 0 |
-| PV inverters | 10-15 years | 15-20% of PV CAPEX | 0-1 |
-| Wind turbines | 20-25 years | N/A (outlasts simulation) | 0 |
+**Purpose:** Provision a daily reserve to cover mid-simulation replacement of infrastructure components with shorter lifespans than the simulation horizon.
 
 **Formula:**
 
 ```
-Replacement_cost(year) = Σ replacement_cost_i   for each component i due for replacement in that year
-
-Annual_replacement_reserve = Σ (replacement_cost_i / lifespan_i)   across all components
-                           (sinking fund approach — smooth annual provision)
+daily_replacement_reserve = total_capex_invested * annual_reserve_pct / 365
 ```
 
-**Sinking fund approach (recommended for planning):**
+**Parameters:**
 
-Rather than modeling lumpy replacement events, provision an annual reserve fund:
+- `total_capex_invested`: Sum of capital costs across all subsystems (from initialization)
+- `annual_reserve_pct`: Default 2.5% of total CAPEX per year
 
-```
-Annual_reserve_i = replacement_cost_i / lifespan_years_i
-Total_annual_reserve = Σ Annual_reserve_i
-```
+**Output:** daily_replacement_reserve in USD/day; included in Total Operating Expense (§ 13)
 
-This provides a realistic annual cost that smooths replacement shocks and should be included in Total Operating Expense.
-
-**Dependencies:**
-
-- Parameter file: `data/parameters/economic/equipment_lifespans-toy.csv`
-- Capital costs from equipment parameter files
-- Replacement cost ratios by component type
-
-**Notes:**
-
-- RO membrane replacement is the most frequent and impactful — at 30-40% of BWRO CAPEX every 5-7 years, it can equal or exceed annual O&M costs
-- Battery replacement cost is declining ~8-10%/yr with technology improvements; use year-of-replacement projected cost for accuracy
-- For MVP: Use the sinking fund approach as a fixed annual cost adder; for later phases, model discrete replacement events
+Simplified from per-component sinking fund to flat percentage for MVP. Default annual_reserve_pct = 2.5%. Per-component lifespan data retained in `equipment_lifespans-toy.csv` for future enhancement.
 
 **Sources:**
 
 - Standard financial amortization formulas
-- Typical commercial loan rates: 5-7% annual
-- Typical concessional loans (development banks): 2-4% annual
 - Equipment depreciation: 10-20 years typical
-- RO membrane replacement: Voutchkov (2018); typical BWRO plant operating data
-- Battery replacement: BloombergNEF Lithium-Ion Battery Price Survey (annual)
 
 ## 3. Water Cost Calculation
 
@@ -117,80 +86,64 @@ Cost_gw [USD/day] = (E_pump [kWh/m3] + E_convey [kWh/m3] + E_desal [kWh/m3])
 **Municipal Water Cost:**
 
 ```
-Cost_municipal [USD/day] = volume_m3 [m3] × price_per_m3 [USD/m3] (tier, regime)
+Cost_municipal [USD/day] = volume_m3 [m3] × price_per_m3 [USD/m3] (flat rate per regime)
 ```
+
+**Groundwater maintenance cost derivation:**
+
+`gw_maintenance_per_m3` is a derived parameter computed once at initialization from the annual O&M cost of the water treatment system and its rated daily capacity:
+
+```
+gw_maintenance_per_m3 = annual_om_usd(water_treatment) / (system_capacity_m3_day * 365)
+```
+
+Where `annual_om_usd` is loaded from `operating_costs-toy.csv` (row: `water_treatment`) and `system_capacity_m3_day` is from the scenario's `water_system.water_treatment.system_capacity_m3_day`. This converts a fixed annual O&M expense into a per-m3 rate so the water policy can include it in per-source cost comparisons.
 
 **Parameters:**
 
-- `electricity_price [USD/kWh]`: Grid electricity price from pricing data
-- `price_per_m3 [USD/m3]`: Municipal water price from configuration (resolved by consumer type)
-- O&M costs [USD/day] from parameter files
+- `electricity_price [USD/kWh]`: Grid electricity price from historical price data
+- `price_per_m3 [USD/m3]`: Municipal water price from historical price data (resolved by consumer type and pricing regime)
+- `gw_maintenance_per_m3 [USD/m3]`: Derived from annual O&M / (capacity × 365)
 
 **Output:** Daily water cost in USD
 
 **Dependencies:**
 
 - Configuration: `water_pricing.municipal_source`
-- Configuration: `water_pricing.agricultural.pricing_regime` [subsidized, unsubsidized] (for farm water demands)
-- Configuration: `water_pricing.community.pricing_regime` [subsidized, unsubsidized] (for household/facility water demands)
+- Configuration: `water_pricing.agricultural.pricing_regime` [subsidized, unsubsidized] — selects which historical price CSV to load for farm water demands
+- Configuration: `water_pricing.community.pricing_regime` [subsidized, unsubsidized] — selects which historical price CSV to load for household/facility water demands
 - Price data: `data/prices/electricity/historical_grid_electricity_prices-research.csv`
 - Price data: `data/prices/water/historical_municipal_water_prices-research.csv`
+- Parameter file: `data/parameters/costs/operating_costs-toy.csv` (for `gw_maintenance_per_m3` derivation)
 
-**Note:** Water pricing uses dual agricultural/community regimes configured independently. The simulation resolves the applicable regime based on consumer type before passing the price to the water policy. See `structure.md` Pricing Configuration for the canonical schema.
+**Note:** Water pricing uses dual agricultural/community regimes configured independently. The `pricing_regime` selector determines which CSV file is loaded; all price values come from the CSV, not from the scenario YAML. See `structure.md` § 2.7 for the canonical schema.
 
 **Sources:**
 
-- Egyptian HCWW tiered water pricing (Egyptian HCWW tariff documentation — research file pending)
+- Egyptian HCWW water pricing (Egyptian HCWW tariff documentation — research file pending). Tiered pricing is deferred; flat rate is active for MVP.
 - Desalination cost studies for Egypt (Ettouney & Wilf, 2009)
 
-## 4. Tiered Municipal Water Pricing
+## 4. Community Water Pricing
 
-**Purpose:** Calculate municipal water costs under Egyptian-style progressive bracket pricing, where the per-unit price increases with cumulative monthly consumption
+**Purpose:** Calculate municipal water costs for community consumers (households, community buildings) and agricultural consumers (farm irrigation, processing).
 
-> **MVP implementation note:** This feature is fully implemented in `data_loader.py` (`calculate_tiered_cost`, `get_marginal_tier_price`) but not yet documented in the original calculations spec. The implementation follows the Egyptian HCWW (Holding Company for Water and Wastewater) tiered pricing structure.
-
-**Methodology:**
-
-Each unit of consumption is charged at the rate for the bracket it falls into, based on cumulative monthly consumption:
+**Formula:**
 
 ```
-For each consumption event within a billing period:
-  1. Determine current position = cumulative_consumption
-  2. For each tier bracket [min_units, max_units, price_per_unit]:
-     - Calculate units falling in this bracket
-     - Add units × price_per_unit to total cost
-  3. Apply wastewater surcharge if configured:
-     total_cost += total_cost × (wastewater_surcharge_pct / 100)
+cost = volume_m3 * price_usd_per_m3(current_date)
 ```
 
-**Key functions:**
+Where `price_usd_per_m3(current_date)` is looked up from the historical price CSV for the current simulation date. The `pricing_regime` selector (subsidized vs. unsubsidized) in the scenario YAML determines which CSV file is loaded. No escalation logic is applied — the CSV data already encodes real-world tariff changes over time.
 
-- `calculate_tiered_cost(consumption, cumulative_consumption, tier_config)` — Returns total cost, effective average cost per unit, tier breakdown, and marginal tier number
-- `get_marginal_tier_price(cumulative_consumption, tier_config)` — Returns the price for the *next* unit of consumption. Used by water allocation policies for cost comparison decisions (e.g., `cheapest_source` comparing GW cost vs marginal municipal cost)
+**Pricing regimes:** Agricultural and community consumers each have independent subsidized/unsubsidized regimes configured in the scenario YAML. See `structure.md` § 2.7 for the canonical schema.
 
-**Example (Egyptian-style tiers):**
+→ simulation_flow.md § 5 for the full price resolution logic by consumer type.
 
-```
-Tier 1:  0-10 m³/month  → 0.65 EGP/m³
-Tier 2: 11-20 m³/month  → 1.60 EGP/m³
-Tier 3: 21-40 m³/month  → 2.75 EGP/m³
-Tier 4:   >40 m³/month  → 4.50 EGP/m³
-
-If cumulative = 8 m³ and new consumption = 5 m³:
-  - 2 m³ at Tier 1 (0.65) = 1.30 EGP
-  - 3 m³ at Tier 2 (1.60) = 4.80 EGP
-  - Total: 6.10 EGP, effective rate: 1.22 EGP/m³
-  - Marginal tier: 2
-```
-
-**Wastewater surcharge:** An additional percentage surcharge applied to the total water cost, representing wastewater treatment fees collected by HCWW alongside water tariffs.
+Tiered pricing (Egyptian 5-tier IBT system with wastewater surcharge) is deferred as a future enhancement.
 
 **Dependencies:**
 
-- Configuration: `water_pricing.community.subsidized.tier_pricing` (bracket definitions for community consumers only)
-- Configuration: `water_pricing.community.subsidized.wastewater_surcharge_pct` (surcharge on community tiered water bills)
-
-> **Note:** Tiered pricing applies to community water consumption only (households and community buildings). Agricultural water uses flat-rate pricing (subsidized or unsubsidized) with optional annual escalation. See simulation_flow.md Section 4.3 for the full price resolution logic by consumer type.
+- Price data: `data/prices/water/historical_municipal_water_prices-research.csv`
 
 **Sources:**
 
@@ -232,8 +185,8 @@ Where `product_type` is one of [fresh, packaged, canned, dried], and `product_kg
 
 **Assumptions:**
 
-- For MVP: No inventory or storage costs
-- Future: Add processing costs, storage costs, market timing strategies
+- Revenue is computed on final output quantity after both handling loss and processing weight loss.
+- Market timing is governed by the active market policy (see `policies.md` § 8).
 
 ## 6. Daily Storage Cost
 
@@ -246,7 +199,7 @@ daily_storage_cost [USD/day] = SUM over all tranches in farm_storage:
     tranche.kg x storage_cost_per_kg_per_day(tranche.product_type)
 ```
 
-Where each tranche is a StorageTranche as defined in simulation_flow.md Section 4.7. The storage cost rate is looked up by product_type from the parameter file.
+Where each tranche is a StorageTranche as defined in structure.md § 3.7. The storage cost rate is looked up by product_type from the parameter file.
 
 **Storage cost rates (from `food_storage_costs-toy.csv`):**
 
@@ -289,15 +242,25 @@ Total_OPEX += Annual_storage_cost
 
 ## 7. Debt Service Calculation
 
-**Purpose:** Calculate monthly loan payments
+**Purpose:** Calculate daily debt service cost from loan amortization schedules
 
-> **MVP simplification:** Debt service is fixed monthly payments per financing profile. No accelerated repayment or debt pay-down policies in MVP.
+> **MVP simplification:** Debt service is fixed payments per financing profile, spread evenly across days. No accelerated repayment or debt pay-down policies in MVP.
 
 **Formula (fixed-rate amortization):**
 
+The monthly payment is computed once at initialization using the standard amortization formula:
+
 ```
-Payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
+monthly_payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 ```
+
+Debt service is then spread daily rather than lumped on a single day (e.g., the 1st of the month):
+
+```
+daily_debt_service = monthly_payment / days_in_current_month
+```
+
+This produces a smooth daily cost that avoids artificial spikes in the daily accounting records.
 
 **Parameters:**
 
@@ -305,14 +268,14 @@ Payment = P × [r(1 + r)^n] / [(1 + r)^n - 1]
 - r: Monthly interest rate = annual_rate / 12
 - n: Number of payments = term_years × 12
 
-**Output:** Monthly payment in USD
+**Output:** daily_debt_service in USD/day (derived from monthly_payment / days_in_current_month)
 
 **Dependencies:**
 
 - Configuration: `[system].[subsystem].financing_status` — per-subsystem financing category (determines whether debt service applies)
 - Parameter file: `data/parameters/economic/financing_profiles-toy.csv` — contains principal amounts, loan terms, and interest rates per financing profile
 
-> **MVP simplification:** Debt service is fixed monthly payments per financing profile. No accelerated repayment or debt pay-down policies in MVP. There is no single `economics.debt` configuration — debt parameters are resolved per subsystem from `financing_status` and `financing_profiles-toy.csv`.
+> **Note:** There is no single `economics.debt` configuration — debt parameters are resolved per subsystem from `financing_status` and `financing_profiles-toy.csv`.
 
 ## 8. Diesel Fuel Cost
 
@@ -436,7 +399,7 @@ Total_opex = Infrastructure_OM + Debt_service + Equipment_replacement_reserve
            + Labor_costs + Input_costs + Water_costs + Energy_costs + Diesel_costs
 
 Infrastructure_OM = Σ OPEX_component  across all subsystems (water, energy, processing)
-Equipment_replacement_reserve = Σ Annual_reserve_i  (see Equipment Replacement Costs)
+Equipment_replacement_reserve = total_capex_invested * annual_reserve_pct  (see § 2)
 ```
 
 **Output:** $/yr
@@ -602,7 +565,9 @@ NPV = Σ (Net_income(t) / (1 + r)^t)  for t = 1 to N
 
 - `r`: Discount rate (from config:`economics.discount_rate`)
 - `N`: Number of simulation years
-- `Net_income(t)`: Net income in year t
+- `Net_income(t)`: Net income in year t. For year N, add `terminal_inventory_value`
+  (unsold inventory valued at final-day prices) before discounting.
+  → simulation_flow.md § 10.1 Step 2 for terminal inventory valuation
 
 **Output:** NPV in USD (positive = value-creating investment)
 
@@ -626,34 +591,18 @@ This is the simpler approach and is appropriate when the goal is to compare infr
 
 **Option B — Nominal terms (future implementation):**
 
-Prices and costs escalate annually at category-specific rates:
+If needed, nominal modeling would require a separate inflation layer. This is not currently supported.
 
-```
-Price(year) = Price_base × (1 + escalation_rate) ^ year
-```
-
-Typical escalation rates for Egypt:
-
-- General inflation: 5-15%/yr (historically volatile; 10-30% in 2022-2024)
-- Electricity tariffs: May increase faster than general inflation due to subsidy reform
-- Diesel prices: Tied to global oil markets plus subsidy removal
-- Agricultural input costs: Roughly track general inflation
-- Crop prices: May lag or lead inflation depending on market dynamics
-- Labor costs: Roughly track inflation in the medium term
-
-With nominal prices, use the nominal discount rate for NPV.
-
-**Current assumption:** The model uses **real (constant-year) terms**. All prices in data files are base-year values and are not escalated. The discount rate in `economics.discount_rate` should be interpreted as a real rate (typically 3-8% for infrastructure projects in developing economies, vs 8-15% nominal).
+**Current assumption:** The model uses **historical prices from CSV files**. Prices reflect actual historical values (which inherently include any real-world inflation, subsidy reform, or tariff changes). The discount rate in `economics.discount_rate` should be interpreted accordingly — if historical prices include inflation effects, use a nominal discount rate; if prices are deflated to a base year, use a real rate.
 
 **Parameters:**
 
-- Configuration: `economics.discount_rate` — must be real rate if using Option A
-- Configuration (future): `economics.inflation_rate`, per-category escalation rates
+- Configuration: `economics.discount_rate`
 
 **Notes:**
 
 - Failing to specify real-vs-nominal is one of the most common errors in long-range infrastructure planning models — it can distort NPV by 30-50% over a 15-year horizon
-- Even in real terms, *relative* price changes matter (e.g., electricity prices rising faster than crop prices) — these can be modeled as real escalation differentials without full nominal modeling
+- Historical CSV prices naturally capture relative price changes (e.g., electricity tariff reform, crop price seasonality) without needing explicit escalation formulas
 
 ## 23. Debt-to-Revenue Ratio
 
@@ -678,12 +627,12 @@ Cash(t+1) = Cash(t) + Revenue(t) - Expenses(t)
 Cash(0) = Σ starting_capital_usd  across all farms
 ```
 
-**Output:** USD balance at end of each period
+**Output:** USD balance at end of each day
 
 **Notes:**
 
-- Insolvency occurs when Cash(t) < 0
-- Used as input to Monte Carlo survivability analysis
+- **Cash can go negative without penalty.** There is no loan simulation, interest charge, or policy intervention when cash is negative. Negative cash is simply recorded as a data point. This simplification avoids modeling credit markets and emergency lending, which are outside the scope of the community planning tool.
+- Negative cash events are used as an input to Monte Carlo survivability analysis (see calculations.md Survival Rate)
 
 ## 25. Cash Reserve Adequacy
 
@@ -705,30 +654,7 @@ Adequacy_months = Cash_reserves / avg_monthly_opex
 
 ---
 
-## 26. Processing Capacity
-
-**Purpose:** Calculate daily processing throughput
-
-**Formula:**
-
-```
-Capacity = Σ(equipment_capacity_i × fraction_i × availability)
-```
-
-**Parameters:**
-
-- equipment_capacity_i: From equipment parameter files
-- fraction_i: Equipment mix fraction (from config)
-- availability: Equipment uptime = 0.90 (90%)
-
-**Output:** Daily processing capacity in kg/day
-
-**Dependencies:**
-
-- Configuration:`food_processing_system.[type].equipment`
-- Parameter file:`data/parameters/equipment/processing_equipment-toy.csv`
-
-## 27. Processing Energy Requirements
+## 26. Processing Energy Requirements
 
 **Purpose:** Calculate energy needed for food processing operations
 
@@ -751,11 +677,11 @@ Capacity = Σ(equipment_capacity_i × fraction_i × availability)
 
 ---
 
-## 28. Labor Calculations
+## 27. Labor Calculations
 
 **Purpose:** Calculate daily labor costs using a per-event model. Labor hours are assigned to discrete agricultural events tied to the crop lifecycle, infrastructure maintenance, and management activities. This provides physically accurate daily labor demand and cost allocation rather than smoothing annual estimates across all days.
 
-### 28.1 Per-Event Labor Cost Model
+### 27.1 Per-Event Labor Cost Model
 
 Labor demand is driven by events that occur at specific times relative to the crop calendar and operational schedule. Each event has an hours-per-unit requirement, a skill level (which determines wage rate), and a trigger condition that determines when the event occurs.
 
@@ -766,11 +692,11 @@ daily_labor_cost [USD/day] = SUM over all active events on this day:
     event_hours(event, farm) x wage_rate(event.skill_level)
 ```
 
-### 28.2 Labor Event Categories
+### 27.2 Labor Event Categories
 
 Events are organized into five categories: field operations, processing operations, management, infrastructure maintenance, and logistics. All per-unit hours are sourced from `labor_requirements-toy.csv`.
 
-#### 28.2.1 Field Operations (Per Farm, Per Crop)
+#### 27.2.1 Field Operations (Per Farm, Per Crop)
 
 Field labor events are tied to the crop lifecycle. Each event occurs at a specific time relative to the planting date and spans a defined number of days.
 
@@ -821,7 +747,7 @@ daily_field_hours(farm, date) = SUM over all active crops on farm:
 
 Where `crop_area_ha = plantable_area_ha x area_fraction x percent_planted`.
 
-#### 28.2.2 Processing Operations (Per Farm, Harvest Days Only)
+#### 27.2.2 Processing Operations (Per Farm, Harvest Days Only)
 
 Processing labor is event-driven: it occurs only on days when food processing takes place (harvest day + 1 through completion). Hours are calculated from actual throughput.
 
@@ -853,7 +779,7 @@ fresh_handling_hours = input_kg x 0.018 hrs/kg  (sorting + boxing, no processing
 packing_storage_hours = total_output_kg x 0.018 hrs/kg  (sorting + grading + boxing)
 ```
 
-#### 28.2.3 Management (Daily, Year-Round)
+#### 27.2.3 Management (Daily, Year-Round)
 
 Management labor occurs every working day regardless of field activity:
 
@@ -869,7 +795,7 @@ Management labor occurs every working day regardless of field activity:
 daily_management_hours = 13 hrs/day (on working days only; 280 working days/yr)
 ```
 
-#### 28.2.4 Infrastructure Maintenance (Continuous, Year-Round)
+#### 27.2.4 Infrastructure Maintenance (Continuous, Year-Round)
 
 Maintenance labor is distributed evenly across working days:
 
@@ -887,7 +813,7 @@ daily_maintenance_hours = total_annual_maintenance_hours / working_days
 
 Annual maintenance hours are computed from infrastructure configuration at scenario load time. See `labor_requirements-toy.csv` for aggregate model parameters (`maint_pv`, `maint_wind`, `maint_bwro`, `maint_well`, `maint_battery`, `maint_generator`).
 
-#### 28.2.5 Logistics (Per Event and Continuous)
+#### 27.2.5 Logistics (Per Event and Continuous)
 
 | Activity | Rate | Unit | Skill Level |
 | --- | --- | --- | --- |
@@ -898,7 +824,7 @@ Annual maintenance hours are computed from infrastructure configuration at scena
 
 Logistics loading/unloading labor is triggered on harvest days and sale days. Transport labor is triggered when product is sold (market delivery). Inventory management runs daily when storage is non-empty.
 
-### 28.3 Daily Labor Cost Aggregation
+### 27.3 Daily Labor Cost Aggregation
 
 ```
 daily_labor_hours = daily_field_hours + daily_processing_hours
@@ -926,7 +852,7 @@ For MVP, use the blended wage rate of $3.50/hr for all labor categories to simpl
 daily_labor_cost_mvp [USD/day] = daily_labor_hours x 3.50
 ```
 
-### 28.4 FTE and Annual Totals
+### 27.4 FTE and Annual Totals
 
 ```
 annual_labor_hours = SUM(daily_labor_hours) over all days in year
@@ -936,7 +862,7 @@ annual_labor_cost = SUM(daily_labor_cost) over all days in year
 
 **Output:** daily_labor_cost in USD/day per farm; annual_labor_cost in USD/yr per farm; FTE count per year
 
-### 28.5 Peak Labor Demand
+### 27.5 Peak Labor Demand
 
 **Purpose:** Identify peak daily labor demand for workforce planning.
 
@@ -950,7 +876,7 @@ peak_fte = peak_daily_hours / 8
 
 Peak demand typically occurs when harvesting overlaps across multiple crops. Staggered planting dates reduce peak demand by spreading harvest events across the calendar.
 
-### 28.6 Community vs External Labor
+### 27.6 Community vs External Labor
 
 **Purpose:** Measure local employment benefit.
 
@@ -965,7 +891,7 @@ Community_labor_ratio = community_labor_hrs / total_labor_hrs x 100
 - Community available labor supply (working-age population x available hours)
 - Skill requirements vs community skill profile
 
-### 28.7 Dependencies
+### 27.7 Dependencies
 
 - Parameter file: `data/parameters/labor/labor_requirements-toy.csv` (via registry `labor.requirements`)
 - Parameter file: `data/parameters/labor/labor_wages-toy.csv` (via registry `labor.wages`)
@@ -974,7 +900,7 @@ Community_labor_ratio = community_labor_hrs / total_labor_hrs x 100
 - Parameter file: `data/parameters/crops/crop_coefficients-toy.csv` (season lengths for harvest date calculation)
 - Simulation state: harvest day flag, processing throughput, storage inventory, sale events
 
-### 28.8 Notes
+### 27.8 Notes
 
 1. The per-event model provides physically accurate daily labor demand. On non-event days (no field work, no processing, no sales), only management, maintenance, and inventory labor are incurred. On harvest days, labor demand spikes due to simultaneous harvesting, processing, packing, and logistics.
 

@@ -16,9 +16,9 @@ Calculation methodologies are organized into four domain-specific files:
 
 | File | Contents |
 | --- | --- |
-| [calculations_water.md](calculations_water.md) | Water system calculations: groundwater pumping energy, desalination energy (BWRO), conveyance energy, irrigation pressurization, irrigation water demand, storage dynamics, water use efficiency, self-sufficiency, allocation policy notes, aquifer depletion, aquifer drawdown feedback, days without municipal, storage utilization, demand vs delivery |
+| [calculations_water.md](calculations_water.md) | Water system calculations: groundwater pumping energy, desalination energy (BWRO), conveyance energy, irrigation pressurization, irrigation water demand, storage dynamics, water use efficiency, self-sufficiency, allocation policy notes, days without municipal, storage utilization, demand vs delivery |
 | [calculations_energy.md](calculations_energy.md) | Energy system calculations: PV power generation, wind power generation, battery storage dynamics, backup generator fuel consumption, energy dispatch (load balance), total energy demand, total renewable generation, grid import/export, battery throughput, energy self-sufficiency, days without grid, curtailment, blended electricity cost, grid electricity pricing regimes |
-| [calculations_crop.md](calculations_crop.md) | Crop growth and yield calculations: crop yield estimation (FAO-33), soil salinity yield reduction (FAO-29), crop growth stages, post-harvest handling losses, processed product output, processing utilization, crop diversity index (Shannon), PV microclimate yield protection (TBD) |
+| [calculations_crop.md](calculations_crop.md) | Crop growth and yield calculations: crop yield estimation (FAO-33), soil salinity yield reduction (FAO-29, deferred), crop growth stages, post-harvest handling losses, processed product output, processing utilization, crop diversity index (Shannon), PV microclimate yield protection (TBD) |
 | [calculations_economic.md](calculations_economic.md) | Economic, food processing, and labor calculations: infrastructure financing costs, equipment replacement costs, water cost calculation, tiered municipal water pricing, crop revenue, daily storage cost, debt service, diesel fuel cost, fertilizer/input cost (TBD), processed product revenue, grid export revenue, total gross revenue, total operating expense, operating margin, cost volatility, revenue concentration, net farm income, payback period, ROI, IRR, NPV, inflation/real-vs-nominal, debt-to-revenue ratio, cash reserves, cash reserve adequacy, processing capacity, processing energy requirements, labor event model, wage rates, FTE calculation, peak labor demand |
 
 ## 3. Resilience and Monte Carlo Calculations
@@ -264,7 +264,6 @@ Drawdown = max(Peak_cash - Trough_cash)  over all peak-to-trough sequences
 
 - IEC 61400-1: Wind turbines design standards
 - IEC 61215: Crystalline silicon terrestrial photovoltaic modules — Design qualification and type approval
-- Jordan, D.C., & Kurtz, S.R. (2013). Photovoltaic degradation rates — An analytical review. Progress in Photovoltaics, 21(1), 12-29.
 - NREL PVWatts Calculator documentation
 - Stull, R.B. (1988). An Introduction to Boundary Layer Meteorology. Kluwer Academic Publishers.
 - System Advisor Model (SAM) technical documentation
@@ -277,7 +276,7 @@ Drawdown = max(Peak_cash - Trough_cash)  over all peak-to-trough sequences
 ### Battery Storage
 
 - BloombergNEF Lithium-Ion Battery Price Survey (annual)
-- LFP calendar and cycle aging data from manufacturer datasheets (CATL, BYD)
+- LFP battery specifications from manufacturer datasheets (CATL, BYD)
 
 ### Economic Methods
 

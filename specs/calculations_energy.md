@@ -4,27 +4,15 @@ Extracted from the consolidated calculations specification. For other domain cal
 
 ## 1. PV Power Generation
 
-**Purpose:** Calculate solar photovoltaic power output under crop cover, accounting for panel degradation and temperature effects
+**Purpose:** Calculate solar photovoltaic power output under crop cover, accounting for shading and temperature effects
 
 **Formula:**
 
 ```
-P_pv(t) = sys_capacity_kw × CF_pv(t) × shading_factor × degradation_factor(year) × temp_derate(t)
+P_pv(t) = sys_capacity_kw × CF_pv(t) × shading_factor × temp_derate(t)
 ```
 
-**Panel Degradation (annual capacity loss):**
-
-```
-degradation_factor(year) = (1 - degradation_rate) ^ year
-```
-
-Typical degradation rates:
-
-- Mono-crystalline Si: 0.005/yr (0.5%/yr)
-- Poly-crystalline Si: 0.007/yr (0.7%/yr)
-- Thin-film: 0.005-0.010/yr
-
-Over a 15-year simulation at 0.5%/yr: year-15 output = 92.8% of year-1. This is a standard manufacturer warranty assumption (IEC 61215) and should not be omitted for simulations longer than ~3 years.
+> **Simplification:** PV degradation (annual capacity loss) has been removed from the model. Nameplate capacity is used throughout the simulation. For community-scale planning horizons (5-15 years), the ~3-7% cumulative output reduction from panel aging is small relative to other uncertainties (weather variation, price volatility). This avoids tracking `degradation_factor` and `degradation_rate` parameters.
 
 **Temperature Derating (hot climate correction):**
 
@@ -63,7 +51,6 @@ Current implementation uses a static density-based approximation. Note: actual s
 - CF_pv(t): Capacity factor at time t (from precomputed data)
 - `density`: Panel density configuration
 - `height_m`: Panel height above crops
-- `degradation_rate`: Annual capacity degradation rate (from parameter file, default 0.005). **Note:** This value comes from equipment parameter files, not from user scenario configuration.
 - γ: Temperature coefficient of power (from parameter file, default -0.004 /°C)
 
 **Output:** P_pv in kW at each time step
@@ -80,7 +67,6 @@ Current implementation uses a static density-based approximation. Note: actual s
 
 - Normalized PV output from PVWatts or System Advisor Model (SAM)
 - Agri-PV shading effects from Dupraz et al. (2011) and regional studies
-- PV degradation rates: Jordan & Kurtz (2013), "Photovoltaic Degradation Rates — An Analytical Review", NREL
 - Temperature derating: IEC 61215 standard test conditions; NOCT model from PVWatts documentation
 
 ## 2. Wind Power Generation
@@ -168,7 +154,7 @@ P_discharge(t) ≤ P_discharge_max
 - η_charge: Charging efficiency = 0.95 (LFP)
 - η_discharge: Discharging efficiency = 0.95 (LFP)
 - SOC_min: Minimum state of charge = 0.10 (10%)
-- SOC_max: Maximum state of charge = 0.90 (90%)
+- SOC_max: Maximum state of charge = 0.95 (95%)
 
 **Output:** SOC (state of charge) at each time step
 
@@ -177,35 +163,15 @@ P_discharge(t) ≤ P_discharge_max
 - Configuration:`energy_system.battery.sys_capacity_kwh`
 - Configuration:`energy_system.battery.chemistry`
 
-**Battery Capacity Degradation:**
+> **Simplification:** Battery capacity degradation (calendar fade and cycle fade) has been removed from the model. The dual aging model (alpha_cal, alpha_cyc, EFC tracking, end-of-life threshold) added complexity disproportionate to its impact on community-level planning decisions. Battery capacity is treated as fixed at nameplate throughout the simulation. Equipment replacement costs are covered by the flat equipment replacement reserve (see calculations_economic.md § 2).
 
-For simulations longer than ~3 years, capacity fade must be modeled. LFP batteries experience two independent aging mechanisms:
+**Fixed battery parameters (set once at initialization, never change):**
 
-```
-Effective_capacity(year) = capacity_kwh × (1 - fade_calendar(year)) × (1 - fade_cycle(year))
-```
-
-**Calendar aging** (time-dependent, regardless of use):
-
-```
-fade_calendar(year) = α_cal × year
-```
-
-- α_cal ≈ 0.015/yr (1.5%/yr) for LFP at 25-35°C ambient
-- Accelerated at higher temperatures: roughly doubles per 10°C above 25°C
-- For Sinai climate (mean ~25°C, peaks 40°C+), use α_cal ≈ 0.018-0.020/yr
-
-**Cycle aging** (throughput-dependent):
-
-```
-fade_cycle(year) = α_cyc × EFC_cumulative(year) / EFC_rated
-```
-
-- EFC_cumulative: Cumulative equivalent full cycles from simulation start
-- EFC_rated: Rated cycle life to 80% capacity ≈ 4000-6000 for LFP
-- α_cyc ≈ 0.20 (total cycle-driven fade at rated life)
-
-**End-of-life threshold:** Battery is typically considered for replacement when effective capacity drops below 70-80% of nameplate. At ~2%/yr combined fade, this occurs around year 10-15 for LFP.
+- SOC_min = 0.10 (hardware floor, protects battery longevity)
+- SOC_max = 0.95
+- η_charge = 0.95 (LFP round-trip charging efficiency)
+- η_discharge = 0.95 (LFP round-trip discharging efficiency)
+- self_discharge_rate_daily = 0.0005 (0.05%/day for LFP, ~1.5%/month)
 
 **Self-discharge:**
 
@@ -213,15 +179,11 @@ fade_cycle(year) = α_cyc × EFC_cumulative(year) / EFC_rated
 SOC_loss_per_day = SOC(t) × self_discharge_rate_daily
 ```
 
-- Self-discharge rate: ~0.05%/day for LFP (≈1.5%/month)
-- Small effect on daily dispatch but accumulates over weekends/low-demand periods
-
 **Assumptions:**
 
-- Round-trip efficiency: 90% for LFP batteries
+- Round-trip efficiency: 90% for LFP batteries (0.95 x 0.95)
 - Initial SOC: 50% of capacity
-- MVP simplification: Capacity degradation can be approximated as a linear annual fade of ~2%/yr combined (calendar + cycle) if detailed cycle tracking is not yet implemented
-- Self-discharge can be omitted for MVP daily time-step if battery cycles most days
+- Battery capacity is fixed at nameplate for the entire simulation
 
 ## 4. Backup Generator Fuel Consumption
 
@@ -229,7 +191,9 @@ SOC_loss_per_day = SOC(t) × self_discharge_rate_daily
 
 Diesel generators have highly nonlinear fuel consumption — at low loads, specific fuel consumption (L/kWh) increases substantially because a significant fraction of fuel goes to overcoming friction and maintaining idle speed regardless of electrical output.
 
-**Formula (constant SFC — MVP simplification):**
+**Active model: Willans line.** The constant SFC approximation is documented for reference but is not used in the simulation.
+
+**Formula (constant SFC — reference only):**
 
 ```
 Fuel(t) = P_gen(t) × SFC × Δt
@@ -237,7 +201,7 @@ Fuel(t) = P_gen(t) × SFC × Δt
 
 This is adequate when the generator consistently runs near rated load (>60%).
 
-**Formula (Willans line model — recommended for accuracy):**
+**Formula (Willans line model — active):**
 
 The Willans line is the standard engineering model for diesel generator fuel consumption:
 
@@ -270,7 +234,7 @@ At 25% load, the constant SFC model underestimates fuel consumption by ~43%. Thi
 Most diesel generators should not run below 30% of rated capacity for extended periods (wet stacking, carbon buildup). The dispatch algorithm enforces:
 
 ```
-# Generator minimum load behavior (resolved in simulation_flow.md 10.9):
+# Generator minimum load behavior:
 # The generator always starts when there is unmet demand and use_generator=true.
 # If demand is below the 30% minimum load threshold, the generator runs at
 # minimum load and excess output is curtailed. This wastes some fuel but ensures
@@ -281,7 +245,7 @@ P_gen(t) = max(P_rated × min_load_fraction, deficit)   otherwise
 generator_curtailed = max(0, P_gen(t) - deficit)
 ```
 
-Note: The "always start" behavior applies specifically to the `microgrid` policy where grid import is unavailable. Under `renewable_first` or `all_grid` policies, the generator is not dispatched (`use_generator=false`) because grid import serves as the fallback. See `simulation_flow.md` Section 5.3 for policy-specific dispatch behavior.
+Note: The "always start" behavior applies specifically to the `microgrid` policy where grid import is unavailable. Under `renewable_first` or `all_grid` policies, the generator is not dispatched (`use_generator=false`) because grid import serves as the fallback. See simulation_flow.md § 3 (Step 6) and policies.md § 5 for policy-specific dispatch behavior.
 
 **Parameters:**
 
@@ -316,13 +280,12 @@ Note: The "always start" behavior applies specifically to the `microgrid` policy
 **PV generation (within dispatch):**
 
 ```
-pv_kwh [kWh] = sys_capacity_kw × pv_kwh_per_kw(date, density) × degradation_factor × shading_factor
+pv_kwh [kWh] = sys_capacity_kw × pv_kwh_per_kw(date, density) × shading_factor
 
-degradation_factor = (1 - degradation_rate)^years_since_start
 shading_factor = {low: 0.95, medium: 0.90, high: 0.85}
 ```
 
-> **Note:** `degradation_rate` comes from parameter files (default 0.005/yr), not user configuration. See PV Power Generation section above.
+> **Note:** PV degradation has been removed; nameplate capacity is used throughout. See PV Power Generation section above.
 
 **Total demand (full model, all 7 components):**
 
@@ -332,6 +295,8 @@ E_demand(t) [kWh] = E_pump(t) + E_desal(t) + E_convey(t) + E_irrigation_pump(t)
 ```
 
 See Total Energy Demand section below for component descriptions. For water-related energy components (E_pump, E_desal, E_convey, E_irrigation_pump), see [calculations_water.md](calculations_water.md). For processing energy (E_processing), see [calculations_economic.md](calculations_economic.md).
+
+> **Note:** There is no one-day lag for food processing energy. All demands (including E_processing) are known same-day because food processing runs before energy dispatch in the daily simulation loop (see simulation_flow.md).
 
 **Total renewable generation:**
 
@@ -463,6 +428,7 @@ Running at full load is the most fuel-efficient operating point per the Backup G
 
 **Current MVP simplifications:**
 
+- **The grid acts as an infinite backstop** — energy supply never constrains activities. The simulation tracks energy costs but does not restrict operations due to energy shortfalls. Any unmet demand after renewables, battery, and generator is covered by grid import at the applicable price.
 - Grid import and export are unlimited (no capacity constraints)
 - No time-of-use price optimization -- dispatch is fixed merit-order regardless of TOU pricing
 
@@ -542,7 +508,7 @@ Grid_export_yr = Σ Grid_export(t) × Δt  [kWh/yr]
 
 ## 9. Battery Throughput
 
-**Purpose:** Measure annual battery cycling for degradation and cost tracking
+**Purpose:** Measure annual battery cycling for reporting and cost tracking
 
 **Formula:**
 
@@ -615,13 +581,15 @@ Curtailment_pct = (Curtailment_yr / E_renewable_yr) × 100
 Blended_cost = Total_electricity_cost / Total_consumption
 
 Total_electricity_cost = (Grid_import × grid_price)
-                       + (Generator_output × SFC × diesel_price)
+                       + generator_fuel_L × diesel_price_per_L
                        + (E_renewable_used × LCOE_renewable)
                        - (Grid_export × export_price)
 
 LCOE_renewable = (annual_infrastructure_cost_pv + annual_infrastructure_cost_wind + annual_battery_cost)
                / E_renewable_yr
 ```
+
+Where `generator_fuel_L` is computed via the Willans line model (see § 4).
 
 **Cash cost vs. economic (blended) cost distinction:**
 
@@ -659,14 +627,11 @@ The pricing regime for each consumer type is specified in scenario configuration
 
 **Configuration:**
 
-- `energy_pricing.agricultural.pricing_regime`: [subsidized, unsubsidized]
-- `energy_pricing.agricultural.subsidized.price_usd_per_kwh`: Flat rate for subsidized agricultural electricity [USD/kWh]
-- `energy_pricing.agricultural.unsubsidized.price_usd_per_kwh`: Flat rate for unsubsidized agricultural electricity [USD/kWh]
-- `energy_pricing.community.pricing_regime`: [subsidized, unsubsidized]
-- `energy_pricing.community.subsidized.price_usd_per_kwh`: Flat rate for subsidized community electricity [USD/kWh]
-- `energy_pricing.community.unsubsidized.price_usd_per_kwh`: Flat rate for unsubsidized community electricity [USD/kWh]
-- `use_peak_offpeak`: Optional flag for peak/offpeak rates (per regime)
-- `annual_escalation_pct`: Annual price escalation rate (per regime)
+- `energy_pricing.agricultural.pricing_regime`: [subsidized, unsubsidized] — selects which historical price CSV to load
+- `energy_pricing.community.pricing_regime`: [subsidized, unsubsidized] — selects which historical price CSV to load
+- `energy_pricing.net_metering_ratio`: export price = grid_import_price × this value (default 0.70)
+
+All price values come from historical CSV files, not from the scenario YAML. The `pricing_regime` selector determines which CSV is loaded. No escalation logic is applied — the CSV data already encodes real-world tariff changes over time.
 
 **Dependencies:**
 

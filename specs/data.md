@@ -552,7 +552,7 @@ This section maps which data files feed into each subsystem, linking `data/` fil
 | Community buildings water | `precomputed/community_buildings/community_buildings_water_m3_per_day-toy.csv` | Step 2b facility allocation |
 | Housing parameters | `parameters/community/housing_energy_water-toy.csv` | `calculate_household_demand()` |
 | Community buildings params | `parameters/community/community_buildings_energy_water-toy.csv` | Building demand calculation |
-| Aquifer parameters | `docs/research/aquifer_parameters.md` | Aquifer drawdown feedback (yearly) |
+| *(Aquifer parameters — deferred)* | | |
 
 ### Energy Subsystem
 
@@ -769,7 +769,6 @@ Model includes:
 
 ## References
 
-- Community Farm Model Specifications: `specs/overview.md`
 - Configuration Schema: `specs/structure.md`
 - Calculation Methodologies: `specs/calculations.md`
 - Policy Specifications: `specs/policies.md`

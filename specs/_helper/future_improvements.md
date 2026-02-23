@@ -405,42 +405,4 @@ simulation loop integration does not.
 
 ## Aquifer Drawdown Feedback
 
-### Description
-
-Dynamic pumping energy adjustment as the water table drops over years of
-extraction. As cumulative groundwater extraction increases, the effective pumping
-head increases, requiring more energy per cubic meter. This creates a positive
-feedback loop: extraction leads to a deeper water table, which leads to higher energy cost
-per cubic meter, which leads to higher operating expenses.
-
-The linearized drawdown model is fully specified in `calculations_water.md`
-Section 11, and the yearly boundary operation for updating effective pumping head
-is specified in `simulation_flow.md` Section 7.2 (Aquifer state update). The
-`calculations.md` overview notes this feature as "pending code implementation."
-
-### Why Deferred
-
-The formulas and simulation loop integration points are fully specified. The
-feature is pending code implementation only. It requires connecting the yearly
-aquifer state update (which recomputes `effective_head_m` and `pumping_kwh_per_m3`)
-to the water policy context so that pumping energy costs increase over time.
-
-### Implementation Path
-
-1. **`src/simulation/simulation.py`**: At yearly boundaries, compute
-   `fraction_depleted = cumulative_extraction / aquifer_exploitable_volume_m3`,
-   then `drawdown_m = max_drawdown_m * fraction_depleted`, then
-   `effective_head_m = well_depth_m + drawdown_m`. Recompute `pumping_kwh_per_m3`
-   using the updated head.
-
-2. **`src/simulation/state.py`**: Ensure `AquiferState` tracks
-   `cumulative_extraction_m3`, `remaining_volume_m3`, `effective_head_m`, and
-   `current_pumping_kwh_per_m3`.
-
-3. **Water policy context**: Pass the updated `pumping_kwh_per_m3` to all water
-   policies each day so that groundwater cost comparisons reflect the increasing
-   pumping depth.
-
-4. **Configuration**: Uses existing `aquifer_exploitable_volume_m3`,
-   `aquifer_recharge_rate_m3_yr`, and `max_drawdown_m` parameters from
-   `structure.md` (water system, groundwater wells section).
+*Deferred. Aquifer level modeling (depletion tracking, drawdown, dynamic pumping energy) has been removed from the current spec. Pumping energy uses a static `well_depth_m` value. Cumulative groundwater extraction is tracked for reporting. Reintroduce when aquifer data becomes available.*

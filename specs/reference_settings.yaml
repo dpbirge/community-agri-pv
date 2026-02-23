@@ -44,9 +44,6 @@ water_system:
     salinity_level: moderate                 # [low, moderate, high]; must match rows in treatment_kwh_per_m3-toy.csv
     well_flow_rate_m3_day: 100              # m3/day per well; maximum extraction rate
     number_of_wells: 5                      # integer > 0; total wells serving the community
-    aquifer_exploitable_volume_m3: 500000   # m3; estimated exploitable aquifer volume. Default: 0.0
-    aquifer_recharge_rate_m3_yr: 5000       # m3/year; natural recharge rate (negligible in arid Sinai). Default: 0.0
-    max_drawdown_m: 30                      # meters; max allowable drawdown at full depletion (for pumping energy feedback). Default: 0.0
     financing_status: existing_owned        # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
 
   water_treatment:
@@ -92,6 +89,11 @@ energy_system:
     sys_capacity_kwh: 200                   # kWh; total battery storage capacity. Default: 0.0
     units: 2                                # integer > 0; number of battery units. Default: 1
     chemistry: LFP                          # [LFP, NMC, lead_acid]. Default: lithium_iron_phosphate (loader default)
+    soc_min: 0.10                           # fraction; minimum state of charge. Default: 0.10
+    soc_max: 0.95                           # fraction; maximum state of charge. Default: 0.95
+    charge_efficiency: 0.95                 # fraction; charging efficiency. Default: 0.95 (LFP)
+    discharge_efficiency: 0.95              # fraction; discharging efficiency. Default: 0.95 (LFP)
+    self_discharge_rate_per_day: 0.0005     # fraction; daily self-discharge (0.05%/day for LFP). Default: 0.0005
     financing_status: loan_standard         # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
 
   backup_generator:
@@ -107,8 +109,10 @@ energy_system:
 # Each category has:
 #   equipment: list of {type, fraction} where fractions must sum to 1.0
 #   storage_capacity_kg_total: kg; total storage for this product type
-#   shelf_life_days: days; storage life before forced sale
 #   financing_status: financing profile
+#
+# Shelf life (days before forced sale) is defined per crop × product_type
+# in data/parameters/crops/storage_spoilage_rates-toy.csv — NOT in this file.
 #
 food_processing_system:
 
@@ -117,7 +121,6 @@ food_processing_system:
       - type: washing_sorting_line          # [washing_sorting_line, simple_wash_station]
         fraction: 1.0                       # 0.0-1.0; all fractions in equipment list must sum to 1.0
     storage_capacity_kg_total: 20000        # kg
-    shelf_life_days: 3                      # days; short duration (3-7 typical)
     financing_status: loan_standard         # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
 
   drying:
@@ -127,7 +130,6 @@ food_processing_system:
       - type: simple_dehydrator
         fraction: 0.4
     storage_capacity_kg_total: 20000        # kg
-    shelf_life_days: 180                    # days; long duration (180-365 typical for dried products)
     financing_status: grant_full            # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
 
   canning:
@@ -135,7 +137,6 @@ food_processing_system:
       - type: simple_retort                 # [simple_retort, pressure_canner, industrial_retort]
         fraction: 1.0
     storage_capacity_kg_total: 20000        # kg
-    shelf_life_days: 365                    # days; very long duration (365-1095 typical for canned products)
     financing_status: loan_standard         # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
 
   packaging:
@@ -143,7 +144,6 @@ food_processing_system:
       - type: packaged                      # [packaged, vacuum_sealed, modified_atmosphere]
         fraction: 1.0
     storage_capacity_kg_total: 20000        # kg
-    shelf_life_days: 14                     # days; moderate duration (14-56 typical depending on technology)
     financing_status: existing_owned        # [existing_owned, grant_full, grant_capex, purchased_cash, loan_standard, loan_concessional]. Default: existing_owned
 
 # ============================================================================
@@ -183,7 +183,7 @@ community_structure:
   # Valid food policies:   [all_fresh, maximize_storage, balanced_mix, market_responsive]
   # Valid crop policies:   [fixed_schedule, deficit_irrigation, weather_adaptive]
   # Valid market policies: [sell_all_immediately, hold_for_peak, adaptive]
-  # Valid economic policies: [balanced_finance, aggressive_growth, conservative, risk_averse]
+  # Economic policies: DEFERRED — cash flows are tracked without intervention in this version.
   # ---------------------------------------------------------------------------
   collective_farm_override:
     policies:
@@ -192,7 +192,6 @@ community_structure:
       food: balanced_mix                    # all farms use diversified processing split
       crop: fixed_schedule                  # all farms use standard irrigation schedule
       market: hold_for_peak                 # community sells pooled inventory when prices peak
-      economic: balanced_finance            # all farms use adaptive financial management
 
   # ---------------------------------------------------------------------------
   # FARMS -- at least one farm required; three shown for heterogeneity
@@ -313,7 +312,7 @@ post_harvest:
   # 0.05 (5%) reflects reduced losses from on-site processing.
   # FAO estimates 10-15% for typical developing-economy supply chains.
   # Applied uniformly to all crops before the food processing split.
-  post_harvest_handling_loss_rate: 0.05     # DEFERRED: 0.0-1.0; fraction lost before processing intake. Default: 0.05
+  post_harvest_handling_loss_rate: 0.05     # 0.0-1.0; fraction lost before processing intake. Default: 0.05
 
 # ============================================================================
 # COMMUNITY POLICY PARAMETERS
@@ -389,15 +388,8 @@ community_policy_parameters:
     max_sell: 1.0                           # 0.0-1.0; maximum sell fraction. Default: 1.0
 
   # --- Economic policies ---
-  aggressive_growth:
-    min_cash_months: 1                      # integer; months of operating costs as cash reserve. Default: 1
-    max_inventory_months: 6                 # integer; max months of inventory to hold. Default: 6
-
-  conservative:
-    min_cash_months: 6                      # Default: 6
-
-  risk_averse:
-    min_cash_months: 3                      # Default: 3
+  # DEFERRED: Economic policies are not active in the current simulation version.
+  # Cash flows are tracked without intervention. If cash goes negative, no action is taken.
 
 # ============================================================================
 # HOUSEHOLD POLICIES (COMMUNITY LEVEL)
@@ -436,74 +428,39 @@ economics:
 # WATER PRICING
 # ============================================================================
 # Agricultural and community water have independent pricing regimes.
-# Both support subsidized (flat rate) and unsubsidized (escalating) options.
-# Price escalation is applied relative to simulation.start_date.year.
-# Set annual_escalation_pct to 0 for flat government-fixed pricing.
+# pricing_regime selects which historical CSV price file to load.
+# All prices come from historical time-series CSV files — no YAML price
+# values or escalation rates. The simulation looks up the price for each
+# day from the CSV, which already encodes any real-world escalation.
+#
+# Price data: data/prices/water/historical_municipal_water_prices-research.csv
 # ============================================================================
 water_pricing:
   municipal_source: seawater_desalination   # [seawater_desalination, piped_groundwater]; source of municipal water supply
 
   agricultural:
-    pricing_regime: unsubsidized            # [subsidized, unsubsidized]; active pricing regime for agricultural water
-    subsidized:
-      price_usd_per_m3: 0.75               # USD/m3; flat rate. Default: 0.75
-      annual_escalation_pct: 0.0            # percent/year; 0 = flat government-fixed. Default: 0.0
-    unsubsidized:
-      base_price_usd_m3: 0.75              # USD/m3; base price (year 0). Default: 0.75
-      annual_escalation_pct: 3.0            # percent/year; annual increase. Default: 3.0
+    pricing_regime: unsubsidized            # [subsidized, unsubsidized]; selects which historical price CSV to load
 
   community:
-    pricing_regime: subsidized              # [subsidized, unsubsidized]; active pricing regime for community water (households + community buildings)
-    subsidized:
-      # Egyptian 5-tier increasing block tariff (2018 decree, EGP values)
-      # Converted to USD at load time via economics.exchange_rate_egp_per_usd
-      # Note: tier_pricing is not parsed by the loader in MVP; the loader reads
-      # a flat price_usd_per_m3 for community subsidized pricing.
-      price_usd_per_m3: 0.45               # USD/m3; flat community subsidized rate. Default: 0.45
-      tier_pricing:                         # informational; not parsed by loader
-        - tier: 1
-          max_m3_per_month: 10
-          price_egp_per_m3: 0.65
-        - tier: 2
-          max_m3_per_month: 20
-          price_egp_per_m3: 1.60
-        - tier: 3
-          max_m3_per_month: 30
-          price_egp_per_m3: 2.25
-        - tier: 4
-          max_m3_per_month: 40
-          price_egp_per_m3: 2.75
-        - tier: 5
-          max_m3_per_month: null            # unlimited above tier 4
-          price_egp_per_m3: 3.15
-      wastewater_surcharge_pct: 75          # DEFERRED: percent; applied to water bill total
-    unsubsidized:
-      base_price_usd_m3: 0.75              # USD/m3; base price. Default: 0.75
-      annual_escalation_pct: 3.0            # percent/year; annual increase. Default: 3.0
+    pricing_regime: subsidized              # [subsidized, unsubsidized]; selects which historical price CSV to load
 
 # ============================================================================
 # ENERGY PRICING
 # ============================================================================
 # Agricultural and community energy have independent pricing regimes.
-# Set annual_escalation_pct to 0 for flat government-fixed pricing.
+# pricing_regime selects which historical CSV price file to load.
+# All prices come from historical time-series CSV files — no YAML price
+# values or escalation rates. The simulation looks up the price for each
+# day from the CSV, which already encodes any real-world tariff changes.
+#
+# Price data (subsidized):   data/prices/electricity/historical_grid_electricity_prices-research.csv
+# Price data (unsubsidized): data/prices/electricity/historical_grid_electricity_prices_unsubsidized-research.csv
 # ============================================================================
 energy_pricing:
-  net_metering_ratio: 0.70                  # DEFERRED: 0.0-1.0; export_price = grid_import_price * this. Default: 0.70
+  net_metering_ratio: 0.70                  # 0.0-1.0; export_price = grid_import_price * this. Default: 0.70
 
   agricultural:
-    pricing_regime: subsidized              # [subsidized, unsubsidized]; active pricing regime for agricultural electricity
-    subsidized:
-      price_usd_per_kwh: 0.12              # USD/kWh; flat rate for water pumping, processing. Default: 0.12
-      annual_escalation_pct: 0.0            # DEFERRED: percent/year; 0 = flat government-fixed
-    unsubsidized:
-      price_usd_per_kwh: 0.15              # USD/kWh; market rate. Default: 0.15
-      annual_escalation_pct: 3.0            # DEFERRED: percent/year; annual increase
+    pricing_regime: subsidized              # [subsidized, unsubsidized]; selects which historical price CSV to load
 
   community:
-    pricing_regime: subsidized              # [subsidized, unsubsidized]; active pricing regime for community electricity (households + community buildings)
-    subsidized:
-      price_usd_per_kwh: 0.10              # USD/kWh; flat rate for households, community buildings. Default: 0.10
-      annual_escalation_pct: 0.0            # DEFERRED: percent/year; 0 = flat government-fixed
-    unsubsidized:
-      price_usd_per_kwh: 0.15              # USD/kWh; market rate. Default: 0.15
-      annual_escalation_pct: 3.0            # DEFERRED: percent/year; annual increase
+    pricing_regime: subsidized              # [subsidized, unsubsidized]; selects which historical price CSV to load

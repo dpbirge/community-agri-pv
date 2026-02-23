@@ -21,25 +21,34 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 
 ## Directory Structure
 
-- `/data` - All simulation datasets (99 CSV files)
-  - `/parameters` - Static parameters: crops, equipment, labor, community, costs, economic, water (42 files)
-  - `/precomputed` - Layer 1 outputs: weather, PV/wind, irrigation, yields, microclimate, household, community buildings (22 files)
-  - `/prices` - Historical price time-series: crops, processed, electricity, water, diesel, inputs (35 files)
+- `/data` - All simulation datasets (102 CSV files)
+  - `/parameters` - Static parameters: crops, equipment, labor, community, costs, economic, water
+  - `/precomputed` - Layer 1 outputs: weather, PV/wind, irrigation, yields, microclimate, household, community buildings
+  - `/prices` - Historical price time-series: crops, processed, electricity, water, diesel, inputs
   - `/scripts` - Data generation scripts (8 Python files, Layer 1)
 - `/docs` - Documentation
-  - `/arch` - Core model specifications (6 docs)
   - `/codereview` - Code review reports and archive
   - `/planning` - Implementation plans
   - `/prompts` - AI assistant prompts
+  - `/research` - Scientific references (aquifer parameters, water source metadata)
 - `/notebooks` - Jupyter notebooks for interactive analysis
   - `run_simulation.ipynb` - Primary simulation runner with interactive plots
   - `validations.ipynb` - Data validation and inspection
   - `/exports` - CSV exports from notebook sessions
 - `/results` - Simulation outputs (timestamped folders with CSV, JSON, plots)
-- `/scripts` - Test plotting scripts (test_plot1-6)
+- `/scripts` - Test plotting scripts (test_plot1–6)
 - `/settings` - Layer 2 configuration
   - `data_registry.yaml` - Central registry for all data file paths
   - `settings.yaml` - Active scenario configuration
+- `/specs` - Core model specifications (replaces former docs/arch)
+  - `structure.md` - Configuration schema and policy structure
+  - `calculations.md`, `calculations_*.md` - Calculation methodologies
+  - `policies.md` - Policy decision rules and pseudocode
+  - `data.md` - Data structure and format specifications
+  - `simulation_flow.md` - Simulation execution flow
+  - `metrics_and_reporting.md` - Metrics and reporting specs
+  - `reference_settings.yaml` - Example scenario configuration
+  - `_helper/` - Development guides; `_archive/` - Deprecated content
 - `/src` - Layer 3 simulation engine
   - `/plotting` - Visualization modules (notebook plotting, validation plots)
   - `/policies` - Policy implementations (6 domains, 22 total policies)
@@ -92,14 +101,14 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 - [validation_plots.py](src/plotting/validation_plots.py) - Data validation visualizations
 - [run_simulation.ipynb](notebooks/run_simulation.ipynb) - Primary simulation notebook with widget-based plot selection
 
-**Architecture & Planning:**
+**Architecture & Planning (specs/):**
 
-- [overview.md](docs/arch/overview.md) - Complete model domain specifications
-- [structure.md](docs/arch/structure.md) - Configuration schema and policy structure
-- [calculations.md](docs/arch/calculations.md) - Calculation methodologies and formulas
-- [policies.md](docs/arch/policies.md) - Policy decision rules and pseudocode
-- [data.md](docs/arch/data.md) - Data structure and format specifications
-- [simulation_flow.md](docs/arch/simulation_flow.md) - Simulation execution flow and daily loop logic
+- [structure.md](specs/structure.md) - Configuration schema and policy structure
+- [calculations.md](specs/calculations.md), [calculations_*.md](specs/) - Calculation methodologies (water, crop, energy, economic)
+- [policies.md](specs/policies.md) - Policy decision rules and pseudocode
+- [data.md](specs/data.md) - Data structure and format specifications
+- [simulation_flow.md](specs/simulation_flow.md) - Simulation execution flow and daily loop logic
+- [metrics_and_reporting.md](specs/metrics_and_reporting.md) - Metrics and reporting specifications
 
 ## Key Functions
 
@@ -132,7 +141,7 @@ Layers interact through read-only data contracts. Layer 3 cannot re-compute phys
 - **Community**: 20 farms, 500 hectares farmland, ~150 population
 - **Crops**: Tomato, potato, onion, kale, cucumber
 - **Infrastructure**: Agri-PV (fixed-tilt 28°), wind turbines, battery storage, brackish groundwater desalination, drip irrigation
-- **Data**: 99 datasets (toy + research), 5,479 days weather data (2010-2024)
+- **Data**: 102 CSV datasets (toy + research), 5,479 days weather data (2010-2024)
 
 ## Development
 
