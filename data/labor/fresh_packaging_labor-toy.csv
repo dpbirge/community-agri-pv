@@ -1,0 +1,17 @@
+# SOURCE: Extracted from data/food_processing/fresh_packaging-toy.csv
+#         Original sources: FAO post-harvest handling guides, Egyptian packaging material suppliers,
+#         community farm packaging case studies
+# DATE: 2026-02-03
+# DESCRIPTION: Labor hours per kg for fresh produce packaging by packaging type.
+#              Extracted from fresh_packaging-toy.csv to consolidate all labor data in data/labor/.
+# UNITS: labor_hours_per_kg (hours per kg packaged)
+# LOGIC: Manual packaging with simple tools at community farm scale. Higher labor for heavier/bulkier packaging.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Small-scale manual labor, fresh vegetables, local market distribution.
+#
+packaging_type,capacity_kg_per_unit,labor_hours_per_kg,worker_category
+cardboard_box,20,0.08,field_worker
+plastic_crate,25,0.06,field_worker
+mesh_bag,15,0.05,field_worker
+wooden_crate,30,0.10,field_worker
+pallet,500,0.02,logistics_driver

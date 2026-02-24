@@ -1,0 +1,109 @@
+# SOURCE: FAO Sustainable Agricultural Mechanization benchmarks, Gezira Scheme labor study (Sudan, 2021/22 season,
+#         ResearchGate pub/388724165), UF IFAS Extension FE1026 (tomato harvesting), UC Davis Rural Migration News,
+#         FAO/ILO Encyclopedia of Occupational Health (manual farming operations), Botswana Vegetable Enterprise
+#         Guidelines (Gov.bw), Penn State Extension (cucumber, onion production), Oregon State Extension (kale),
+#         Frontiers in Plant Science (potato harvest mechanization review), FAO Farm Management Ch.2,
+#         ScienceDirect agrivoltaic labor reviews (2025), NREL PV O&M Cost Model & Best Practices 3rd Ed.,
+#         PNNL Energy Storage Assessment & Onsite Wind O&M, Wind Energy the Facts (EWEA),
+#         AMTA RO design guidelines, Netafim drip maintenance guide, Penn State Extension (well maintenance),
+#         FAO Irrigation Water Requirements, National Ag Law Center CSA Labor Guide
+# DATE: 2026-02-24
+# DESCRIPTION: Research-grade labor requirements by activity type for semi-mechanized agricultural operations
+#              in arid coastal Sinai, Egypt. 500 ha community farm system with 5 crops.
+#              Upgrades labor_requirements-toy.csv with empirical and derived values from peer-reviewed
+#              and extension literature. Crop-specific where data supports differentiation.
+# UNITS: hours_per_unit as specified per unit type (per_hectare, per_kg, per_day, per_100kw_per_year, etc.)
+# LOGIC: Field labor hours from FAO/Gezira benchmarks for semi-mechanized developing country operations.
+#        Crop-specific harvest rates from UF IFAS, UC Davis, Oregon State, Frontiers in Plant Science.
+#        Equipment maintenance from NREL, PNNL, EWEA, AMTA industry standards.
+#        Management hours scaled for 500 ha community farm with 50-100 seasonal workers.
+#        Agrivoltaic adjustments from ScienceDirect systematic reviews of AVS labor impacts.
+# DEPENDENCIES: worker_category_mapping-research.csv (for skill-to-wage bridging)
+# ASSUMPTIONS: Semi-mechanized field operations (tractor for tillage, manual planting/harvesting).
+#              Drip irrigation with fertigation. Hot arid climate, experienced workers.
+#              Processing occurs in covered facilities. 280 working days/year, 8-hour standard day.
+#              Under-PV operations use elevated panel structures (5+ m clearance).
+# DATA_QUALITY: MODERATE-HIGH. Field labor values are well-supported by multiple empirical sources.
+#               Equipment maintenance values from industry standards. Management values derived from
+#               FAO cooperative benchmarks. Agrivoltaic multipliers from limited but growing literature.
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 1: FIELD OPERATIONS (crop-specific where data supports it)
+# ──────────────────────────────────────────────────────────────────────────────
+activity_type,crop,unit,hours_per_unit,worker_category,seasonality,data_quality
+land_preparation,all,per_hectare,22,equipment_operator,seasonal,empirical
+planting_transplant,tomato,per_hectare,210,field_worker,seasonal,empirical
+planting_transplant,onion,per_hectare,200,field_worker,seasonal,empirical
+planting_transplant,kale,per_hectare,180,field_worker,seasonal,empirical
+planting_direct_seed,potato,per_hectare,70,field_worker,seasonal,empirical
+planting_direct_seed,cucumber,per_hectare,50,field_worker,seasonal,empirical
+weeding_manual,tomato,per_hectare,125,field_worker,seasonal,empirical
+weeding_manual,potato,per_hectare,100,field_worker,seasonal,empirical
+weeding_manual,onion,per_hectare,150,field_worker,seasonal,empirical
+weeding_manual,kale,per_hectare,100,field_worker,seasonal,empirical
+weeding_manual,cucumber,per_hectare,100,field_worker,seasonal,empirical
+harvesting,tomato,per_hectare,350,seasonal_harvester,seasonal,empirical
+harvesting,potato,per_hectare,120,seasonal_harvester,seasonal,empirical
+harvesting,onion,per_hectare,175,seasonal_harvester,seasonal,empirical
+harvesting,kale,per_hectare,300,seasonal_harvester,seasonal,empirical
+harvesting,cucumber,per_hectare,370,seasonal_harvester,seasonal,empirical
+irrigation_management,all,per_hectare,40,irrigation_technician,year_round,empirical
+pest_scouting,all,per_hectare,25,field_supervisor,seasonal,derived
+fertilizer_application,all,per_hectare,35,field_worker,seasonal,empirical
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 2: PROCESSING OPERATIONS (per kg fresh input)
+# ──────────────────────────────────────────────────────────────────────────────
+canning_preparation,all,per_kg,0.015,processing_worker,seasonal,derived
+canning_processing,all,per_kg,0.020,processing_worker,seasonal,derived
+canning_quality_control,all,per_kg,0.005,quality_inspector,seasonal,derived
+drying_preparation,all,per_kg,0.012,processing_worker,seasonal,derived
+drying_processing,all,per_kg,0.008,processing_worker,seasonal,derived
+packaging_sorting,all,per_kg,0.008,field_worker,seasonal,empirical
+packaging_grading,all,per_kg,0.006,quality_inspector,seasonal,empirical
+packaging_boxing,all,per_kg,0.004,field_worker,seasonal,empirical
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 3: MANAGEMENT AND ADMINISTRATION
+# ──────────────────────────────────────────────────────────────────────────────
+management_planning,all,per_day,5,manager_administrator,year_round,derived
+management_coordination,all,per_day,5,field_supervisor,year_round,derived
+management_sales,all,per_day,3,manager_administrator,year_round,derived
+management_administration,all,per_day,5,manager_administrator,year_round,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 4: EQUIPMENT MAINTENANCE
+# ──────────────────────────────────────────────────────────────────────────────
+maintenance_pv_systems,all,per_100kw_per_year,40,maintenance_technician,year_round,empirical
+maintenance_wind_turbines,all,per_100kw_per_year,50,maintenance_technician,year_round,empirical
+maintenance_bwro,all,per_unit_per_year,300,maintenance_technician,year_round,empirical
+maintenance_wells,all,per_well_per_year,100,maintenance_technician,year_round,derived
+maintenance_batteries,all,per_unit_per_year,25,maintenance_technician,year_round,empirical
+maintenance_generators,all,per_unit_per_year,35,maintenance_technician,year_round,empirical
+maintenance_irrigation,all,per_hectare_per_year,7,irrigation_technician,year_round,derived
+maintenance_processing_equipment,all,per_unit_per_year,12,maintenance_technician,year_round,derived
+maintenance_vehicles,all,per_unit_per_year,8,maintenance_technician,year_round,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 5: LOGISTICS (see also distribution_labor-research.csv for farmgate detail)
+# ──────────────────────────────────────────────────────────────────────────────
+logistics_loading,all,per_kg,0.002,field_worker,year_round,empirical
+logistics_unloading,all,per_kg,0.002,field_worker,year_round,empirical
+logistics_transport,all,per_day,4,logistics_driver,year_round,derived
+logistics_inventory,all,per_day,3,field_supervisor,year_round,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 6: MODEL PARAMETERS (aggregate constants for labor model)
+# ──────────────────────────────────────────────────────────────────────────────
+base_field_labor,all,per_hectare_per_year,200,mixed,year_round,derived
+working_days,all,per_year,280,mixed,year_round,assumed
+working_hours,all,per_day,8,mixed,year_round,assumed
+admin_overhead,all,fraction,0.07,manager_administrator,year_round,derived
+harvest_multiplier,all,multiplier,3.0,mixed,seasonal,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 7: AGRIVOLTAIC LABOR ADJUSTMENTS (new parameters)
+# ──────────────────────────────────────────────────────────────────────────────
+avs_labor_multiplier_elevated,all,multiplier,1.07,mixed,year_round,empirical
+avs_labor_multiplier_low_panel,all,multiplier,1.22,mixed,year_round,empirical
+avs_weeding_reduction,all,multiplier,0.85,field_worker,seasonal,empirical

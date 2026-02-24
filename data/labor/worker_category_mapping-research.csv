@@ -1,0 +1,30 @@
+# SOURCE: Derived from labor_wages-research.csv worker categories and labor_requirements-toy.csv skill levels.
+#         Skill-to-wage mapping informed by Egyptian National Council for Wages skill tier definitions,
+#         ILO ISCO-08 occupation classification for agricultural workers,
+#         FAO community farm staffing models for developing countries.
+# DATE: 2026-02-24
+# DESCRIPTION: Bridging table that maps the 10 worker categories (from labor_wages-research.csv) to
+#              the 3-level skill system (from labor_requirements) and to value chain stages.
+#              Enables costing labor hours (from requirements files) at category-specific wage rates.
+# UNITS: wage_multiplier is dimensionless (1.0 = minimum wage baseline of EGP 28/hour)
+# LOGIC: Each worker_category maps to exactly one skill_level. Multiple worker_categories may share a
+#        skill_level. The value_chain_stages column lists where each category is primarily deployed.
+#        wage_multiplier reflects the empirical ratio from labor_wages-research.csv
+#        (egp_per_hour / 28 EGP baseline).
+# DEPENDENCIES: labor_wages-research.csv, labor_requirements-research.csv
+# ASSUMPTIONS: A single worker may perform tasks across multiple value chain stages in a community farm
+#              setting, but their primary deployment and wage rate are fixed by category.
+#              Seasonal harvesters are a distinct category from general field workers due to
+#              different employment terms (piece-rate vs daily wage) and peak-season hours.
+#
+worker_category,skill_level,wage_multiplier,value_chain_stages,typical_activities
+field_worker,unskilled,1.79,farming,"planting;weeding;fertilizer_application;field_cleanup"
+seasonal_harvester,unskilled,1.36,farming,"harvesting;crop_collection;field_sorting"
+field_supervisor,semi-skilled,2.50,farming,"crew_coordination;task_scheduling;field_quality_checks"
+irrigation_technician,semi-skilled,2.50,farming,"irrigation_management;system_monitoring;minor_repairs"
+processing_worker,semi-skilled,2.14,processing,"canning;drying;packaging_processed;quality_sorting"
+equipment_operator,skilled,3.14,farming;processing,"tractor_operation;land_preparation;heavy_equipment"
+quality_inspector,skilled,3.00,processing;storage,"quality_control;grading;lab_testing;compliance"
+maintenance_technician,skilled,2.50,farming;processing;storage,"pv_maintenance;equipment_repair;water_treatment"
+logistics_driver,semi-skilled,1.96,storage;distribution,"transport;loading;delivery;vehicle_maintenance"
+manager_administrator,skilled,3.93,all,"planning;administration;sales;procurement;record_keeping"

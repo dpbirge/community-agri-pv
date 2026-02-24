@@ -1,0 +1,34 @@
+# SOURCE: Extracted from data/food_processing/processing_specs-research.csv
+#         Original sources: FAO Small-Scale Postharvest Handling, FAO/UNIDO Pre-Feasibility Studies for Crop Processing
+#         in Upper Egypt, FAO Nubaria SDT Project (sun-dried tomato labor data), USDA ERS Price Spreads
+# DATE: 2026-02-05
+# DESCRIPTION: Labor hours per kg of fresh input for each crop x processing type combination.
+#              Extracted from processing_specs-research.csv to consolidate all labor data in data/labor/.
+# UNITS: labor_hours_per_kg (hours per kg fresh input)
+# LOGIC: Semi-manual community operations (~4x more labor-intensive than industrial).
+#        Fresh = no processing labor. Packaged = sorting, grading, wrapping. Canned = prep, cooking, sealing, QC.
+#        Dried = washing, slicing, loading/unloading dryers, quality sorting.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Semi-automated community-scale equipment, not industrial. Hot arid climate (Sinai Peninsula).
+#
+crop_name,processing_type,labor_hours_per_kg,worker_category
+tomato,fresh,0.0,none
+tomato,packaged,0.02,processing_worker
+tomato,canned,0.07,processing_worker
+tomato,dried,0.10,processing_worker
+potato,fresh,0.0,none
+potato,packaged,0.015,processing_worker
+potato,canned,0.09,processing_worker
+potato,dried,0.14,processing_worker
+onion,fresh,0.0,none
+onion,packaged,0.015,processing_worker
+onion,canned,0.06,processing_worker
+onion,dried,0.10,processing_worker
+kale,fresh,0.0,none
+kale,packaged,0.025,processing_worker
+kale,canned,0.08,processing_worker
+kale,dried,0.08,processing_worker
+cucumber,fresh,0.0,none
+cucumber,packaged,0.02,processing_worker
+cucumber,canned,0.05,processing_worker
+cucumber,dried,0.12,processing_worker

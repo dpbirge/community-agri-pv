@@ -1,0 +1,62 @@
+# SOURCE: FAO Agricultural and Food Marketing Management (fao.org/4/w3240e), FAO Small-Scale Postharvest Handling,
+#         FAO Manual for Preparation and Sale of Fruits and Vegetables (fao.org/4/y4893e),
+#         IFAD Egypt Smallholder Contract Farming study (ifad.org), IFPRI Egypt SSP Market-Oriented Agriculture,
+#         CGIAR Smallholder Value Chain Participation Egypt, World Bank Egypt MALR Programmatic Support,
+#         UF IFAS FE1026 (tomato QC throughput), AVRDC Smallholder Vegetable Packhouse Manual,
+#         Meijer Handling Solutions (truck loading benchmarks), Inbound Logistics (forklift productivity),
+#         GS1 Fresh Fruit and Vegetable Traceability Guideline, GlobalGAP Compliance Costs (Ghana study),
+#         Penn State Extension (direct marketing, retail farm pricing), USDA ERS Local Foods studies,
+#         Zawia3 Egyptian vegetable vendor market data, JICA ISMAP Egypt farmer survey data
+# DATE: 2026-02-24
+# DESCRIPTION: Farmgate distribution and sales labor requirements for a 500 ha community farm in
+#              arid coastal Sinai, Egypt. Farmgate model: buyers come to the farm for pickup.
+#              Covers sales operations, loading dock, dispatch QC, transport coordination,
+#              market intelligence, and record keeping/traceability.
+# UNITS: hours_per_day (daily recurring), hours_per_transaction (per buyer dispatch),
+#        hours_per_ton (per ton dispatched), hours_per_week (weekly recurring)
+# LOGIC: Farmgate model means the farm's distribution labor is coordination-focused, not transport-focused.
+#        Assumes 3-8 buyer dispatches per day during harvest season, fewer off-season.
+#        Per-transaction rates derived from FAO marketing management estimates and GS1 traceability standards.
+#        Loading rates consistent with existing logistics_loading values (0.002 hrs/kg = 2 hrs/ton).
+# DEPENDENCIES: worker_category_mapping-research.csv, labor_requirements-research.csv (logistics section)
+# ASSUMPTIONS: Buyers bring own transport. Farm provides loading dock with manual handling (no forklift).
+#              Semi-manual invoicing and documentation (paper + basic digital records).
+#              5 fresh crops + processed products (canned, dried, packaged). Local/regional market reach.
+#              3-8 dispatches/day peak season, 1-3/day off-season.
+# DATA_QUALITY: MODERATE-LOW. ~60-70% of values are derived estimates. No published per-transaction
+#               labor studies exist for Egypt/MENA farmgate operations. Aggregate daily totals are
+#               consistent with FAO community farm marketing benchmarks. Sub-activity decomposition
+#               uses proportional reasoning from the best available analogous data.
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 1: FARMGATE SALES OPERATIONS (daily recurring)
+# ──────────────────────────────────────────────────────────────────────────────
+activity_type,unit,hours_per_unit,worker_category,seasonality,data_quality
+buyer_coordination,per_day,1.25,manager_administrator,year_round,derived
+price_monitoring,per_day,0.75,manager_administrator,year_round,derived
+buyer_relationship_management,per_week,3.0,manager_administrator,year_round,derived
+seasonal_price_negotiation,per_negotiation,0.75,manager_administrator,seasonal,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 2: PER-TRANSACTION OPERATIONS (per buyer dispatch event)
+# ──────────────────────────────────────────────────────────────────────────────
+order_processing,per_transaction,0.40,field_supervisor,year_round,derived
+invoicing,per_transaction,0.20,manager_administrator,year_round,derived
+loading_documentation,per_transaction,0.20,field_supervisor,year_round,derived
+dispatch_qc_inspection,per_ton,1.75,quality_inspector,year_round,derived
+dock_queuing_management,per_transaction,0.35,logistics_driver,year_round,derived
+weighbridge_gate_pass,per_transaction,0.20,logistics_driver,year_round,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 3: RECORD KEEPING AND TRACEABILITY (daily/per-transaction)
+# ──────────────────────────────────────────────────────────────────────────────
+production_harvest_recording,per_day,0.75,field_supervisor,year_round,derived
+dispatch_documentation,per_transaction,0.25,manager_administrator,year_round,derived
+financial_record_keeping,per_day,0.75,manager_administrator,year_round,derived
+inventory_stock_tracking,per_day,1.50,field_supervisor,year_round,derived
+traceability_lot_tracking,per_day,0.75,quality_inspector,year_round,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 4: TRANSPORT COORDINATION (farmgate model - buyers come to farm)
+# ──────────────────────────────────────────────────────────────────────────────
+daily_schedule_planning,per_day,0.75,logistics_driver,year_round,derived

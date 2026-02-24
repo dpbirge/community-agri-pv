@@ -1,0 +1,91 @@
+# SOURCE: Indian Govt 1000 MT Cold Storage DPR (APICOL/Odisha, mkuy.apicol.nic.in), Rinac Cold Storage Guide 2026,
+#         FAO Manual on Meat Cold Store Operation (fao.org/4/t0098e), EU Manual Handling Directive 90/269/EEC,
+#         HACCP Principles & Application Guidelines (FDA), FAO Small-Scale Postharvest Handling (Kitinoja & Kader),
+#         FAO Post-Harvest Compendium (Potato, Onion), Cornell Cold Storage Chart, Oregon State Onion Storage
+#         Guidelines (PNW277), UC Davis IPM potato storage, NC State Extension postharvest cooling guides,
+#         USDA Food Distribution Handbook Ch.7, FAO Processing Facilities Guide (w6864e),
+#         AVRDC Smallholder Vegetable Packhouse Manual, SafetyCulture cold storage management
+# DATE: 2026-02-24
+# DESCRIPTION: Post-harvest storage labor requirements by crop and storage type for a community-scale
+#              farm (50-200 MT storage capacity) in arid coastal Sinai, Egypt.
+#              Fresh produce in cold storage; canned/dried products in ambient storage.
+# UNITS: hours_per_ton_per_month (recurring monthly labor per ton stored),
+#        hours_per_ton_per_turnover (one-time labor per ton loaded/unloaded),
+#        hours_per_ton_per_batch (one-time labor for curing operations),
+#        hours_per_day (facility-level daily tasks)
+# LOGIC: Fresh produce storage labor driven by spoilage rate -- shorter shelf life = more frequent
+#        handling, inspection, and cleaning. Potato and onion have additional curing phase labor.
+#        Ambient storage (canned/dried) requires minimal labor -- primarily FIFO rotation and pest monitoring.
+#        Loading/unloading rates from EU manual handling limits adjusted for hot climate conditions.
+# DEPENDENCIES: worker_category_mapping-research.csv
+# ASSUMPTIONS: Manual/semi-mechanized handling (no forklift). 2-3 cold rooms at community scale.
+#              HACCP-compliant temperature monitoring. 25 kg crates/bags as handling unit.
+#              Curing operations for potato and onion done on-site before cold storage.
+# DATA_QUALITY: MODERATE. No published hrs/ton/month benchmarks exist for small-scale storage in MENA.
+#               Values synthesized from Indian cold storage DPRs, EU handling regulations, HACCP standards,
+#               and FAO post-harvest compendiums. Crop-specific differentials based on spoilage rate
+#               and curing requirements from extension literature.
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 1: FRESH PRODUCE COLD STORAGE (per ton per month, recurring)
+# ──────────────────────────────────────────────────────────────────────────────
+activity_type,crop,storage_type,unit,hours_per_unit,worker_category,data_quality
+temperature_monitoring,tomato,cold,per_ton_per_month,0.30,irrigation_technician,derived
+temperature_monitoring,potato,cold,per_ton_per_month,0.30,irrigation_technician,derived
+temperature_monitoring,onion,cold,per_ton_per_month,0.20,irrigation_technician,derived
+temperature_monitoring,kale,cold,per_ton_per_month,0.30,irrigation_technician,derived
+temperature_monitoring,cucumber,cold,per_ton_per_month,0.30,irrigation_technician,derived
+quality_inspection,tomato,cold,per_ton_per_month,1.50,quality_inspector,derived
+quality_inspection,potato,cold,per_ton_per_month,1.00,quality_inspector,derived
+quality_inspection,onion,cold,per_ton_per_month,0.80,quality_inspector,derived
+quality_inspection,kale,cold,per_ton_per_month,2.00,quality_inspector,derived
+quality_inspection,cucumber,cold,per_ton_per_month,2.00,quality_inspector,derived
+inventory_management,tomato,cold,per_ton_per_month,0.50,field_supervisor,derived
+inventory_management,potato,cold,per_ton_per_month,0.30,field_supervisor,derived
+inventory_management,onion,cold,per_ton_per_month,0.30,field_supervisor,derived
+inventory_management,kale,cold,per_ton_per_month,0.50,field_supervisor,derived
+inventory_management,cucumber,cold,per_ton_per_month,0.50,field_supervisor,derived
+cleaning,tomato,cold,per_ton_per_month,0.40,field_worker,derived
+cleaning,potato,cold,per_ton_per_month,0.30,field_worker,derived
+cleaning,onion,cold,per_ton_per_month,0.30,field_worker,derived
+cleaning,kale,cold,per_ton_per_month,0.50,field_worker,derived
+cleaning,cucumber,cold,per_ton_per_month,0.50,field_worker,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 2: LOADING/UNLOADING (per ton per turnover event, one-time)
+# ──────────────────────────────────────────────────────────────────────────────
+loading_unloading,fresh_all,cold,per_ton_per_turnover,2.00,field_worker,empirical
+loading_unloading,kale,cold,per_ton_per_turnover,2.50,field_worker,derived
+loading_unloading,cucumber,cold,per_ton_per_turnover,2.50,field_worker,derived
+loading_unloading,canned_all,ambient,per_ton_per_turnover,1.50,field_worker,derived
+loading_unloading,dried_all,ambient,per_ton_per_turnover,1.50,field_worker,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 3: CURING OPERATIONS (per ton per batch, one-time at intake)
+# ──────────────────────────────────────────────────────────────────────────────
+curing,potato,curing_room,per_ton_per_batch,1.50,field_supervisor,derived
+curing,onion,curing_room,per_ton_per_batch,2.00,field_supervisor,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 4: AMBIENT STORAGE - CANNED PRODUCTS (per ton per month, recurring)
+# ──────────────────────────────────────────────────────────────────────────────
+inventory_management,canned_all,ambient,per_ton_per_month,0.15,field_supervisor,derived
+quality_inspection,canned_all,ambient,per_ton_per_month,0.10,quality_inspector,derived
+cleaning,canned_all,ambient,per_ton_per_month,0.05,field_worker,derived
+pest_monitoring,canned_all,ambient,per_ton_per_month,0.05,field_worker,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 5: AMBIENT STORAGE - DRIED PRODUCTS (per ton per month, recurring)
+# ──────────────────────────────────────────────────────────────────────────────
+inventory_management,dried_all,ambient,per_ton_per_month,0.20,field_supervisor,derived
+quality_inspection,dried_all,ambient,per_ton_per_month,0.20,quality_inspector,derived
+cleaning,dried_all,ambient,per_ton_per_month,0.10,field_worker,derived
+pest_monitoring,dried_all,ambient,per_ton_per_month,0.15,field_worker,derived
+moisture_monitoring,dried_all,ambient,per_ton_per_month,0.10,quality_inspector,derived
+#
+# ──────────────────────────────────────────────────────────────────────────────
+# SECTION 6: FACILITY-LEVEL DAILY OPERATIONS (hours per day, all storage)
+# ──────────────────────────────────────────────────────────────────────────────
+cold_room_deep_clean,all,cold,per_cold_room_per_month,6.00,field_worker,derived
+equipment_monitoring,all,cold,per_day,0.75,maintenance_technician,derived
+ambient_facility_cleaning,all,ambient,per_week,3.00,field_worker,derived

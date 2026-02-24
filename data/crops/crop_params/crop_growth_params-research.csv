@@ -1,0 +1,38 @@
+# SOURCE: FAO Irrigation and Drainage Paper No. 33 (Doorenbos & Kassam, 1979);
+#   Monteith (1977) J. Exp. Bot.; Sinclair & Muchow (1999) Advances in Agronomy;
+#   FAO Crop Information pages; Steduto et al. (2012) FAO Paper 66 (AquaCrop);
+#   Marcelis et al. (1998) Scientia Horticulturae; FAO GAEZ v4.
+# DATE: 2026-02-24
+# DESCRIPTION: Crop growth parameters for biomass accumulation and yield estimation
+#   in Sinai Peninsula hot arid climate (~28N). Values used to convert daily intercepted
+#   radiation and water supply into biomass accumulation and marketable yield.
+# UNITS:
+#   - potential_yield_kg_per_ha: Maximum attainable fresh yield under optimal conditions (kg/ha)
+#   - harvest_index: Fraction of total above-ground dry biomass that is marketable product (dimensionless)
+#   - rue_g_per_mj: Radiation use efficiency — above-ground dry biomass produced per MJ of
+#     intercepted PAR (g DM / MJ PAR)
+#   - dry_matter_fraction: Fraction of fresh weight that is dry matter (dimensionless)
+#   - t_base_c: Base temperature below which growth ceases (degrees Celsius)
+#   - t_opt_low_c: Lower bound of optimal temperature range (degrees Celsius)
+#   - t_opt_high_c: Upper bound of optimal temperature range (degrees Celsius)
+#   - t_max_c: Temperature above which growth ceases (degrees Celsius)
+# LOGIC: Daily biomass = RUE * intercepted_PAR * water_stress_factor * temperature_factor.
+#   Marketable yield = total_biomass * harvest_index / dry_matter_fraction (to convert to fresh weight).
+#   Temperature factor is 0 below t_base or above t_max, ramps linearly from 0 to 1 between
+#   t_base and t_opt_low, is 1.0 between t_opt_low and t_opt_high, and declines linearly
+#   from 1 to 0 between t_opt_high and t_max.
+# DEPENDENCIES: crop_coefficients-research.csv (stage durations), weather data
+# ASSUMPTIONS:
+#   - Potential yields are for irrigated conditions in warm arid climates (Egypt/Sinai benchmarks)
+#   - RUE values are for total above-ground dry matter under non-stressed conditions
+#   - Harvest index values are typical for well-managed irrigated production
+#   - Temperature response parameters from FAO AquaCrop (Paper 66) and crop physiology literature
+#   - Kale uses cabbage/brassica data as proxy (same species Brassica oleracea)
+# DATA_QUALITY: HIGH — FAO Paper 33/66 and Monteith/Sinclair RUE values are standard references.
+#   Potential yields cross-checked against Egyptian agricultural statistics.
+crop,potential_yield_kg_per_ha,harvest_index,rue_g_per_mj,dry_matter_fraction,t_base_c,t_opt_low_c,t_opt_high_c,t_max_c
+tomato,60000,0.60,1.60,0.065,10,20,28,35
+potato,35000,0.75,1.55,0.22,5,17,24,30
+onion,40000,0.80,1.20,0.12,7,18,27,35
+kale,25000,0.85,1.40,0.14,5,15,22,30
+cucumber,40000,0.65,1.50,0.040,12,22,30,38

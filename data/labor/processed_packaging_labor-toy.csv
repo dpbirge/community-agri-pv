@@ -1,0 +1,16 @@
+# SOURCE: Extracted from data/food_processing/processed_packaging-toy.csv
+#         Original sources: FAO food packaging guides, Egyptian packaging material suppliers,
+#         community food processing case studies
+# DATE: 2026-02-03
+# DESCRIPTION: Labor hours per kg for processed food packaging by packaging type.
+#              Extracted from processed_packaging-toy.csv to consolidate all labor data in data/labor/.
+# UNITS: labor_hours_per_kg (hours per kg packaged)
+# LOGIC: Manual packaging with simple sealing equipment. Glass jars most labor-intensive (handling fragile containers).
+# DEPENDENCIES: None
+# ASSUMPTIONS: Small-scale manual labor, processed goods (dried, canned), community farm scale.
+#
+packaging_type,capacity_kg_per_unit,labor_hours_per_kg,worker_category
+sealed_bag,1,0.10,processing_worker
+glass_jar,0.5,0.15,processing_worker
+metal_can,0.4,0.12,processing_worker
+vacuum_bag,0.5,0.12,processing_worker

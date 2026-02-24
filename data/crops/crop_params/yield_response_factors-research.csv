@@ -1,0 +1,19 @@
+# SOURCE: FAO Irrigation and Drainage Paper No. 33 (Doorenbos & Kassam, 1979)
+# DATE: 2026-02-24
+# DESCRIPTION: FAO yield response factors (Ky) for water stress calculations
+# UNITS: ky_whole_season (dimensionless) — yield sensitivity to water deficit
+# LOGIC: Y_actual = Y_potential × (1 - Ky × (1 - ET_actual / ET_crop))
+#   Ky > 1.0 = yield drops more than proportionally to water deficit (sensitive)
+#   Ky = 1.0 = proportional response
+#   Ky < 1.0 = yield drops less than proportionally (tolerant)
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS:
+#   - Whole-season Ky values; per-growth-stage values available in FAO Paper 33 Table 12
+#   - Kale uses cabbage (Brassica oleracea var. capitata) as proxy — same species
+#   - Cucumber not in FAO Paper 33; value from open-field irrigation study consensus (Ky=0.96-1.02)
+crop_name,ky_whole_season,source,notes
+tomato,1.05,FAO Paper 33,Most sensitive during flowering (Ky=1.1) and yield formation (Ky=0.8)
+potato,1.10,FAO Paper 33,Most sensitive during stolonization/tuber initiation; very tolerant at ripening (Ky=0.20)
+onion,1.10,FAO Paper 33,Dry onion; most sensitive during bulb formation (Ky=0.80)
+kale,0.95,FAO Paper 33 cabbage proxy,Cabbage (var. capitata) proxy for kale (var. acephala); kale may be 5-10% less sensitive
+cucumber,1.00,Literature consensus,Open-field studies report Ky=0.96-1.02; not in FAO Paper 33
