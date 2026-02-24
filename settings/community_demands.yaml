@@ -1,0 +1,52 @@
+# Community Energy & Water Demands Configuration
+# Defines household composition and building footprints for daily demand calculation.
+# Daily demand = (data lookup value) * count_or_area * multiplier
+#
+# Data files: see building_demands section in settings/data_registry.yaml
+#
+# Multipliers are optional (default 1.0). Use them to model efficiency upgrades,
+# conservation programs, or higher-than-baseline usage without regenerating data.
+
+config_name: baseline_community
+
+# --- Households ---
+households:
+  small_household:
+    count: 6
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  medium_household:
+    count: 12
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  large_household:
+    count: 15
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+
+# --- Community Buildings ---
+community_buildings:
+  office_admin:
+    area_m2: 150
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  non_conditioned_warehouse:
+    area_m2: 400
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  climate_controlled_warehouse:
+    area_m2: 250
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  chilled_warehouse:
+    area_m2: 100
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  meeting_hall:
+    area_m2: 200
+    energy_multiplier: 1.0
+    water_multiplier: 1.0
+  workshop_maintenance:
+    area_m2: 150
+    energy_multiplier: 1.0
+    water_multiplier: 1.0

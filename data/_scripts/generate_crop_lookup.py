@@ -36,7 +36,8 @@ Models:
   - Water stress: Ks = min(1, water_applied / ETc) — applied daily to biomass
   - Temperature stress: Kt piecewise linear from crop cardinal temperatures
   - Biomass: RUE × incident_PAR × fPAR × Ks × Kt (daily accumulation)
-  - Yield: potential_yield × (1 − Ky × deficit) × avg_Kt (FAO Paper 33)
+  - Yield: potential_yield × (ETa/ETc)^(1/alpha) × avg_Kt
+    where alpha = 1 + beta*(1.15 - Ky), producing concave water-yield response.
     Yield is decoupled from cumulative biomass to avoid the dm_frac
     amplification problem (crops with >95% water content produce unrealistic
     fresh yields from any reasonable dry biomass).  Light and water
@@ -261,6 +262,7 @@ def simulate_season(
     t_max = growth_params["t_max_c"]
     potential_yield = growth_params["potential_yield_kg_per_ha"]
     ky = yield_response.get("ky_whole_season", 1.0)
+    wue_beta = yield_response.get("wue_curvature", 3.5)
 
     temp_adj_c = 0.0
     total_et_reduction = 0.0
@@ -340,9 +342,12 @@ def simulate_season(
                 stage = stage_name_on_day(kc_stages, d)
 
                 if d == season_length - 1:
-                    deficit = (max(0.0, 1.0 - season_et_actual / season_et_crop)
-                               if season_et_crop > 0 else 0.0)
-                    ky_factor = max(0.0, 1.0 - ky * deficit)
+                    f = (season_et_actual / season_et_crop
+                         if season_et_crop > 0 else 0.0)
+                    f = min(f, 1.0)
+                    alpha = 1.0 + wue_beta * (1.15 - ky)
+                    alpha = max(alpha, 1.0)
+                    ky_factor = f ** (1.0 / alpha)
                     avg_kt = (season_sum_kt / season_day_count
                               if season_day_count > 0 else 1.0)
                     yield_fresh = potential_yield * ky_factor * avg_kt
@@ -414,7 +419,8 @@ def generate_header(
         f"#   Under PV, ETo_ref uses openfield temps to avoid double-counting.\n"
         f"#   Canopy interception fPAR ramps with growth stage (seedling→full canopy).\n"
         f"#   Daily biomass = RUE * PAR * fPAR * Ks * Kt (tracks growth dynamics).\n"
-        f"#   Yield = potential_yield * (1 - Ky * deficit) * avg_Kt (FAO Paper 33).\n"
+        f"#   Yield = potential_yield * (ETa/ETc)^(1/alpha) * avg_Kt\n"
+        f"#   where alpha = 1 + beta*(1.15 - Ky), producing concave water-yield response.\n"
         f"#   PV light/temp attenuation captured in condition-specific weather files.\n"
         f"# DEPENDENCIES: crop_coefficients-research.csv, crop_growth_params-research.csv,\n"
         f"#   yield_response_factors-research.csv, pv_microclimate_factors-research.csv,\n"
