@@ -1,0 +1,12 @@
+# SOURCE: Synthetic data based on evaporation studies for hot arid climates, Egyptian construction cost databases, FAO water storage guides
+# DATE: 2026-02-03
+# DESCRIPTION: Water storage system specifications for irrigation water buffer storage in hot arid climate
+# UNITS: storage_type (string), evaporation_rate_annual_pct (%), capital_cost_per_m3 (USD/m3), om_cost_per_m3_per_year (USD/m3/year)
+# LOGIC: Underground tanks have lowest evaporation (2%) due to protection from sun and wind. Surface tanks moderate (8%) due to exposure. Reservoirs highest (15%) due to large surface area and wind exposure. Costs reflect Egyptian construction costs for small-scale community infrastructure.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot arid climate, high evaporation rates; storage capacity 100-2000 m3 typical; treated irrigation water; buffer storage between treatment and irrigation; costs in 2024 USD; includes basic pumps and controls
+# CONTEXT: Location: Sinai Peninsula, Egypt. Climate: Hot arid, high evaporation rates. Storage capacity: 100-2000 m3 typical. Water type: Treated irrigation water. Use case: Buffer storage between treatment and irrigation.
+storage_type,evaporation_rate_annual_pct,capital_cost_per_m3,om_cost_per_m3_per_year
+underground_tank,2.0,85,2.5
+surface_tank,8.0,45,1.8
+reservoir,15.0,25,1.2

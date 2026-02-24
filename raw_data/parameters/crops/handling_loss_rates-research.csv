@@ -1,0 +1,37 @@
+# SOURCE: FAO Food Loss Analysis Egypt (2021), Gustavsson et al. (2011), FAO Post-Harvest Compendium,
+#   USDA postharvest handling guidelines, FAO/UNIDO Pre-Feasibility Studies (Upper Egypt)
+# DATE: 2026-02-06
+# DESCRIPTION: Post-harvest loss percentages by crop and processing pathway
+# UNITS: loss_pct (percentage of input weight lost to waste/spoilage, NOT processing weight change)
+# LOGIC: Separate from processing weight loss (dehydration, peeling). These are waste losses only:
+#   spoilage, handling damage, transport damage, quality rejection, spillage.
+#   Fresh losses highest for perishable crops in hot climate without cold chain.
+#   Processing reduces losses by removing the spoilage pathway (thermal/dehydration preservation).
+# DEPENDENCIES: None (reference data)
+# ASSUMPTIONS:
+#   - Hot arid climate (Sinai Peninsula, 25-40C daytime)
+#   - Small-scale community farming, no industrial cold chain
+#   - Local/regional marketing (20-100 km transport)
+#   - Same-day or next-day sale for fresh pathway
+#   - Solar-assisted drying in favorable arid climate
+crop_name,pathway,loss_pct,source,notes
+tomato,fresh,28.0,FAO Egypt tomato value chain 2021,25-49% farm-to-consumer; 28% for farm-to-first-sale in hot climate
+tomato,packaged,8.0,FAO postharvest handling guidelines,5% sorting rejects + 3% handling damage
+tomato,canned,5.0,FAO Nubaria SDT Project,3% grading reject + 2% processing spillage
+tomato,dried,3.0,FAO Nubaria sun-dried tomato project,2% defective rejection + 1% handling
+potato,fresh,15.0,FAO Post-Harvest Compendium potato,5-8% harvest mechanical damage + 3-5% sprouting + 2-4% transport
+potato,packaged,6.0,USDA postharvest handling,4% sorting rejects + 2% bruising
+potato,canned,4.0,Food processing industry benchmarks,2% defective pieces + 2% process spillage
+potato,dried,2.0,FAO Small-Scale Postharvest Handling,Minimal spoilage in hot arid climate
+onion,fresh,12.0,FAO Post-Harvest Compendium onion,3-4% skin damage + 2-3% sprouting + 3-5% mechanical; arid curing favorable
+onion,packaged,5.0,FAO postharvest guidelines,3% sorting damaged/sprouted + 2% handling
+onion,canned,3.0,FAO/UNIDO Pre-Feasibility Studies Upper Egypt,2% trimming waste + 1% process loss
+onion,dried,2.0,Journal of Food Science & Technology,Efficient dehydration in arid climate
+kale,fresh,30.0,FAO/World Bank leafy vegetable loss data,Highly perishable; wilting begins within hours at 35C+ without cold chain
+kale,packaged,10.0,FAO fresh-cut produce guidelines,5% trimming + 3% wilting before packaging + 2% seal failures
+kale,canned,5.0,Food processing industry benchmarks,3% trimming waste + 2% process loss
+kale,dried,3.0,Colorado State Extension drying guidelines,2% sorting/stem removal + 1% handling
+cucumber,fresh,25.0,FAO vegetable loss data developing countries,96% water content makes extremely perishable; 25% assumes rapid same-day transport
+cucumber,packaged,8.0,USDA postharvest handling,4% sorting/defect + 2% skin damage + 2% shrinkage
+cucumber,canned,3.0,FAO/UNIDO processing studies,Pickling/brining efficient; 2% size rejection + 1% process waste
+cucumber,dried,2.0,Solar drying studies,Very low solid waste despite 95% dehydration weight loss

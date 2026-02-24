@@ -1,0 +1,14 @@
+# SOURCE: Synthetic data based on FAO post-harvest handling guides, Egyptian packaging material suppliers, community farm packaging case studies
+# DATE: 2026-02-03
+# DESCRIPTION: Fresh food packaging specifications for small-scale Egyptian community farms
+# UNITS: packaging_type (string), capacity_kg_per_unit (kg), labor_hours_per_kg (hours/kg), material_cost_per_kg (USD/kg), energy_kwh_per_kg (kWh/kg), shelf_life_extension_days (days)
+# LOGIC: Simple, affordable packaging appropriate for community farms. Cardboard boxes and plastic crates most common. Mesh bags for ventilation. Wooden crates for durability. Pallets for bulk transport. Labor-intensive manual packaging. Minimal energy requirements.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Small-scale, manual labor with simple tools; fresh vegetables (tomato, potato, onion, kale, cucumber); local markets and distribution centers; costs in 2024 USD; focus on simple, affordable packaging, not industrial
+# CONTEXT: Location: Egyptian community farms. Scale: Small-scale, manual labor. Products: Fresh vegetables. Destination: Local markets, distribution centers. Important: Focus on simple, affordable packaging appropriate for community farms, not industrial packaging.
+packaging_type,capacity_kg_per_unit,labor_hours_per_kg,material_cost_per_kg,energy_kwh_per_kg,shelf_life_extension_days
+cardboard_box,20,0.08,0.12,0.01,2
+plastic_crate,25,0.06,0.15,0.01,3
+mesh_bag,15,0.05,0.08,0.00,1
+wooden_crate,30,0.10,0.25,0.01,4
+pallet,500,0.02,0.05,0.02,0

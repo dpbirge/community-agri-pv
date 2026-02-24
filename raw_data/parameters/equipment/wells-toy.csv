@@ -1,0 +1,25 @@
+# SOURCE: Synthetic data based on FAO irrigation guides, Egyptian well drilling cost databases, pump manufacturer specifications,
+# DATE: 2026-02-03,,,
+# DESCRIPTION: Groundwater well specifications for brackish water extraction in Sinai Peninsula,,,
+# UNITS: well_depth_m (meters), flow_rate_m3_day (m3/day), capital_cost_per_well (USD), om_cost_per_year (USD/year), pumping_kwh_per_m3 (kWh/m3)
+# LOGIC: Pumping energy is now calculated from first principles in calculations.py using hydraulic engineering formulas (lift + friction losses). Deeper wells have higher capital costs (drilling, casing) and higher O&M (pump maintenance, cleaning).,
+# DEPENDENCIES: None,,,
+# ASSUMPTIONS: Brackish groundwater (density ~1025 kg/m3); submersible electric pumps; costs in 2024 USD; small-scale community wells (10-20 wells per community); typical Sinai Peninsula depths 30-100m; flow rates suitable for community irrigation needs,,,
+# CONTEXT: Location: Sinai Peninsula, Egypt. Water type: Brackish groundwater. Scale: Community wells. Typical depth: 30-100 meters. Typical flow: 50-200 m3/day per well.,,
+well_depth_m,flow_rate_m3_day,capital_cost_per_well,om_cost_per_year,pumping_kwh_per_m3
+30,50,8500,450,0.14
+30,100,9500,550,0.14
+30,150,10500,650,0.14
+30,200,11500,750,0.14
+50,50,12000,600,0.233
+50,100,13500,700,0.233
+50,150,15000,800,0.233
+50,200,16500,900,0.233
+75,50,18000,800,0.349
+75,100,20000,900,0.349
+75,150,22000,1000,0.349
+75,200,24000,1100,0.349
+100,50,25000,1000,0.466
+100,100,27500,1100,0.466
+100,150,30000,1200,0.466
+100,200,32500,1300,0.466

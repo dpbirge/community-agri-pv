@@ -1,0 +1,16 @@
+# SOURCE: Synthetic data based on NREL ATB 2024, manufacturer warranty data, IRENA technology reports, and industry maintenance guidelines for arid environments
+# DATE: 2026-02-18
+# DESCRIPTION: Equipment lifespan and replacement cost parameters for community infrastructure maintenance budgeting
+# UNITS: lifespan_years (years), replacement_cost_pct_of_capex (% of original capital expenditure)
+# LOGIC: Lifespans reflect conservative estimates for hot arid desert conditions. Replacement cost as percentage of original CAPEX accounts for partial vs full component replacement. Components with lifespan exceeding typical 15-year simulation horizon show 0% replacement cost.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot desert environment reduces lifespans by 10-20% vs temperate benchmarks; replacement costs include labor and commissioning; PV panels and wind turbines outlast the simulation period so replacement cost is zero
+component,lifespan_years,replacement_cost_pct_of_capex,notes
+ro_membranes,6,35,RO membrane replacement
+pumps_submersible,12,70,Pump replacement
+drip_emitters,7,25,Drip irrigation lines
+battery_pack,12,60,LFP battery pack
+pv_panels,27,0,Outlasts simulation
+pv_inverters,12,18,PV inverter replacement
+wind_turbines,22,0,Outlasts simulation
+generator,15,50,Diesel generator

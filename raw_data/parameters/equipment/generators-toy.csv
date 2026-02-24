@@ -1,0 +1,13 @@
+# SOURCE: Synthetic data based on diesel generator manufacturer specifications, generator efficiency studies, Egyptian fuel prices
+# DATE: 2026-02-03
+# DESCRIPTION: Diesel backup generator specifications for small-scale community microgrid
+# UNITS: generator_type (string), capacity_kw (kW), fuel_consumption_l_per_kwh (L/kWh), efficiency (decimal), min_load_pct (%), startup_time_min (minutes), min_load_fraction (decimal), sfc_coefficient_a (L/kWh), sfc_coefficient_b (L/kWh)
+# LOGIC: Fuel consumption varies with load factor - higher loads more efficient. Typical diesel generators 30-40% efficient. Minimum load ~30% to prevent engine damage. Startup time 2-5 minutes for small generators. Willans line fuel model: fuel_L = (a * P_rated + b * P_gen) * hours, where a is no-load coefficient and b is incremental coefficient.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Backup power for critical loads; diesel fuel available in Egypt; small-scale community microgrid (50-200 kW); costs in 2024 USD; fuel consumption at 75% load factor
+# CONTEXT: Location: Sinai Peninsula, Egypt. Use case: Backup power for critical loads. Fuel: Diesel (available in Egypt). Scale: Small-scale community microgrid (50-200 kW).
+generator_type,capacity_kw,fuel_consumption_l_per_kwh,efficiency,min_load_pct,startup_time_min,min_load_fraction,sfc_coefficient_a,sfc_coefficient_b
+diesel,50,0.28,0.35,30,3,0.30,0.06,0.20
+diesel,100,0.26,0.37,30,3,0.30,0.06,0.20
+diesel,150,0.25,0.38,30,4,0.30,0.06,0.20
+diesel,200,0.24,0.39,30,5,0.30,0.06,0.20

@@ -1,0 +1,17 @@
+# SOURCE: Synthetic data for community agri-PV model
+# DATE: 2026-02-23
+# DESCRIPTION: Community building types with energy and water demand profiles
+# UNITS: energy_per_m2_per_day_kwh (kWh/m²/day), water_per_m2_per_day_m3 (m³/m²/day)
+# LOGIC: Community buildings include offices, warehouse variants, meeting halls, workshops
+# LOGIC: Warehouses split into: non-conditioned (ventilation only), climate-controlled (68F/20C), chilled (50F/10C)
+# LOGIC: Water demand for bathrooms, cleaning, drinking water
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot arid climate (BWh). Warehouse baselines from ASHRAE/industry norms. Weather response uses degree-day physics.
+# ASSUMPTIONS: Reasonably insulated construction (U~0.5 W/m²K climate-controlled, U~0.45 cold storage)
+building_type,typical_use,energy_per_m2_per_day_kwh,water_per_m2_per_day_m3,equipment_list
+office_admin,Administration offices with AC,0.15,0.010,AC units; LED lighting; computers; printers; small fridge; water cooler
+non_conditioned_warehouse,Ventilated storage no HVAC,0.020,0.002,Ventilation fans; minimal LED lighting; occasional power tool use
+climate_controlled_warehouse,Climate-controlled storage 68F/20C,0.073,0.004,HVAC; ventilation; LED lighting; humidity control
+chilled_warehouse,Cold storage 50F/10C perishables,0.148,0.005,Refrigeration; LED lighting; dock seals; humidity control
+meeting_hall,Community gathering space with basic amenities,0.08,0.008,Ceiling fans; LED lighting; basic sound system; restroom facilities
+workshop_maintenance,Maintenance workshop with tools,0.12,0.012,Ventilation; LED lighting; power tools; workbenches; wash station; compressed air

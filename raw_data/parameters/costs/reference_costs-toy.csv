@@ -1,0 +1,21 @@
+# SOURCE: Industry average estimates for infrastructure cost modeling, cross-referenced with capital_costs and operating_costs CSVs
+# DATE: 2026-02-18
+# DESCRIPTION: Simplified reference capital and O&M cost parameters used by estimate_infrastructure_costs() for community infrastructure costing. These are scaling factors (cost per unit of capacity) rather than equipment-specific quotes.
+# UNITS: capital_cost_rate (USD per unit as specified), om_rate (USD per unit/yr or fraction of CAPEX as specified by om_type)
+# LOGIC: Values represent industry-average estimates adjusted for community-scale infrastructure in hot arid climates. Distinct from detailed equipment specs in capital_costs and operating_costs CSVs which track component-level costs.
+# DEPENDENCIES: Used by src/settings/calculations.py estimate_infrastructure_costs()
+# ASSUMPTIONS: (1) All costs in 2024 USD, (2) Values are representative averages, not site-specific quotes
+#
+subsystem,capital_cost_key,capital_cost_rate,capital_cost_unit,om_key,om_rate,om_type
+wells,cost_per_m_depth,500,usd_per_m_depth,om_per_well_yr,2000,absolute
+water_treatment,cost_per_m3_day,1000,usd_per_m3_day_capacity,om_pct,0.05,pct_of_capex
+irrigation_storage,cost_per_m3,50,usd_per_m3_capacity,om_pct,0.01,pct_of_capex
+irrigation_system,cost_per_ha,2500,usd_per_hectare,om_pct,0.03,pct_of_capex
+pv,cost_per_kw,1200,usd_per_kw,om_per_kw_yr,15,absolute
+wind,cost_per_kw,2500,usd_per_kw,om_per_kw_yr,30,absolute
+battery,cost_per_kwh,350,usd_per_kwh,om_pct,0.01,pct_of_capex
+generator,cost_per_kw,800,usd_per_kw,om_per_kw_yr,20,absolute
+fresh_packaging,cost_per_line,50000,usd_per_line,om_pct,0.05,pct_of_capex
+drying,cost_per_unit,30000,usd_per_unit,om_pct,0.03,pct_of_capex
+canning,cost_per_unit,80000,usd_per_unit,om_pct,0.05,pct_of_capex
+packaging,cost_per_unit,20000,usd_per_unit,om_pct,0.03,pct_of_capex

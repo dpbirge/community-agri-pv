@@ -1,0 +1,14 @@
+# SOURCE: Engineering estimates for brackish groundwater pumping systems in arid regions
+# DATE: 2026-02-18
+# DESCRIPTION: Pump system parameters for hydraulic energy calculations and infrastructure distance modeling
+# UNITS: As specified in unit column
+# LOGIC: Pump efficiency reflects combined pump+motor efficiency for submersible centrifugal pumps in brackish water applications. Default pipe and distance parameters are used when site-specific values are unavailable. Distance coefficients model average spacing between infrastructure components based on geometric distribution in a square region: E[d] = coeff * sqrt(A) / sqrt(n).
+# DEPENDENCIES: Used by src/settings/calculations.py calculate_pumping_energy() and calculate_distances()
+# ASSUMPTIONS: (1) PVC pipe material with friction factor 0.02, (2) Brackish water density 1025 kg/m3, (3) Distance coefficients calibrated for typical rural infrastructure placement
+#
+parameter,value,unit,description
+pump_efficiency,0.60,fraction,Combined pump and motor efficiency for submersible centrifugal pumps
+default_horizontal_distance_km,0.3,km,Default horizontal pipe distance from well to treatment/storage
+default_pipe_diameter_m,0.1,m,Default main pipe diameter (100mm PVC)
+distance_coeff_well_to_treatment,0.3,dimensionless,Geometric distribution coefficient for well-to-treatment distance (wells tend to cluster near treatment)
+distance_coeff_treatment_to_farm,0.4,dimensionless,Geometric distribution coefficient for treatment-to-farm distance (farms more spread out from central treatment)

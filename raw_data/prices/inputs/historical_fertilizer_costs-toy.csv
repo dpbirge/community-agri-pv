@@ -1,0 +1,34 @@
+# SOURCE: Synthetic data based on Egyptian agricultural input cost surveys, FAO GIEWS,
+#   World Bank Fertilizer Price Index, CAPMAS agricultural production cost bulletins
+# DATE: 2026-02-05
+# DESCRIPTION: Annual fertilizer costs per hectare for irrigated vegetable farming in
+#   arid regions of Egypt. Covers NPK compound fertilizers, urea, and micronutrients
+#   typical for drip-irrigated vegetable production in Sinai-like conditions.
+# UNITS: usd_per_ha (USD per hectare per growing season), egp_per_ha_original (Egyptian
+#   Pounds per hectare), usd_egp_exchange_rate (EGP per 1 USD, period average)
+# LOGIC: Egyptian fertilizer costs reflect three overlapping trends:
+#   1. Domestic subsidy reduction under IMF structural adjustment (2016-2019)
+#   2. Currency devaluations (Nov 2016 float, Jan 2023 float, Mar 2024 float)
+#   3. Global fertilizer price shock from Ukraine war (2022 peak, gradual decline)
+#   Costs rose from ~$220/ha (2015, heavy subsidies) to ~$380/ha (2022 peak),
+#   then moderated slightly as global prices eased despite continued EGP weakness.
+# DEPENDENCIES: None
+# ASSUMPTIONS:
+#   1. Costs represent typical NPK + urea + micronutrient package for vegetable crops
+#   2. Application rates based on Egyptian Ministry of Agriculture recommendations
+#   3. Prices include delivery to farm gate in Sinai region
+#   4. Exchange rates are annual averages from Central Bank of Egypt
+#   5. Single annual value used (fertilizer purchases typically seasonal)
+# DATA_QUALITY: LOW (synthetic/toy data for model development)
+# GENERATION_METHOD: Manual estimation based on published cost surveys and global indices
+date,usd_per_ha,egp_per_ha_original,usd_egp_exchange_rate,notes
+2015-01-01,220,1694.00,7.7,Subsidized domestic fertilizer
+2016-01-01,210,2100.00,10.0,Pre-float subsidized
+2017-01-01,230,4094.00,17.8,Post-float price adjustment
+2018-01-01,250,4450.00,17.8,Subsidy phase-out continues
+2019-01-01,260,4368.00,16.8,Gradual market pricing
+2020-01-01,275,4345.00,15.8,COVID supply chain impact
+2021-01-01,300,4710.00,15.7,Global fertilizer price rise
+2022-01-01,380,7296.00,19.2,Ukraine war peak
+2023-01-01,360,11052.00,30.7,Elevated but easing
+2024-01-01,350,15890.00,45.4,EGP weakness offsets global easing

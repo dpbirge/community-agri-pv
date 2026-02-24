@@ -1,0 +1,13 @@
+# SOURCE: Synthetic data based on FAO food packaging guides, Egyptian packaging material suppliers, community food processing case studies
+# DATE: 2026-02-03
+# DESCRIPTION: Processed food packaging specifications for small-scale Egyptian community farms
+# UNITS: packaging_type (string), capacity_kg_per_unit (kg), labor_hours_per_kg (hours/kg), material_cost_per_kg (USD/kg), energy_kwh_per_kg (kWh/kg)
+# LOGIC: Simple packaging appropriate for processed goods. Sealed bags for dried products. Glass jars and metal cans for canned products. Vacuum bags for extended shelf life. Labor-intensive manual packaging. Minimal energy for sealing equipment.
+# DEPENDENCIES: None
+# ASSUMPTIONS: Small-scale, manual labor with simple tools; processed goods (dried tomatoes/kale, canned tomatoes/onions); costs in 2024 USD; focus on simple, affordable packaging appropriate for community farms
+# CONTEXT: Location: Egyptian community farms. Scale: Small-scale, manual labor. Products: Dried tomatoes/kale, canned tomatoes/onions. Important: Focus on simple, affordable packaging appropriate for community farms.
+packaging_type,capacity_kg_per_unit,labor_hours_per_kg,material_cost_per_kg,energy_kwh_per_kg
+sealed_bag,1,0.10,0.20,0.02
+glass_jar,0.5,0.15,0.35,0.03
+metal_can,0.4,0.12,0.30,0.03
+vacuum_bag,0.5,0.12,0.25,0.05

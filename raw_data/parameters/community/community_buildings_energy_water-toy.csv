@@ -1,0 +1,17 @@
+# SOURCE: Synthetic data for community agri-PV model
+# DATE: 2026-02-06
+# DESCRIPTION: Community building types with energy and water demand profiles
+# UNITS: building_area_m2 (square meters), kwh_per_m2_per_day (kWh/m²/day), m3_per_m2_per_day (m³/m²/day)
+# LOGIC: Community buildings include offices, storage, meeting halls, workshops
+# LOGIC: Energy demand for lighting, ventilation, small appliances, tools
+# LOGIC: Water demand for bathrooms, cleaning, drinking water
+# DEPENDENCIES: None
+# ASSUMPTIONS: Hot arid climate requires some cooling/ventilation
+# ASSUMPTIONS: Non-residential buildings have lower per-m² demand than housing
+# ASSUMPTIONS: Office space has highest energy (AC/lighting), storage lowest
+# ASSUMPTIONS: Water use primarily for sanitation and cleaning
+building_type,typical_use,kwh_per_m2_per_day,m3_per_m2_per_day,equipment_list
+office_admin,Administration offices with AC,0.15,0.010,AC units; LED lighting; computers; printers; small fridge; water cooler
+storage_warehouse,Ventilated storage for equipment and supplies,0.03,0.002,Ventilation fans; minimal lighting; occasional power tool use
+meeting_hall,Community gathering space with basic amenities,0.08,0.008,Ceiling fans; LED lighting; basic sound system; restroom facilities
+workshop_maintenance,Maintenance workshop with tools,0.12,0.012,Ventilation; LED lighting; power tools; workbenches; wash station; compressed air
