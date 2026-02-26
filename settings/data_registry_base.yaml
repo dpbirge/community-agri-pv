@@ -1,0 +1,37 @@
+# Data Registry
+# Central index of all data files used by the simulation.
+# Paths are relative to the repository root.
+# Each domain groups related files; the data_quality tag (toy | research)
+# indicates whether values are synthetic placeholders or literature-derived.
+
+# --- Building Demands ---
+building_demands:
+  household_energy:        data/building_demands/household_energy_kwh_per_day-toy.csv
+  household_water:         data/building_demands/household_water_m3_per_day-toy.csv
+  buildings_energy:        data/building_demands/community_buildings_energy_kwh_per_day-toy.csv
+  buildings_water:         data/building_demands/community_buildings_water_m3_per_day-toy.csv
+
+# --- Energy Generation ---
+energy_supply:
+  pv_energy:               data/energy/daily_pv_output-research.csv
+  wind_energy:             data/energy/daily_wind_output-research.csv
+
+# --- Crops ---
+crops:
+  growth_params:           data/crops/crop_params/crop_growth_params-research.csv
+  yield_response_factors:  data/crops/crop_params/yield_response_factors-research.csv
+  daily_growth_dir:        data/crops/crop_daily_growth
+
+# --- Water Supply ---
+water_supply:
+  wells:                   data/water/wells-toy.csv
+  pump_systems:            data/water/pump_systems-toy.csv
+  treatment_energy_toy:    data/water/treatment_kwh_per_m3-toy.csv
+  treatment_research:      data/water/water_treatment-research.csv
+  storage_systems:         data/water/storage_systems-toy.csv
+  irrigation_systems:      data/water/irrigation_systems-toy.csv
+
+# --- Water Pricing ---
+water_pricing:
+  municipal_research:      data/prices/water/historical_municipal_water_prices-research.csv
+  agricultural_bulk_toy:   data/prices/water/historical_municipal_water_prices-toy.csv

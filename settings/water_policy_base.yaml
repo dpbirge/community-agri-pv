@@ -1,0 +1,49 @@
+# Water supply dispatch and irrigation policy configuration.
+#
+# Paired with a scenario file (scenarios/*.yaml) via the water_policy key.
+# Swap this file to change irrigation strategy without modifying farm profiles
+# or energy system settings.
+
+water_policy_name: baseline_water_policy
+
+# --- Irrigation Mode ---
+# static:  Use a named pre-baked policy from the crop growth lookup tables.
+#          ETc demand reflects the chosen policy; yield is read from the final
+#          harvest-day row in the lookup CSV. Use for scenario comparisons and
+#          pre-simulation validation.
+# dynamic: Use full_eto demand as the request baseline. The water system delivers
+#          what it can each day (requires src/water.py). Yield is computed at
+#          harvest from cumulative ETa/ETc using the FAO response function.
+#          When supply < demand, all fields receive the same proportional reduction.
+
+irrigation:
+  mode: static              # static | dynamic
+  static_policy: full_eto   # used when mode=static
+                            # valid values: full_eto | optimal_deficit |
+                            #               deficit_80 | deficit_60 | rainfed
+
+# --- Groundwater ---
+# All wells are drawn equally — each supplies an equal share of total groundwater
+# extracted on a given day, regardless of depth or TDS.
+groundwater:
+  monthly_cap_m3: null      # null = unlimited; set a value to cap monthly extraction
+
+# --- Municipal Source ---
+municipal:
+  monthly_cap_m3: 500       # maximum municipal water per calendar month (m3)
+
+# --- Monthly Cap Enforcement ---
+# Controls how the system responds when a monthly cap is projected to be exceeded.
+# look_ahead: true  — each day, estimate remaining-month demand and scale daily draw
+#                     so the cap is spread evenly across remaining days in the month.
+#                     Avoids sudden zero-supply days at month-end.
+# look_ahead: false — draw freely until cap is exhausted, then stop for the month.
+cap_enforcement:
+  look_ahead: true
+
+# --- Treatment / Blending Strategy ---
+# How to mix groundwater and municipal supply to meet the daily crop TDS requirement.
+# minimize_cost:      prefer cheapest untreated groundwater; treat only as needed
+# minimize_treatment: blend to meet TDS with minimum treatment volume
+# minimize_draw:      prefer municipal water; use groundwater only after cap is hit
+strategy: minimize_cost

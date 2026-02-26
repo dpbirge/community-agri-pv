@@ -1,14 +1,19 @@
-# SOURCE: Engineering estimates for brackish groundwater pumping systems in arid regions
-# DATE: 2026-02-18
-# DESCRIPTION: Pump system parameters for hydraulic energy calculations and infrastructure distance modeling
-# UNITS: As specified in unit column
-# LOGIC: Pump efficiency reflects combined pump+motor efficiency for submersible centrifugal pumps in brackish water applications. Default pipe and distance parameters are used when site-specific values are unavailable. Distance coefficients model average spacing between infrastructure components based on geometric distribution in a square region: E[d] = coeff * sqrt(A) / sqrt(n).
-# DEPENDENCIES: Used by src/settings/calculations.py calculate_pumping_energy() and calculate_distances()
-# ASSUMPTIONS: (1) PVC pipe material with friction factor 0.02, (2) Brackish water density 1025 kg/m3, (3) Distance coefficients calibrated for typical rural infrastructure placement
-#
-parameter,value,unit,description
-pump_efficiency,0.60,fraction,Combined pump and motor efficiency for submersible centrifugal pumps
-default_horizontal_distance_km,0.3,km,Default horizontal pipe distance from well to treatment/storage
-default_pipe_diameter_m,0.1,m,Default main pipe diameter (100mm PVC)
-distance_coeff_well_to_treatment,0.3,dimensionless,Geometric distribution coefficient for well-to-treatment distance (wells tend to cluster near treatment)
-distance_coeff_treatment_to_farm,0.4,dimensionless,Geometric distribution coefficient for treatment-to-farm distance (farms more spread out from central treatment)
+# SOURCE: Manufacturer specs (Grundfos SP series, Pedrollo 4SR, DAB S4), FAO pumping guidelines, Egyptian irrigation pump suppliers
+# DATE: 2026-02-25
+# DESCRIPTION: Submersible and surface pump profiles for brackish groundwater extraction and water transfer in hot-arid community systems
+# UNITS: pump_type (string), max_depth_m (meters), rated_flow_m3_hr (m3/hr), pump_efficiency (fraction), motor_kw (kW), capital_cost (USD), om_cost_per_year (USD/year)
+# LOGIC: Efficiency reflects combined pump+motor for submersible centrifugal pumps in brackish water. Larger pumps handle deeper wells but at lower efficiency due to increased friction and shaft losses. Surface booster pumps are used for horizontal transfer (well-to-treatment, treatment-to-storage, storage-to-field) with higher efficiency since no lift losses. Motor kW sized for rated flow at max depth with ~10-15% headroom.
+# MOTOR VALIDATION: motor_kw >= (density * g * max_depth * rated_flow / 3600) / efficiency.
+#   small: (1025*9.81*50*5/3600)/0.62 = 1128 W -> 1.5 kW motor (33% headroom)
+#   medium: (1025*9.81*100*10/3600)/0.58 = 4820 W -> 5.5 kW motor (14% headroom)
+#   large: (1025*9.81*150*18/3600)/0.55 = 13724 W -> 15.0 kW motor (9% headroom)
+#   deep: (1025*9.81*200*15/3600)/0.50 = 16760 W -> 18.5 kW motor (10% headroom)
+# DEPENDENCIES: Referenced by pump_type in settings/water_systems.yaml
+# ASSUMPTIONS: Brackish water density ~1025 kg/m3; PVC rising main; costs in 2024 USD; includes motor, cable, and basic controls; O&M includes impeller/seal replacement and annual servicing
+# NOTES: Select pump where max_depth_m >= well_depth. Booster pumps handle horizontal pipe runs only (no lift). Simulation reads pump_type from water_systems.yaml and looks up efficiency and flow rate here.
+pump_type,max_depth_m,rated_flow_m3_hr,pump_efficiency,motor_kw,capital_cost,om_cost_per_year
+small_submersible,50,5,0.62,1.5,1500,200
+medium_submersible,100,10,0.58,5.5,3200,380
+large_submersible,150,18,0.55,15.0,6000,550
+deep_submersible,200,15,0.50,18.5,9500,850
+booster_surface,0,30,0.72,3.0,1200,180

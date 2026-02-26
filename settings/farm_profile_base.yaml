@@ -1,0 +1,69 @@
+# Farm Profiles
+# Defines independent farms in the community farming collective.
+#
+# Each farm has one or more fields. Each field specifies:
+#   - area_ha: cultivated area in hectares
+#   - irrigation_system: drip | sprinkler | furrow (see data/water/irrigation_systems-toy.csv)
+#   - condition: openfield | underpv_low | underpv_medium | underpv_high
+#   - plantings: sequential crops planted in the field across the year
+#
+# Planting entries reference pre-computed crop daily growth files at:
+#   data/crops/crop_daily_growth/{crop}/{crop}_{planting}_{condition}-research.csv
+#
+# Available crops and planting dates:
+#   cucumber: apr01, feb15, oct15, sep01
+#   kale:     dec01, feb01, mar15, oct01
+#   onion:    apr01, dec01, jan15
+#   potato:   jan15, nov15, sep15
+#   tomato:   apr01, aug01, feb15, nov01
+
+config_name: baseline_farm_collective
+
+farms:
+  - name: farm_1
+    fields:
+      - name: north_field
+        area_ha: 5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: openfield
+        plantings:
+          - crop: kale
+            planting: oct01
+          - crop: tomato
+            planting: feb15
+
+      - name: south_field
+        area_ha: 5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: underpv_medium
+        plantings:
+          - crop: potato
+            planting: sep15
+          - crop: onion
+            planting: jan15
+
+  - name: farm_2
+    fields:
+      - name: east_field
+        area_ha: 5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: underpv_low
+        plantings:
+          - crop: cucumber
+            planting: feb15
+          - crop: cucumber
+            planting: sep01
+
+      - name: west_field
+        area_ha: 5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: tomato
+            planting: apr01
+          - crop: kale
+            planting: dec01

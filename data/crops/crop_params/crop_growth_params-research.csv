@@ -2,10 +2,13 @@
 #   Monteith (1977) J. Exp. Bot.; Sinclair & Muchow (1999) Advances in Agronomy;
 #   FAO Crop Information pages; Steduto et al. (2012) FAO Paper 66 (AquaCrop);
 #   Marcelis et al. (1998) Scientia Horticulturae; FAO GAEZ v4.
-# DATE: 2026-02-24
+#   Salt tolerance: FAO Irrigation and Drainage Paper No. 29 Rev. 1 (Ayers & Westcot, 1985);
+#   Maas & Hoffman (1977) ASCE J. Irrigation and Drainage; FAO Annex 1 crop salt tolerance data.
+# DATE: 2026-02-25
 # DESCRIPTION: Crop growth parameters for biomass accumulation and yield estimation
 #   in Sinai Peninsula hot arid climate (~28N). Values used to convert daily intercepted
 #   radiation and water supply into biomass accumulation and marketable yield.
+#   Includes salt (TDS) tolerance thresholds for irrigation water quality decisions.
 # UNITS:
 #   - potential_yield_kg_per_ha: Maximum attainable fresh yield under optimal conditions (kg/ha)
 #   - harvest_index: Fraction of total above-ground dry biomass that is marketable product (dimensionless)
@@ -16,11 +19,23 @@
 #   - t_opt_low_c: Lower bound of optimal temperature range (degrees Celsius)
 #   - t_opt_high_c: Upper bound of optimal temperature range (degrees Celsius)
 #   - t_max_c: Temperature above which growth ceases (degrees Celsius)
+#   - tds_no_penalty_ppm: Irrigation water TDS below which yield is unaffected (ppm)
+#   - tds_lethal_ppm: Irrigation water TDS above which crop dies — 100% yield loss (ppm)
+#   - tds_yield_decline_pct_per_100ppm: Linear yield decline rate in stress zone (% per 100 ppm)
+#   - salt_tolerance: FAO tolerance rating — S=sensitive, MS=moderately sensitive
 # LOGIC: Daily biomass = RUE * intercepted_PAR * water_stress_factor * temperature_factor.
 #   Marketable yield = total_biomass * harvest_index / dry_matter_fraction (to convert to fresh weight).
 #   Temperature factor is 0 below t_base or above t_max, ramps linearly from 0 to 1 between
 #   t_base and t_opt_low, is 1.0 between t_opt_low and t_opt_high, and declines linearly
 #   from 1 to 0 between t_opt_high and t_max.
+#   Salt stress factor: 1.0 when TDS <= tds_no_penalty_ppm; 0.0 when TDS >= tds_lethal_ppm;
+#   linearly interpolated between using tds_yield_decline_pct_per_100ppm.
+# SALT TOLERANCE CONVERSION:
+#   FAO 29 reports thresholds as soil salinity ECe (dS/m). Converted to irrigation water TDS:
+#     ECw = ECe / 1.5 (FAO standard, 15-20% leaching fraction)
+#     TDS (ppm) = ECw × 640
+#   Maas-Hoffman model: yield_loss_% = slope × (ECe - threshold). Lethal ECe = threshold + 100/slope.
+#   Slope converted to %/100ppm: slope_ece × 100 / (640/1.5) = slope_ece / 4.267.
 # DEPENDENCIES: crop_coefficients-research.csv (stage durations), weather data
 # ASSUMPTIONS:
 #   - Potential yields are for irrigated conditions in warm arid climates (Egypt/Sinai benchmarks)
@@ -28,11 +43,22 @@
 #   - Harvest index values are typical for well-managed irrigated production
 #   - Temperature response parameters from FAO AquaCrop (Paper 66) and crop physiology literature
 #   - Kale uses cabbage/brassica data as proxy (same species Brassica oleracea)
+#   - TDS thresholds assume 15-20% leaching fraction per FAO 29 guidelines
+#   - Kale salt tolerance uses cabbage (Brassica oleracea) values: ECe threshold 1.8 dS/m, slope 9.7%/dS/m
 # DATA_QUALITY: HIGH — FAO Paper 33/66 and Monteith/Sinclair RUE values are standard references.
 #   Potential yields cross-checked against Egyptian agricultural statistics.
-crop,potential_yield_kg_per_ha,harvest_index,rue_g_per_mj,dry_matter_fraction,t_base_c,t_opt_low_c,t_opt_high_c,t_max_c
-tomato,60000,0.60,1.60,0.065,10,20,28,35
-potato,35000,0.75,1.55,0.22,5,17,24,30
-onion,40000,0.80,1.20,0.12,7,18,27,35
-kale,25000,0.85,1.40,0.14,5,15,22,30
-cucumber,40000,0.65,1.50,0.040,12,22,30,38
+#   Salt tolerance from FAO 29 Annex 1 (Maas-Hoffman parameters) — standard reference for irrigation management.
+#
+# FAO 29 SOURCE VALUES (ECe):
+#   tomato:   threshold 2.5 dS/m, slope  9.9 %/dS/m, rating MS
+#   potato:   threshold 1.7 dS/m, slope 12.0 %/dS/m, rating MS
+#   onion:    threshold 1.2 dS/m, slope 16.0 %/dS/m, rating S
+#   kale:     threshold 1.8 dS/m, slope  9.7 %/dS/m, rating MS (cabbage proxy)
+#   cucumber: threshold 2.5 dS/m, slope 13.0 %/dS/m, rating MS
+#
+crop,potential_yield_kg_per_ha,harvest_index,rue_g_per_mj,dry_matter_fraction,t_base_c,t_opt_low_c,t_opt_high_c,t_max_c,tds_no_penalty_ppm,tds_lethal_ppm,tds_yield_decline_pct_per_100ppm,salt_tolerance
+tomato,60000,0.60,1.60,0.065,10,20,28,35,1070,5400,2.3,MS
+potato,35000,0.75,1.55,0.22,5,17,24,30,730,4280,2.8,MS
+onion,40000,0.80,1.20,0.12,7,18,27,35,510,3180,3.7,S
+kale,25000,0.85,1.40,0.14,5,15,22,30,770,5170,2.3,MS
+cucumber,40000,0.65,1.50,0.040,12,22,30,38,1070,4350,3.0,MS

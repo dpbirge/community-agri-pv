@@ -1,0 +1,44 @@
+# Scenario 1: Baseline Community Agri-PV
+#
+# Composes domain-specific settings files for a single simulation run.
+# Swap any domain value to a different settings file to mix-and-match
+# configurations without touching other domains.
+
+scenario_name: baseline
+description: Baseline community — research-grade energy data, toy-grade water and building data
+
+# --- Simulation Period ---
+simulation:
+  start_date: "2023-01-01"
+  end_date: "2023-12-31"
+  weather_scenario_id: null  # null = use first/only scenario found in data files
+
+# --- Data Registry ---
+# Central index mapping logical data names to file paths.
+# Swap to an alternate registry to change data quality tiers (toy vs research)
+# across multiple domains at once.
+data_registry: settings/data_registry.yaml
+
+# --- Domain Settings ---
+# Each key points to the settings file for that domain.
+# Swap any single entry to run an alternative configuration for that domain.
+community:     settings/community_demands.yaml
+energy_system: settings/energy_system.yaml
+farm_profiles: settings/farm_profiles.yaml
+water_systems: settings/water_systems.yaml
+
+# --- Water Policy ---
+# Defines dispatch rules: source priority order, blending logic,
+# monthly cap enforcement, and deficit irrigation handling.
+water_policy: settings/water_policy_base.yaml
+
+# --- Energy Policy (not yet created) ---
+# Defines dispatch rules: grid import/export logic, battery charge/discharge
+# scheduling, generator dispatch thresholds, and demand curtailment priorities.
+# energy_policy: settings/energy_policy.yaml
+
+# --- Food Processing (not yet created) ---
+# Defines post-harvest processing steps (washing, cooling, packing, storage)
+# and their associated energy and water demands per unit crop mass.
+# food_processing: settings/food_processing.yaml
+

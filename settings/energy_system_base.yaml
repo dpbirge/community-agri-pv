@@ -1,0 +1,42 @@
+# Shared Energy System Configuration
+# Defines the energy system shared throughout the community
+# Defines ALL wind systems as they do not interact with farming operations
+# Defined any non-agri-pv based solar panels, as all agri-pv systems are defined
+# at the farm level. Panel location is not specified intentionally.
+#
+# Data files: see energy_supply section in settings/data_registry.yaml
+
+config_name: baseline_energy_system
+
+# --- Solar System ---
+community_solar:
+  low_density:
+    area_ha: 0.25
+  medium_density:
+    area_ha: 0.25
+  high_density:
+    area_ha: 2
+ 
+# --- Wind System ---
+wind_turbines:
+  small_turbine:
+    number: 15
+  medium_turbine:
+    number: 4
+  large_turbine:
+    number: 2
+
+# --- Generator System ---
+generator:
+  has_generator: true 
+  generator_type: null
+  generator_capacity: null
+
+# --- Battery System ---
+battery:
+  has_battery: false
+  battery_type: null
+  battery_capacity: null
+
+# --- Grid Connection ---
+grid_connect: full

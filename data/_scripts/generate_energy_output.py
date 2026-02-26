@@ -104,25 +104,67 @@ def wind_power_curve(
     return power
 
 
+def expected_wind_power_rayleigh(
+    v_mean: np.ndarray,
+    rated_capacity_kw: float,
+    cut_in_ms: float,
+    rated_ms: float,
+    cut_out_ms: float,
+    n_points: int = 200,
+) -> np.ndarray:
+    """Compute expected power by integrating power curve over Rayleigh distribution.
+
+    For daily-average wind speed v_mean, assumes sub-daily speeds follow
+    a Rayleigh distribution and numerically integrates the power curve
+    over this distribution to get expected power output.
+
+    Args:
+        v_mean: Array of daily mean wind speeds at hub height (m/s).
+        rated_capacity_kw: Turbine rated power (kW).
+        cut_in_ms: Cut-in wind speed (m/s).
+        rated_ms: Rated wind speed (m/s).
+        cut_out_ms: Cut-out wind speed (m/s).
+        n_points: Number of integration points.
+
+    Returns:
+        Array of expected power values (kW).
+    """
+    results = np.zeros_like(v_mean, dtype=float)
+    v_grid = np.linspace(0, cut_out_ms * 1.5, n_points)
+    power_grid = wind_power_curve(v_grid, rated_capacity_kw, cut_in_ms, rated_ms, cut_out_ms)
+
+    for i, vm in enumerate(v_mean):
+        if vm < 0.5:  # negligible wind
+            continue
+        # Rayleigh PDF: f(v) = (v / sigma^2) * exp(-v^2 / (2*sigma^2))
+        # where sigma = v_mean * sqrt(2/pi)
+        sigma = vm * np.sqrt(2 / np.pi)
+        pdf = (v_grid / sigma**2) * np.exp(-v_grid**2 / (2 * sigma**2))
+        results[i] = np.trapezoid(power_grid * pdf, v_grid)
+
+    return results
+
+
 def compute_wind_output(
     weather_df: pd.DataFrame,
     turbines_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """Compute daily wind energy output (kWh/turbine/day) for each turbine size."""
-    result = weather_df[["date", "weather_scenario_id"]].copy()
+    result = weather_df[["date"]].copy()
     v_10m = weather_df["wind_speed_ms"].values
 
     for _, turbine in turbines_df.iterrows():
         v_hub = wind_speed_at_hub(v_10m, turbine["hub_height_m"])
-        avg_power_kw = wind_power_curve(
+        avg_power_kw = expected_wind_power_rayleigh(
             v_hub,
             turbine["rated_capacity_kw"],
             turbine["cut_in_speed_ms"],
             turbine["rated_speed_ms"],
             turbine["cut_out_speed_ms"],
         )
-        col = f"{turbine['turbine_name']}_kwh"
-        result[col] = np.round(avg_power_kw * HOURS_PER_DAY, 2)
+        col = f"{turbine['turbine_name']}_turbine_kwh"
+        daily_kwh = avg_power_kw * HOURS_PER_DAY * (1 - turbine["system_losses_pct"] / 100)
+        result[col] = np.round(daily_kwh, 2)
 
     return result
 
@@ -137,7 +179,7 @@ def compute_pv_output(
     pv_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """Compute daily PV energy output (kWh/hectare/day) for each density level."""
-    result = weather_df[["date", "weather_scenario_id"]].copy()
+    result = weather_df[["date"]].copy()
 
     ghi = weather_df["solar_irradiance_kwh_m2"].values
     t_avg = (weather_df["temp_max_c"].values + weather_df["temp_min_c"].values) / 2
@@ -158,7 +200,7 @@ def compute_pv_output(
             * pv["shading_factor"]
         )
 
-        col = f"{pv['density_name']}_kwh_per_ha"
+        col = f"{pv['density_name']}_density_kwh_per_ha"
         result[col] = np.round(daily_kwh, 2)
 
     return result
@@ -173,10 +215,10 @@ def wind_metadata_header(turbines_df: pd.DataFrame, date_str: str) -> str:
     turbine_specs = "; ".join(
         f"{r['turbine_name']}={r['product_name']} "
         f"({r['rated_capacity_kw']}kW, hub {r['hub_height_m']}m, "
-        f"rotor {r['rotor_diameter_m']}m)"
+        f"rotor {r['rotor_diameter_m']}m, losses {r['system_losses_pct']}%)"
         for _, r in turbines_df.iterrows()
     )
-    cols = ", ".join(f"{r['turbine_name']}_kwh" for _, r in turbines_df.iterrows())
+    cols = ", ".join(f"{r['turbine_name']}_turbine_kwh" for _, r in turbines_df.iterrows())
     return (
         f"# SOURCE: Derived from wind_turbines-research.csv and daily_weather_openfield-research.csv\n"
         f"# DATE: {date_str}\n"
@@ -184,11 +226,13 @@ def wind_metadata_header(turbines_df: pd.DataFrame, date_str: str) -> str:
         f"# UNITS: date=YYYY-MM-DD, {cols}=kWh/turbine/day\n"
         f"# LOGIC: Wind speed extrapolated from 10m to hub height using power law (alpha={WIND_SHEAR_EXPONENT}). "
         f"Power curve: P = P_rated * (v^3 - v_cin^3) / (v_rated^3 - v_cin^3) for v_cin <= v <= v_rated; "
-        f"P_rated for v_rated < v <= v_cout; 0 otherwise. Daily energy = avg_power_kw * 24h.\n"
-        f"# DEPENDENCIES: data/energy_gen/wind_turbines-research.csv, data/weather/daily_weather_openfield-research.csv\n"
+        f"P_rated for v_rated < v <= v_cout; 0 otherwise. "
+        f"Expected power computed by numerical integration of power curve over Rayleigh distribution "
+        f"of sub-daily wind speeds (corrects Jensen's inequality bias from using daily mean directly). "
+        f"System losses (availability, electrical, dust/soiling, mechanical) applied as per-turbine derating.\n"
+        f"# DEPENDENCIES: data/energy/wind_turbines-research.csv, data/weather/daily_weather_openfield-research.csv\n"
         f"# ASSUMPTIONS: (1) Power-law wind shear exponent {WIND_SHEAR_EXPONENT} for open coastal terrain. "
-        f"(2) Daily avg wind speed applied directly to power curve (no sub-daily Weibull correction — "
-        f"underestimates output due to Jensen's inequality on cubic curve). "
+        f"(2) Sub-daily wind speed variability modeled via Rayleigh distribution (sigma = v_mean * sqrt(2/pi)). "
         f"(3) No air density correction for altitude/temperature.\n"
         f"# TURBINES: {turbine_specs}\n"
     )
@@ -200,9 +244,9 @@ def pv_metadata_header(pv_df: pd.DataFrame, date_str: str) -> str:
         f"shading {r['shading_factor']}, temp_adj {r['temp_adjustment_c']:+.1f}C"
         for _, r in pv_df.iterrows()
     )
-    cols = ", ".join(f"{r['density_name']}_kwh_per_ha" for _, r in pv_df.iterrows())
+    cols = ", ".join(f"{r['density_name']}_density_kwh_per_ha" for _, r in pv_df.iterrows())
     return (
-        f"# SOURCE: Derived from pv_systems-toy.csv and daily_weather_openfield-research.csv\n"
+        f"# SOURCE: Derived from pv_systems-research.csv and daily_weather_openfield-research.csv\n"
         f"# DATE: {date_str}\n"
         f"# DESCRIPTION: Daily PV energy output per hectare for low/medium/high density agri-PV systems\n"
         f"# UNITS: date=YYYY-MM-DD, {cols}=kWh/hectare/day\n"
@@ -210,7 +254,7 @@ def pv_metadata_header(pv_df: pd.DataFrame, date_str: str) -> str:
         f"* temp_derate * (1 - system_losses/100) * shading_factor. "
         f"Cell temp estimated as (T_max+T_min)/2 + temp_adjustment_c. "
         f"Temp derate = 1 + temp_coeff * (T_cell - T_ref).\n"
-        f"# DEPENDENCIES: data/energy_gen/pv_systems-toy.csv, data/weather/daily_weather_openfield-research.csv\n"
+        f"# DEPENDENCIES: data/energy/pv_systems-research.csv, data/weather/daily_weather_openfield-research.csv\n"
         f"# ASSUMPTIONS: (1) Cell temperature approximated from daily avg air temp + density-dependent offset. "
         f"(2) GHI used as proxy for plane-of-array irradiance (tilt_factor applied as multiplier). "
         f"(3) No hourly decomposition — daily totals only.\n"
@@ -232,8 +276,8 @@ def main(
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     weather_path = weather_path or root / "data/weather/daily_weather_openfield-research.csv"
-    turbines_path = turbines_path or root / "data/energy_gen/wind_turbines-research.csv"
-    pv_path = pv_path or root / "data/energy_gen/pv_systems-toy.csv"
+    turbines_path = turbines_path or root / "data/energy/wind_turbines-research.csv"
+    pv_path = pv_path or root / "data/energy/pv_systems-research.csv"
 
     for p in (weather_path, turbines_path, pv_path):
         if not p.exists():
@@ -245,7 +289,7 @@ def main(
 
     stem = weather_path.stem
     suffix = stem.split("-", 1)[1] if "-" in stem else "research"
-    output_dir = root / "data/energy_gen"
+    output_dir = root / "data/energy"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Wind output ---
@@ -281,13 +325,13 @@ def parse_args():
         "--turbines",
         type=Path,
         default=None,
-        help="Path to wind turbines CSV (default: data/energy_gen/wind_turbines-research.csv)",
+        help="Path to wind turbines CSV (default: data/energy/wind_turbines-research.csv)",
     )
     parser.add_argument(
         "--pv",
         type=Path,
         default=None,
-        help="Path to PV systems CSV (default: data/energy_gen/pv_systems-toy.csv)",
+        help="Path to PV systems CSV (default: data/energy/pv_systems-research.csv)",
     )
     return parser.parse_args()
 

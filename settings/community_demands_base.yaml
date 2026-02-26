@@ -23,7 +23,7 @@ households:
     count: 15
     energy_multiplier: 1.0
     water_multiplier: 1.0
-
+ 
 # --- Community Buildings ---
 community_buildings:
   office_admin:
@@ -47,6 +47,6 @@ community_buildings:
     energy_multiplier: 1.0
     water_multiplier: 1.0
   workshop_maintenance:
-    area_m2: 150
+    area_m2: 500
     energy_multiplier: 1.0
     water_multiplier: 1.0

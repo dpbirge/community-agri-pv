@@ -1,0 +1,52 @@
+# Water Systems Configuration
+# Defines one or more independent water supply systems for the community
+#
+# Each system contains: wells, one treatment unit, one municipal source,
+# and an optional storage tank. Most simulations use a single system.
+#
+# Data files: see water_supply section in settings/data_registry.yaml
+
+config_name: baseline_water_systems
+
+systems:
+  - name: main_irrigation
+
+    # --- Wells ---
+    # pump_type references pump_systems-toy.csv for efficiency, flow rate, motor kW
+    wells:
+      - name: well_1
+        depth_m: 20
+        tds_ppm: 1400
+        pump_type: small_submersible
+      - name: well_2
+        depth_m: 50
+        tds_ppm: 3500
+        pump_type: medium_submersible
+      - name: well_3
+        depth_m: 100
+        tds_ppm: 6500
+        pump_type: large_submersible
+
+    # --- Treatment ---
+    treatment:
+      type: bwro
+      throughput_m3_hr: 15
+      goal_output_tds_ppm: 400
+
+    # --- Municipal Source ---
+    municipal_source:
+      tds_ppm: 200
+      cost_per_m3: 0.50
+      throughput_m3_hr: 10
+      monthly_cap_m3: 500  # set to null for unlimited
+
+    # --- Storage (optional) ---
+    storage:
+      type: underground_tank
+      capacity_m3: 100
+      max_output_m3_hr: 20
+      initial_level_m3: 75
+      initial_tds_ppm: 400
+
+    # --- Monthly Caps ---
+    groundwater_monthly_cap_m3: null  # set to null for unlimited
