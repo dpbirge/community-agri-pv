@@ -23,7 +23,7 @@ farms:
   - name: farm_1
     fields:
       - name: north_field
-        area_ha: 5
+        area_ha: 1
         water_system: main_irrigation
         irrigation_system: drip
         condition: openfield
@@ -34,7 +34,7 @@ farms:
             planting: feb15
 
       - name: south_field
-        area_ha: 5
+        area_ha: 1
         water_system: main_irrigation
         irrigation_system: drip
         condition: underpv_medium
@@ -47,7 +47,7 @@ farms:
   - name: farm_2
     fields:
       - name: east_field
-        area_ha: 5
+        area_ha: 1
         water_system: main_irrigation
         irrigation_system: drip
         condition: underpv_low
@@ -58,7 +58,7 @@ farms:
             planting: sep01
 
       - name: west_field
-        area_ha: 5
+        area_ha: 1
         water_system: main_irrigation
         irrigation_system: sprinkler
         condition: openfield
