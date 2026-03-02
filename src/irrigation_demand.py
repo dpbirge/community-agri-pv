@@ -22,6 +22,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from src.farm_profile import normalize_plantings, validate_no_overlap
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -103,7 +105,7 @@ def _compute_field_demand(growth_dir, field, irrigation_lookup, irrigation_polic
     condition = field['condition']
 
     parts = []
-    for p in field['plantings']:
+    for p in normalize_plantings(field):
         etc_df = _load_daily_etc(
             growth_dir, p['crop'], p['planting'], condition, irrigation_policy
         )
@@ -191,6 +193,7 @@ def compute_irrigation_demand(farm_profiles_path, registry_path, *,
 
     farm_config = _load_yaml(farm_profiles_path)
     registry = _load_yaml(registry_path)
+    validate_no_overlap(farm_config, registry, root_dir)
 
     growth_dir = root_dir / registry['crops']['daily_growth_dir']
     irrig_path = root_dir / registry['water_supply']['irrigation_systems']

@@ -5,7 +5,7 @@
 #   - area_ha: cultivated area in hectares
 #   - irrigation_system: drip | sprinkler | furrow (see data/water/irrigation_systems-toy.csv)
 #   - condition: openfield | underpv_low | underpv_medium | underpv_high
-#   - plantings: sequential crops planted in the field across the year
+#   - plantings: crops with their planting dates (list of dates per crop; no overlap allowed)
 #
 # Planting entries reference pre-computed crop daily growth files at:
 #   data/crops/crop_daily_growth/{crop}/{crop}_{planting}_{condition}-research.csv
@@ -29,9 +29,9 @@ farms:
         condition: openfield
         plantings:
           - crop: kale
-            planting: oct01
+            plantings: [oct01]
           - crop: tomato
-            planting: feb15
+            plantings: [feb15]
 
       - name: south_field
         area_ha: 1
@@ -40,9 +40,9 @@ farms:
         condition: underpv_medium
         plantings:
           - crop: potato
-            planting: sep15
+            plantings: [sep15]
           - crop: onion
-            planting: jan15
+            plantings: [jan15]
 
   - name: farm_2
     fields:
@@ -53,9 +53,7 @@ farms:
         condition: underpv_low
         plantings:
           - crop: cucumber
-            planting: feb15
-          - crop: cucumber
-            planting: sep01
+            plantings: [feb15, sep01]
 
       - name: west_field
         area_ha: 1
@@ -64,6 +62,6 @@ farms:
         condition: openfield
         plantings:
           - crop: tomato
-            planting: apr01
+            plantings: [apr01]
           - crop: kale
-            planting: dec01
+            plantings: [dec01]
