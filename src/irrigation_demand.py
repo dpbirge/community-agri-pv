@@ -208,13 +208,21 @@ def compute_irrigation_demand(farm_profiles_path, registry_path, *,
         for f in fields
     ]
 
-    # Merge all fields onto a common date axis
-    all_dates = (
-        pd.concat([df[['date']] for df in field_dfs])
-        .drop_duplicates()
-        .sort_values('date')
-        .reset_index(drop=True)
-    )
+    # Build a complete daily date axis for full calendar years.
+    # Ensures every day of each year is plotted (365/366 days) and fallow days
+    # (when no field has a crop) are included with zero demand.
+    all_dates_union = pd.concat([df[['date']] for df in field_dfs]).drop_duplicates()
+    date_min = all_dates_union['date'].min()
+    date_max = all_dates_union['date'].max()
+    year_min = date_min.year
+    year_max = date_max.year
+    all_dates = pd.DataFrame({
+        'date': pd.date_range(
+            start=pd.Timestamp(year=year_min, month=1, day=1),
+            end=pd.Timestamp(year=year_max, month=12, day=31),
+            freq='D',
+        ),
+    })
     result = all_dates.copy()
 
     demand_cols = []
@@ -239,6 +247,49 @@ def compute_irrigation_demand(farm_profiles_path, registry_path, *,
     result = result.rename(columns={'date': 'day'})
 
     return result
+
+
+def get_field_irrigation_specs(farm_profiles_path, registry_path, *,
+                               water_system_name='main_irrigation', root_dir=None):
+    """Return per-field irrigation specs for application energy calculation.
+
+    Loads farm profiles and irrigation system data to build a lookup of
+    each field's irrigation system type and application energy rate.
+
+    Args:
+        farm_profiles_path: Path to farm_profiles.yaml.
+        registry_path: Path to data_registry.yaml.
+        water_system_name: Name of the water system to collect fields for.
+        root_dir: Repository root. Defaults to parent of settings/.
+
+    Returns:
+        Dict mapping field_name to dict with keys:
+            - irrigation_system: str (e.g. 'drip')
+            - application_energy_kwh_per_m3: float
+    """
+    if root_dir is None:
+        root_dir = Path(registry_path).parent.parent
+
+    farm_config = _load_yaml(farm_profiles_path)
+    registry = _load_yaml(registry_path)
+    irrig_path = root_dir / registry['water_supply']['irrigation_systems']
+
+    df = pd.read_csv(irrig_path, comment='#')
+    energy_lookup = {}
+    for _, row in df.iterrows():
+        full_name = row['irrigation_type']
+        energy_lookup[full_name] = row['application_energy_kwh_per_m3']
+        energy_lookup[full_name.replace('_irrigation', '')] = row['application_energy_kwh_per_m3']
+
+    fields = _collect_fields(farm_config, water_system_name)
+    specs = {}
+    for field in fields:
+        irrig_sys = field['irrigation_system']
+        specs[field['name']] = {
+            'irrigation_system': irrig_sys,
+            'application_energy_kwh_per_m3': energy_lookup[irrig_sys],
+        }
+    return specs
 
 
 def save_irrigation_demand(df, output_dir, *, filename='daily_irrigation_demand.csv', decimals=3):

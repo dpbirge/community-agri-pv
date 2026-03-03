@@ -2,6 +2,12 @@
 
 Each field has plantings as a list of {crop, plantings: [date, ...]}.
 Planting dates use codes like oct01, feb15 matching crop growth filenames.
+
+Usage:
+    from src.farm_profile import normalize_plantings, validate_no_overlap
+
+    flat = normalize_plantings(field_dict)
+    validate_no_overlap(farm_config, registry, root_dir)
 """
 
 import pandas as pd
@@ -16,7 +22,7 @@ _MONTH_ABBREV_TO_MM = {
 }
 
 
-def planting_code_to_mmdd(code: str) -> str:
+def planting_code_to_mmdd(code):
     """Convert planting code (e.g. oct01, feb15) to MM-DD (e.g. 10-01, 02-15)."""
     code = code.lower().strip()
     if len(code) < 4:
@@ -35,7 +41,7 @@ def planting_code_to_mmdd(code: str) -> str:
     return f"{mm}-{day_str}"
 
 
-def _load_season_lengths(registry, root_dir: Path) -> dict[tuple[str, str], int]:
+def _load_season_lengths(registry, root_dir):
     """Load (crop, mmdd) -> expected_season_length_days from planting_windows."""
     growth_path = root_dir / registry["crops"]["growth_params"]
     windows_path = growth_path.parent / "planting_windows-research.csv"
@@ -49,7 +55,7 @@ def _load_season_lengths(registry, root_dir: Path) -> dict[tuple[str, str], int]
     return lookup
 
 
-def normalize_plantings(field: dict) -> list[dict]:
+def normalize_plantings(field):
     """Expand field plantings to flat list of {crop, planting}.
 
     Each entry in field['plantings'] has crop and plantings: [date, ...].
@@ -64,11 +70,7 @@ def normalize_plantings(field: dict) -> list[dict]:
     return out
 
 
-def validate_no_overlap(
-    farm_config: dict,
-    registry: dict,
-    root_dir: Path,
-) -> None:
+def validate_no_overlap(farm_config, registry, root_dir):
     """Raise ValueError if any field has overlapping growing seasons.
 
     Uses planting_windows-research.csv for expected_season_length_days.
@@ -77,7 +79,7 @@ def validate_no_overlap(
     season_lookup = _load_season_lengths(registry, root_dir)
     ref_year = 2020  # arbitrary, seasons wrap across Dec 31 as needed
 
-    def date_range(crop: str, planting_code: str) -> tuple[datetime, datetime]:
+    def date_range(crop, planting_code):
         mmdd = planting_code_to_mmdd(planting_code)
         key = (crop, mmdd)
         if key not in season_lookup:
@@ -90,7 +92,7 @@ def validate_no_overlap(
         end = start + timedelta(days=length)
         return start, end
 
-    def ranges_overlap(a: tuple, b: tuple) -> bool:
+    def ranges_overlap(a, b):
         """Intervals (start, end) overlap iff start_a < end_b and start_b < end_a."""
         start_a, end_a = a
         start_b, end_b = b

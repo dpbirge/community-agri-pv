@@ -47,3 +47,11 @@ cap_enforcement:
 # minimize_treatment: blend to meet TDS with minimum treatment volume
 # minimize_draw:      prefer municipal water; use groundwater only after cap is hit
 strategy: minimize_cost
+
+# --- Tank Prefill ---
+# After meeting daily irrigation demand, use remaining source capacity to
+# prefill the tank when upcoming demand is forecast to exceed throughput.
+# Reduces deficit days by buffering water ahead of peak demand.
+prefill:
+  enabled: true
+  look_ahead_days: 3          # how many days ahead to scan for demand spikes

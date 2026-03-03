@@ -28,6 +28,7 @@ water_supply:
   pump_systems:            data/water/pump_systems-toy.csv
   treatment_energy_toy:    data/water/treatment_kwh_per_m3-toy.csv
   treatment_research:      data/water/water_treatment-research.csv
+  treatment_efficiency:    data/water/treatment_efficiency_curve-toy.csv
   storage_systems:         data/water/storage_systems-toy.csv
   irrigation_systems:      data/water/irrigation_systems-toy.csv
 

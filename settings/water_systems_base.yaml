@@ -45,4 +45,4 @@ systems:
       capacity_m3: 1000
       initial_level_m3: 500
       max_output_m3_hr: 50
-      initial_tds_ppm: 300
+      initial_tds_ppm: 500

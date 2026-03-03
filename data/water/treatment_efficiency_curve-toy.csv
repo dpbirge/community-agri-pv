@@ -1,0 +1,20 @@
+# SOURCE: Estimated from general BWRO engineering literature and manufacturer guidelines
+# DATE: 2026-03-02
+# DESCRIPTION: Treatment system efficiency multipliers by utilization band for BWRO plants. Models how energy consumption, maintenance cost, and membrane life vary with operating point relative to rated capacity. Sweet spot at 70-85% utilization where all multipliers equal 1.0.
+# UNITS: utilization_pct (%), energy_multiplier (dimensionless), maintenance_multiplier (dimensionless), membrane_life_multiplier (dimensionless), recovery_adjustment_pct (percentage points added to base recovery)
+# LOGIC: Below sweet spot — intermittent operation causes startup/shutdown cycling losses (higher specific energy) but gentler on membranes (longer life). Above sweet spot — higher transmembrane pressure increases fouling rate (shorter membrane life, higher maintenance) and reduces marginal permeate flux (higher specific energy). Recovery drops at high utilization as operators run more conservatively to protect membranes.
+# DEPENDENCIES: Composes with water_treatment-research.csv — base parameters come from TDS band, these multipliers modulate them by utilization ratio.
+# ASSUMPTIONS: Applicable to small-scale BWRO (100-500 m3/day). Hot arid environment. Multipliers are symmetric around sweet spot center (80%) with steeper penalty below than above for energy (startup losses dominate). Values are synthetic estimates suitable for educational simulation; upgrade to -research suffix when validated against specific plant performance data.
+# DATA_QUALITY: Toy-grade. Multiplier magnitudes are consistent with published BWRO operational guidelines but not calibrated to a specific installation.
+#
+utilization_pct,energy_multiplier,maintenance_multiplier,membrane_life_multiplier,recovery_adjustment_pct
+10,1.40,1.10,1.15,1.0
+30,1.25,1.05,1.10,0.5
+50,1.12,1.02,1.05,0.0
+60,1.05,1.00,1.02,0.0
+70,1.00,1.00,1.00,0.0
+80,1.00,1.00,1.00,0.0
+85,1.00,1.00,1.00,0.0
+90,1.03,1.05,0.95,-0.5
+95,1.08,1.15,0.85,-1.5
+100,1.15,1.30,0.75,-2.5

@@ -6,7 +6,7 @@ per-unit energy output data to produce scaled daily totals for each generator ty
 category subtotals, and a combined total.
 
 Usage:
-    from src.energy import compute_daily_energy, save_energy
+    from src.energy_supply import compute_daily_energy, save_energy
 
     df = compute_daily_energy(
         config_path='settings/energy_system.yaml',

@@ -4,7 +4,7 @@ Parses community configuration (household counts, building areas, multipliers) a
 precomputed per-unit demand data to produce scaled daily totals for each building type.
 
 Usage:
-    from src.demand import compute_daily_demands, save_demands
+    from src.community_demand import compute_daily_demands, save_demands
 
     df = compute_daily_demands(
         config_path='settings/community_demands.yaml',
