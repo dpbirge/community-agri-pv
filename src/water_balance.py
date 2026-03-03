@@ -36,6 +36,83 @@ def _load_yaml(path):
         return yaml.safe_load(f)
 
 
+def _order_balance_columns(result):
+    """Reorder columns in the water balance DataFrame for output.
+
+    Groups columns into semantic sections: metadata, demand, source,
+    delivery, quality, energy, cost, tank state, diagnostics, policy,
+    caps, treatment, wells, and extras. Columns not explicitly listed
+    are appended at the end.
+
+    Args:
+        result: DataFrame with all water balance columns computed.
+
+    Returns:
+        DataFrame with columns reordered.
+    """
+    meta_cols = ['day']
+
+    demand_section = ['irrigation_demand_m3', 'community_water_demand_m3', 'total_water_demand_m3']
+    demand_section += sorted([c for c in result.columns if c.endswith('_demand_m3')
+                              and c not in demand_section])
+    # Per-building community water breakdown
+    demand_section += sorted([c for c in result.columns if c.startswith('community_')
+                              and c.endswith('_water_m3') and c != 'community_water_demand_m3'])
+
+    source_cols = [
+        'gw_untreated_to_tank_m3', 'gw_treated_to_tank_m3',
+        'municipal_to_tank_m3', 'total_sourced_to_tank_m3',
+        'municipal_community_m3',
+    ]
+
+    delivery_cols = ['irrigation_delivered_m3', 'tank_flush_delivered_m3',
+                     'safety_flush_m3', 'look_ahead_drain_m3', 'deficit_m3']
+    delivery_cols += sorted([c for c in result.columns if c.endswith('_delivered_m3')
+                             and c not in delivery_cols])
+
+    quality_cols = ['delivered_tds_ppm', 'sourced_tds_ppm',
+                    'crop_tds_requirement_ppm', 'tds_exceedance_ppm']
+
+    energy_cols = ['pumping_energy_kwh', 'treatment_energy_kwh', 'application_energy_kwh']
+    energy_cols += sorted([c for c in result.columns if c.endswith('_application_energy_kwh')])
+    energy_cols += sorted([c for c in result.columns if c.endswith('_pumping_kwh')])
+    energy_cols += ['total_water_energy_kwh']
+
+    cost_cols = ['municipal_irrigation_cost', 'municipal_community_cost',
+                 'groundwater_cost', 'total_water_cost']
+
+    tank_cols = ['tank_volume_m3', 'tank_tds_ppm', 'prefill_m3']
+
+    balance_cols = ['over_delivery_m3', 'balance_check']
+
+    policy_cols = ['policy_strategy', 'policy_primary_source', 'policy_flush_reason', 'policy_deficit']
+
+    # Monthly cap tracking
+    cap_cols = ['gw_cap_used_month_m3', 'muni_cap_used_month_m3',
+                'gw_monthly_cap_m3', 'muni_monthly_cap_m3']
+
+    # Treatment throughput utilization
+    treatment_cols = ['treatment_feed_m3', 'treatment_max_feed_m3', 'treatment_reject_m3']
+
+    # Well columns from supply
+    well_cols = [c for c in result.columns if c.endswith('_extraction_m3') or
+                 (c.endswith('_tds_ppm') and c not in quality_cols + tank_cols)]
+
+    extra_cols = ['total_groundwater_extracted_m3']
+
+    ordered = meta_cols + demand_section + source_cols + delivery_cols + quality_cols
+    ordered += energy_cols + cost_cols + tank_cols + balance_cols + policy_cols
+    ordered += cap_cols + treatment_cols + well_cols + extra_cols
+
+    # Only include columns that exist
+    ordered = [c for c in ordered if c in result.columns]
+    # Add any remaining columns not yet included
+    remaining = [c for c in result.columns if c not in ordered]
+    ordered += remaining
+
+    return result[ordered]
+
+
 def compute_daily_water_balance(farm_profiles_path, water_systems_path,
                                 water_policy_path, community_config_path,
                                 registry_path, *,
@@ -187,68 +264,7 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
         - result['tank_volume_m3']
     ).round(6)
 
-    # Order columns
-    meta_cols = ['day']
-
-    demand_section = ['irrigation_demand_m3', 'community_water_demand_m3', 'total_water_demand_m3']
-    demand_section += sorted([c for c in result.columns if c.endswith('_demand_m3')
-                              and c not in demand_section])
-    # Per-building community water breakdown
-    demand_section += sorted([c for c in result.columns if c.startswith('community_')
-                              and c.endswith('_water_m3') and c != 'community_water_demand_m3'])
-
-    source_cols = [
-        'gw_untreated_to_tank_m3', 'gw_treated_to_tank_m3',
-        'municipal_to_tank_m3', 'total_sourced_to_tank_m3',
-        'municipal_community_m3',
-    ]
-
-    delivery_cols = ['irrigation_delivered_m3', 'tank_flush_delivered_m3',
-                     'safety_flush_m3', 'look_ahead_drain_m3', 'deficit_m3']
-    delivery_cols += sorted([c for c in result.columns if c.endswith('_delivered_m3')
-                             and c not in delivery_cols])
-
-    quality_cols = ['delivered_tds_ppm', 'sourced_tds_ppm',
-                    'crop_tds_requirement_ppm', 'tds_exceedance_ppm']
-
-    energy_cols = ['pumping_energy_kwh', 'treatment_energy_kwh', 'application_energy_kwh']
-    energy_cols += sorted([c for c in result.columns if c.endswith('_application_energy_kwh')])
-    energy_cols += sorted([c for c in result.columns if c.endswith('_pumping_kwh')])
-    energy_cols += ['total_water_energy_kwh']
-
-    cost_cols = ['municipal_irrigation_cost', 'municipal_community_cost',
-                 'groundwater_cost', 'total_water_cost']
-
-    tank_cols = ['tank_volume_m3', 'tank_tds_ppm', 'prefill_m3']
-
-    balance_cols = ['over_delivery_m3', 'balance_check']
-
-    policy_cols = ['policy_strategy', 'policy_primary_source', 'policy_flush_reason', 'policy_deficit']
-
-    # Monthly cap tracking
-    cap_cols = ['gw_cap_used_month_m3', 'muni_cap_used_month_m3',
-                'gw_monthly_cap_m3', 'muni_monthly_cap_m3']
-
-    # Treatment throughput utilization
-    treatment_cols = ['treatment_feed_m3', 'treatment_max_feed_m3', 'treatment_reject_m3']
-
-    # Well columns from supply
-    well_cols = [c for c in result.columns if c.endswith('_extraction_m3') or
-                 (c.endswith('_tds_ppm') and c not in quality_cols + tank_cols)]
-
-    extra_cols = ['total_groundwater_extracted_m3']
-
-    ordered = meta_cols + demand_section + source_cols + delivery_cols + quality_cols
-    ordered += energy_cols + cost_cols + tank_cols + balance_cols + policy_cols
-    ordered += cap_cols + treatment_cols + well_cols + extra_cols
-
-    # Only include columns that exist
-    ordered = [c for c in ordered if c in result.columns]
-    # Add any remaining columns not yet included
-    remaining = [c for c in result.columns if c not in ordered]
-    ordered += remaining
-
-    return result[ordered]
+    return _order_balance_columns(result)
 
 
 def save_daily_water_balance(df, output_dir, *, filename='daily_water_balance.csv', decimals=3):

@@ -165,6 +165,25 @@ def _blend_tds(volumes, tds_values):
     return sum(v * t for v, t in zip(volumes, tds_values)) / total_vol
 
 
+def _sourced_blend_tds(gw_untreated, gw_treated, muni_vol,
+                       raw_gw_tds, treated_tds, muni_tds):
+    """Volume-weighted TDS of the three sourced water streams.
+
+    Args:
+        gw_untreated: Untreated groundwater volume (m3).
+        gw_treated: Treated groundwater product volume (m3).
+        muni_vol: Municipal water volume (m3).
+        raw_gw_tds: TDS of raw groundwater (ppm).
+        treated_tds: TDS of treated water output (ppm).
+        muni_tds: TDS of municipal water (ppm).
+
+    Returns:
+        Blended TDS (ppm). Returns 0.0 if total volume is zero.
+    """
+    return _blend_tds([gw_untreated, gw_treated, muni_vol],
+                      [raw_gw_tds, treated_tds, muni_tds])
+
+
 def _daily_cap_allowance(day, monthly_cap, used_this_month, look_ahead):
     """Compute how much of a monthly cap is available today.
 
@@ -491,11 +510,9 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
     # municipal for TDS) and applies regardless of dispatch strategy.
     sourced_before_tds_fix = gw_untreated + gw_treated + muni_vol
     if sourced_before_tds_fix > 0 and municipal['tds_ppm'] < tds_req:
-        blend_tds_check = _blend_tds(
-            [gw_untreated, gw_treated, muni_vol],
-            [raw_gw_tds if gw_untreated > 0 else 0.0,
-             treatment['goal_output_tds_ppm'] if gw_treated > 0 else 0.0,
-             municipal['tds_ppm'] if muni_vol > 0 else 0.0])
+        blend_tds_check = _sourced_blend_tds(
+            gw_untreated, gw_treated, muni_vol,
+            raw_gw_tds, treatment['goal_output_tds_ppm'], municipal['tds_ppm'])
         if blend_tds_check > tds_req:
             muni_for_tds = (sourced_before_tds_fix
                             * (blend_tds_check - tds_req)
@@ -512,11 +529,9 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
         muni_vol = max(0.0, muni_vol - (sourced - headroom))
         sourced = gw_untreated + gw_treated + muni_vol
         if sourced > 0:
-            trim_tds = _blend_tds(
-                [gw_untreated, gw_treated, muni_vol],
-                [raw_gw_tds if gw_untreated > 0 else 0.0,
-                 treatment['goal_output_tds_ppm'] if gw_treated > 0 else 0.0,
-                 municipal['tds_ppm'] if muni_vol > 0 else 0.0])
+            trim_tds = _sourced_blend_tds(
+                gw_untreated, gw_treated, muni_vol,
+                raw_gw_tds, treatment['goal_output_tds_ppm'], municipal['tds_ppm'])
             if trim_tds > tds_req:
                 logger.warning(
                     'Tank headroom limited TDS correction: sourced TDS %.0f ppm '
@@ -525,11 +540,9 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
     # Mix sourced water into tank
     sourced_tds = 0.0
     if sourced > 0:
-        sourced_tds = _blend_tds(
-            [gw_untreated, gw_treated, muni_vol],
-            [raw_gw_tds if gw_untreated > 0 else 0.0,
-             treatment['goal_output_tds_ppm'] if gw_treated > 0 else 0.0,
-             municipal['tds_ppm'] if muni_vol > 0 else 0.0])
+        sourced_tds = _sourced_blend_tds(
+            gw_untreated, gw_treated, muni_vol,
+            raw_gw_tds, treatment['goal_output_tds_ppm'], municipal['tds_ppm'])
         if tank['fill_m3'] > 0:
             tank['tds_ppm'] = _blend_tds(
                 [tank['fill_m3'], sourced],
@@ -555,6 +568,199 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
 # ---------------------------------------------------------------------------
 # Internal helpers — daily dispatch
 # ---------------------------------------------------------------------------
+
+def _init_dispatch_row(wells, tds_req, treatment_throughput_m3_hr,
+                       tank_fill_m3, tank_tds_ppm, strategy):
+    """Build a zeroed-out output row dict for a single dispatch day.
+
+    Args:
+        wells: List of well spec dicts.
+        tds_req: Crop TDS requirement for this day (ppm).
+        treatment_throughput_m3_hr: Treatment system throughput (m3/hr).
+        tank_fill_m3: Current tank fill level (m3).
+        tank_tds_ppm: Current tank TDS (ppm).
+        strategy: Dispatch strategy string.
+
+    Returns:
+        Dict with all output row keys initialized to zero/defaults.
+    """
+    row = {}
+    for w in wells:
+        row[f'{w["name"]}_extraction_m3'] = 0.0
+        row[f'{w["name"]}_tds_ppm'] = w['tds_ppm']
+        row[f'{w["name"]}_pumping_kwh'] = 0.0
+    row.update({
+        'gw_untreated_to_tank_m3': 0.0,
+        'gw_treated_to_tank_m3': 0.0,
+        'municipal_to_tank_m3': 0.0,
+        'total_sourced_to_tank_m3': 0.0,
+        'total_groundwater_extracted_m3': 0.0,
+        'sourced_tds_ppm': 0.0,
+        'treatment_feed_m3': 0.0,
+        'treatment_max_feed_m3': treatment_throughput_m3_hr * 24,
+        'treatment_reject_m3': 0.0,
+        'treatment_energy_kwh': 0.0,
+        'pumping_energy_kwh': 0.0,
+        'municipal_cost': 0.0,
+        'groundwater_cost': 0.0,
+        'total_water_cost': 0.0,
+        'delivered_tds_ppm': 0.0,
+        'crop_tds_requirement_ppm': tds_req,
+        'tds_exceedance_ppm': 0.0,
+        'total_delivered_m3': 0.0,
+        'tank_flush_delivered_m3': 0.0,
+        'safety_flush_m3': 0.0,
+        'look_ahead_drain_m3': 0.0,
+        'deficit_m3': 0.0,
+        'tank_volume_m3': tank_fill_m3,
+        'tank_tds_ppm': tank_tds_ppm,
+        'total_energy_kwh': 0.0,
+        'prefill_m3': 0.0,
+        'policy_strategy': strategy,
+        'policy_primary_source': 'none',
+        'policy_flush_reason': 'none',
+        'policy_deficit': False,
+    })
+    return row
+
+
+def _prefill_tank(row, tank, wells, treatment, municipal,
+                  gw_cap_state, muni_cap_state, strategy,
+                  tds_req, upcoming_demands, upcoming_tds):
+    """Source buffer water into tank for upcoming peak days.
+
+    Reads today's sourced throughput from row, computes shortfall against
+    upcoming demands, and sources additional water into the tank. Accumulates
+    prefill energy, cost, and volume into row in place.
+
+    Args:
+        row: Main output row dict (mutated: accumulates prefill volumes/costs).
+        tank: Tank state dict (mutated by _source_water).
+        wells: List of well spec dicts.
+        treatment: Treatment config dict.
+        municipal: Municipal source config dict.
+        gw_cap_state: Groundwater cap state dict.
+        muni_cap_state: Municipal cap state dict.
+        strategy: Dispatch strategy string.
+        tds_req: Today's TDS requirement (fallback for prefill TDS).
+        upcoming_demands: List of demand_m3 for next N days.
+        upcoming_tds: List of TDS requirements for next N days.
+
+    Returns:
+        Volume prefilled into tank (m3). Zero if no prefill needed.
+    """
+    today_throughput = (row['gw_untreated_to_tank_m3']
+                        + row['gw_treated_to_tank_m3']
+                        + row['municipal_to_tank_m3'])
+    valid_tds = [t for t in (upcoming_tds or []) if not math.isnan(t)]
+    prefill_tds_req = min(valid_tds) if valid_tds else tds_req
+
+    shortfall = sum(d - today_throughput for d in upcoming_demands
+                    if d > today_throughput)
+    if shortfall <= 0:
+        return 0.0
+
+    headroom = tank['capacity_m3'] - tank['fill_m3']
+    prefill_target = min(shortfall, headroom)
+
+    pf_gw_cap = dict(gw_cap_state)
+    pf_gw_cap['used'] = pf_gw_cap['used'] + row['total_groundwater_extracted_m3']
+    pf_muni_cap = dict(muni_cap_state)
+    pf_muni_cap['used'] = pf_muni_cap['used'] + row['municipal_to_tank_m3']
+
+    pf_row = {}
+    for w in wells:
+        pf_row[f'{w["name"]}_extraction_m3'] = 0.0
+        pf_row[f'{w["name"]}_pumping_kwh'] = 0.0
+    pf_row.update({
+        'treatment_feed_m3': 0.0, 'treatment_reject_m3': 0.0,
+        'treatment_energy_kwh': 0.0, 'pumping_energy_kwh': 0.0,
+        'groundwater_cost': 0.0, 'municipal_cost': 0.0,
+        'sourced_tds_ppm': 0.0,
+        'gw_untreated_to_tank_m3': 0.0, 'gw_treated_to_tank_m3': 0.0,
+        'municipal_to_tank_m3': 0.0, 'total_groundwater_extracted_m3': 0.0,
+    })
+
+    prefill_vol = _source_water(
+        prefill_target, prefill_tds_req, wells, treatment, municipal,
+        tank, pf_gw_cap, pf_muni_cap, pf_row, strategy)
+
+    if prefill_vol > 0:
+        for w in wells:
+            row[f'{w["name"]}_extraction_m3'] += pf_row[f'{w["name"]}_extraction_m3']
+            row[f'{w["name"]}_pumping_kwh'] += pf_row[f'{w["name"]}_pumping_kwh']
+        row['gw_untreated_to_tank_m3'] += pf_row['gw_untreated_to_tank_m3']
+        row['gw_treated_to_tank_m3'] += pf_row['gw_treated_to_tank_m3']
+        row['municipal_to_tank_m3'] += pf_row['municipal_to_tank_m3']
+        row['total_groundwater_extracted_m3'] += pf_row['total_groundwater_extracted_m3']
+        row['pumping_energy_kwh'] += pf_row['pumping_energy_kwh']
+        row['treatment_energy_kwh'] += pf_row['treatment_energy_kwh']
+        row['treatment_feed_m3'] += pf_row['treatment_feed_m3']
+        row['treatment_reject_m3'] += pf_row['treatment_reject_m3']
+        row['groundwater_cost'] += pf_row['groundwater_cost']
+        row['municipal_cost'] += pf_row['municipal_cost']
+
+    return prefill_vol
+
+
+def _finalize_dispatch_row(row, tank, demand_m3, tds_req, flush_reason,
+                           deliveries):
+    """Compute delivery totals, energy/cost sums, and policy metadata.
+
+    Args:
+        row: Output row dict (mutated in place).
+        tank: Tank state dict (read-only -- reads fill_m3 and tds_ppm).
+        demand_m3: Today's total irrigation demand.
+        tds_req: Crop TDS requirement.
+        flush_reason: String describing flush cause (or empty).
+        deliveries: Dict with keys 'flush', 'draw_existing', 'draw_fresh',
+            'drain', each mapping to a (volume_m3, tds_ppm) tuple.
+    """
+    flush_vol, flush_tds = deliveries['flush']
+    draw_existing, draw_existing_tds = deliveries['draw_existing']
+    draw_fresh, draw_fresh_tds = deliveries['draw_fresh']
+    drain_vol, drain_tds = deliveries['drain']
+
+    total_delivered = flush_vol + draw_existing + draw_fresh + drain_vol
+    if total_delivered > 0:
+        delivered_tds = _blend_tds(
+            [flush_vol, draw_existing, draw_fresh, drain_vol],
+            [flush_tds, draw_existing_tds, draw_fresh_tds, drain_tds])
+    else:
+        delivered_tds = 0.0
+
+    row['tank_flush_delivered_m3'] = flush_vol + drain_vol
+    row['safety_flush_m3'] = flush_vol
+    row['look_ahead_drain_m3'] = drain_vol
+    row['total_delivered_m3'] = total_delivered
+    row['delivered_tds_ppm'] = delivered_tds
+    row['tds_exceedance_ppm'] = max(0.0, delivered_tds - tds_req) if total_delivered > 0 else 0.0
+    row['deficit_m3'] = max(0.0, demand_m3 - total_delivered)
+    row['total_sourced_to_tank_m3'] = (row['gw_untreated_to_tank_m3'] +
+                                       row['gw_treated_to_tank_m3'] +
+                                       row['municipal_to_tank_m3'])
+    row['total_energy_kwh'] = row['pumping_energy_kwh'] + row['treatment_energy_kwh']
+    row['total_water_cost'] = row['municipal_cost'] + row['groundwater_cost']
+    row['tank_volume_m3'] = tank['fill_m3']
+    row['tank_tds_ppm'] = tank['tds_ppm']
+
+    row['policy_flush_reason'] = flush_reason
+    row['policy_deficit'] = round(row['deficit_m3'], 3) > 0
+
+    gu = row['gw_untreated_to_tank_m3']
+    gt = row['gw_treated_to_tank_m3']
+    mu = row['municipal_to_tank_m3']
+    if gu > 0 or gt > 0 or mu > 0:
+        vol_src = [('gw_untreated', gu), ('gw_treated', gt), ('municipal', mu)]
+        vol_src.sort(key=lambda x: x[1], reverse=True)
+        top1, top2 = vol_src[0], vol_src[1]
+        if top1[1] > top2[1]:
+            row['policy_primary_source'] = top1[0]
+        else:
+            row['policy_primary_source'] = 'mixed'
+    else:
+        row['policy_primary_source'] = 'tank_stock'
+
 
 def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
                   tank, policy, gw_cap_state, muni_cap_state,
@@ -591,44 +797,8 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
         Tuple of (row_dict, updated_tank_dict).
     """
     strategy = policy['strategy']
-
-    row = {}
-    for w in wells:
-        row[f'{w["name"]}_extraction_m3'] = 0.0
-        row[f'{w["name"]}_tds_ppm'] = w['tds_ppm']
-        row[f'{w["name"]}_pumping_kwh'] = 0.0
-    row.update({
-        'gw_untreated_to_tank_m3': 0.0,
-        'gw_treated_to_tank_m3': 0.0,
-        'municipal_to_tank_m3': 0.0,
-        'total_sourced_to_tank_m3': 0.0,
-        'total_groundwater_extracted_m3': 0.0,
-        'sourced_tds_ppm': 0.0,
-        'treatment_feed_m3': 0.0,
-        'treatment_max_feed_m3': treatment['throughput_m3_hr'] * 24,
-        'treatment_reject_m3': 0.0,
-        'treatment_energy_kwh': 0.0,
-        'pumping_energy_kwh': 0.0,
-        'municipal_cost': 0.0,
-        'groundwater_cost': 0.0,
-        'total_water_cost': 0.0,
-        'delivered_tds_ppm': 0.0,
-        'crop_tds_requirement_ppm': tds_req,
-        'tds_exceedance_ppm': 0.0,
-        'total_delivered_m3': 0.0,
-        'tank_flush_delivered_m3': 0.0,
-        'safety_flush_m3': 0.0,
-        'look_ahead_drain_m3': 0.0,
-        'deficit_m3': 0.0,
-        'tank_volume_m3': tank['fill_m3'],
-        'tank_tds_ppm': tank['tds_ppm'],
-        'total_energy_kwh': 0.0,
-        'prefill_m3': 0.0,
-        'policy_strategy': strategy,
-        'policy_primary_source': 'none',
-        'policy_flush_reason': 'none',
-        'policy_deficit': False,
-    })
+    row = _init_dispatch_row(wells, tds_req, treatment['throughput_m3_hr'],
+                             tank['fill_m3'], tank['tds_ppm'], strategy)
 
     # Fallow day — tank sits idle
     if demand_m3 <= 0 or math.isnan(tds_req):
@@ -690,54 +860,10 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
     if (policy.get('prefill_enabled', False)
             and upcoming_demands
             and tank['capacity_m3'] - tank['fill_m3'] > 1.0):
-        today_throughput = (row['gw_untreated_to_tank_m3']
-                            + row['gw_treated_to_tank_m3']
-                            + row['municipal_to_tank_m3'])
-        valid_tds = [t for t in (upcoming_tds or []) if not math.isnan(t)]
-        prefill_tds_req = min(valid_tds) if valid_tds else tds_req
-
-        shortfall = sum(d - today_throughput for d in upcoming_demands
-                        if d > today_throughput)
-        if shortfall > 0:
-            headroom = tank['capacity_m3'] - tank['fill_m3']
-            prefill_target = min(shortfall, headroom)
-
-            pf_gw_cap = dict(gw_cap_state)
-            pf_gw_cap['used'] = pf_gw_cap['used'] + row['total_groundwater_extracted_m3']
-            pf_muni_cap = dict(muni_cap_state)
-            pf_muni_cap['used'] = pf_muni_cap['used'] + row['municipal_to_tank_m3']
-
-            pf_row = {}
-            for w in wells:
-                pf_row[f'{w["name"]}_extraction_m3'] = 0.0
-                pf_row[f'{w["name"]}_pumping_kwh'] = 0.0
-            pf_row.update({
-                'treatment_feed_m3': 0.0, 'treatment_reject_m3': 0.0,
-                'treatment_energy_kwh': 0.0, 'pumping_energy_kwh': 0.0,
-                'groundwater_cost': 0.0, 'municipal_cost': 0.0,
-                'sourced_tds_ppm': 0.0,
-                'gw_untreated_to_tank_m3': 0.0, 'gw_treated_to_tank_m3': 0.0,
-                'municipal_to_tank_m3': 0.0, 'total_groundwater_extracted_m3': 0.0,
-            })
-
-            prefill_vol = _source_water(
-                prefill_target, prefill_tds_req, wells, treatment, municipal,
-                tank, pf_gw_cap, pf_muni_cap, pf_row, strategy)
-
-            if prefill_vol > 0:
-                for w in wells:
-                    row[f'{w["name"]}_extraction_m3'] += pf_row[f'{w["name"]}_extraction_m3']
-                    row[f'{w["name"]}_pumping_kwh'] += pf_row[f'{w["name"]}_pumping_kwh']
-                row['gw_untreated_to_tank_m3'] += pf_row['gw_untreated_to_tank_m3']
-                row['gw_treated_to_tank_m3'] += pf_row['gw_treated_to_tank_m3']
-                row['municipal_to_tank_m3'] += pf_row['municipal_to_tank_m3']
-                row['total_groundwater_extracted_m3'] += pf_row['total_groundwater_extracted_m3']
-                row['pumping_energy_kwh'] += pf_row['pumping_energy_kwh']
-                row['treatment_energy_kwh'] += pf_row['treatment_energy_kwh']
-                row['treatment_feed_m3'] += pf_row['treatment_feed_m3']
-                row['treatment_reject_m3'] += pf_row['treatment_reject_m3']
-                row['groundwater_cost'] += pf_row['groundwater_cost']
-                row['municipal_cost'] += pf_row['municipal_cost']
+        prefill_vol = _prefill_tank(
+            row, tank, wells, treatment, municipal,
+            gw_cap_state, muni_cap_state, strategy,
+            tds_req, upcoming_demands, upcoming_tds)
     row['prefill_m3'] = prefill_vol
 
     # Post-irrigation drain: if next day needs stricter TDS than what the
@@ -755,49 +881,15 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
         if flush_reason == 'none':
             flush_reason = 'look_ahead_drain'
 
-    # Compute delivery totals
-    total_delivered = flush_vol + draw_existing + draw_fresh + drain_vol
-    if total_delivered > 0:
-        delivered_tds = _blend_tds(
-            [flush_vol, draw_existing, draw_fresh, drain_vol],
-            [flush_tds, draw_existing_tds, draw_fresh_tds, drain_tds])
-    else:
-        delivered_tds = 0.0
-
-    # Finalize output row
-    row['tank_flush_delivered_m3'] = flush_vol + drain_vol
-    row['safety_flush_m3'] = flush_vol
-    row['look_ahead_drain_m3'] = drain_vol
-    row['total_delivered_m3'] = total_delivered
-    row['delivered_tds_ppm'] = delivered_tds
-    row['tds_exceedance_ppm'] = max(0.0, delivered_tds - tds_req) if total_delivered > 0 else 0.0
-    row['deficit_m3'] = max(0.0, demand_m3 - total_delivered)
-    row['total_sourced_to_tank_m3'] = (row['gw_untreated_to_tank_m3'] +
-                                       row['gw_treated_to_tank_m3'] +
-                                       row['municipal_to_tank_m3'])
-    row['total_energy_kwh'] = row['pumping_energy_kwh'] + row['treatment_energy_kwh']
-    row['total_water_cost'] = row['municipal_cost'] + row['groundwater_cost']
-    row['tank_volume_m3'] = tank['fill_m3']
-    row['tank_tds_ppm'] = tank['tds_ppm']
-
-    # Policy metadata: why decisions were made
-    row['policy_flush_reason'] = flush_reason
-    row['policy_deficit'] = round(row['deficit_m3'], 3) > 0
-
-    # Primary irrigation source: dominant source actively sourced today
-    gu = row['gw_untreated_to_tank_m3']
-    gt = row['gw_treated_to_tank_m3']
-    mu = row['municipal_to_tank_m3']
-    if gu > 0 or gt > 0 or mu > 0:
-        vol_src = [('gw_untreated', gu), ('gw_treated', gt), ('municipal', mu)]
-        vol_src.sort(key=lambda x: x[1], reverse=True)
-        top1, top2 = vol_src[0], vol_src[1]
-        if top1[1] > top2[1]:
-            row['policy_primary_source'] = top1[0]
-        else:
-            row['policy_primary_source'] = 'mixed'
-    else:
-        row['policy_primary_source'] = 'tank_stock'
+    # Finalize delivery totals, energy/cost sums, and policy metadata
+    deliveries = {
+        'flush': (flush_vol, flush_tds),
+        'draw_existing': (draw_existing, draw_existing_tds),
+        'draw_fresh': (draw_fresh, draw_fresh_tds),
+        'drain': (drain_vol, drain_tds),
+    }
+    _finalize_dispatch_row(row, tank, demand_m3, tds_req, flush_reason,
+                           deliveries)
 
     return row, tank
 
