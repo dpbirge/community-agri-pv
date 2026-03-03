@@ -13,7 +13,7 @@
 #   - Whole-season Ky values; per-growth-stage values available in FAO Paper 33 Table 12
 #   - Kale uses cabbage (Brassica oleracea var. capitata) as proxy — same species
 #   - Cucumber not in FAO Paper 33; value from open-field irrigation study consensus (Ky=0.96-1.02)
-crop_name,ky_whole_season,wue_curvature,source,notes
+crop,ky_whole_season,wue_curvature,source,notes
 tomato,1.05,3.5,FAO Paper 33,Most sensitive during flowering (Ky=1.1) and yield formation (Ky=0.8)
 potato,1.10,3.5,FAO Paper 33,Most sensitive during stolonization/tuber initiation; very tolerant at ripening (Ky=0.20)
 onion,1.10,3.5,FAO Paper 33,Dry onion; most sensitive during bulb formation (Ky=0.80)

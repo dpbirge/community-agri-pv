@@ -2,12 +2,16 @@
 # Defines dispatch rules and constraints, separate from physical infrastructure.
 # Swap to an alternative policy file to test different dispatch strategies
 # without changing the energy system hardware.
+#
+# When policy parameters overlap with equipment CSV defaults (e.g., SOC limits),
+# the policy value takes precedence. Equipment CSVs define hardware limits;
+# the policy defines operational limits chosen for this scenario.
 
 energy_policy_name: baseline_energy_policy
 
 # --- Dispatch Strategy ---
 # minimize_cost:                merit-order by marginal cost (renewables > battery > grid > generator)
-# maximize_self_consumption:    minimize grid import (renewables > battery > generator > grid)
+# minimize_grid_reliance:    minimize grid reliance (renewables > battery > generator > grid)
 # minimize_generator:           minimize diesel use (renewables > battery > grid > generator)
 strategy: minimize_cost
 
@@ -15,12 +19,17 @@ strategy: minimize_cost
 grid:
   mode: self_consumption    # full_grid | net_metering | feed_in_tariff | self_consumption
                             # | limited_grid | off_grid
-  import_cap_kwh: null      # null = unlimited; max daily grid import (kWh)
-  export_rate_usd_kwh: null # feed-in tariff rate; null when mode != feed_in_tariff
+  monthly_import_cap_kwh: null  # null = unlimited; max monthly grid import (kWh)
+  monthly_export_cap_kwh: null  # null = unlimited; max monthly grid export (kWh)
+  export_rate_usd_kwh: null     # explicit FIT rate override; null = look up from CSV by capacity_tier
+  capacity_tier: null           # project_size_category in feed_in_tariff_rates CSV
+                                # (e.g., household, commercial_small, commercial_large, utility_scale)
+                                # only used when mode = feed_in_tariff and export_rate_usd_kwh is null
 
 # --- Grid Cap Enforcement ---
 cap_enforcement:
-  look_ahead: true
+  look_ahead: true    # true = spread remaining monthly cap evenly over remaining days
+                      # false = draw freely until monthly cap exhausted
 
 # --- Tariff Assignment ---
 # Agricultural rate applies to water system electricity (pumping, treatment,
@@ -31,25 +40,24 @@ tariff:
   building_energy: commercial    # registry key under electricity_pricing
 
 # --- Net Metering ---
-# Egypt EgyptERA rules: monthly credit offset against consumption, annual
-# settlement in June. Excess beyond annual offset purchased at EETC solar
-# PPA price (~0.04 USD/kWh).
+# Monthly energy netting: grid export kWh are offset against grid import kWh
+# within each calendar month. Net import determines the monthly bill.
+# At month boundary, accumulators reset — no credit carries forward.
+# Monthly export exceeding what offsets import is unpaid (equivalent to
+# curtailment from the community's economic perspective).
 net_metering:
-  credit_period: monthly         # credits accumulate monthly
-  settlement_period: annual      # annual true-up in June
-  settlement_month: 6            # June fiscal year end
-  excess_buyback_usd_kwh: 0.04  # EETC solar PPA approximate rate
+  credit_period: monthly         # credits accumulate and settle monthly
 
 # --- Battery Dispatch ---
-# Only active when energy_system has_battery: true
+# Only active when energy_system has_battery: true.
+# SOC limits here override the equipment CSV defaults for this scenario.
 battery:
   soc_min: 0.20             # minimum state of charge (fraction of capacity)
   soc_max: 0.95             # maximum state of charge
   soc_initial: 0.50         # starting SOC for simulation
 
 # --- Generator Dispatch ---
-# Only active when energy_system has_generator: true
+# Only active when energy_system has_generator: true.
+# Generator runs only when battery and grid cannot meet remaining deficit.
 generator:
-  soc_start_threshold: 0.25 # start generator when battery SOC drops below this
   min_load_fraction: 0.30   # minimum operating load as fraction of rated capacity
-  monthly_fuel_cap_liters: null  # null = unlimited

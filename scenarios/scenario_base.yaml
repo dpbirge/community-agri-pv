@@ -9,8 +9,6 @@ description: Baseline community — research-grade energy data, toy-grade water 
 
 # --- Simulation Period ---
 simulation:
-  start_date: "2023-01-01"
-  end_date: "2023-12-31"
   weather_scenario_id: null  # null = use first/only scenario found in data files
 
 # --- Data Registry ---

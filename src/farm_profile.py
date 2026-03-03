@@ -43,15 +43,11 @@ def planting_code_to_mmdd(code):
 
 def _load_season_lengths(registry, root_dir):
     """Load (crop, mmdd) -> expected_season_length_days from planting_windows."""
-    growth_path = root_dir / registry["crops"]["growth_params"]
-    windows_path = growth_path.parent / "planting_windows-research.csv"
+    windows_path = root_dir / registry["crops"]["planting_windows"]
     df = pd.read_csv(windows_path, comment="#")
     lookup = {}
     for _, row in df.iterrows():
-        crop = row["crop"]
-        mmdd = row["planting_date_mmdd"]
-        length = int(row["expected_season_length_days"])
-        lookup[(crop, mmdd)] = length
+        lookup[(row["crop"], row["planting_date_mmdd"])] = int(row["expected_season_length_days"])
     return lookup
 
 
@@ -74,12 +70,15 @@ def validate_no_overlap(farm_config, registry, root_dir):
     """Raise ValueError if any field has overlapping growing seasons.
 
     Uses planting_windows-research.csv for expected_season_length_days.
-    Seasons are computed in a reference year; cross-year seasons handled.
+    Checks across two consecutive reference years (2020 and 2021) so that
+    a late-year planting wrapping into the next year is tested against
+    early-year plantings on the same field.
     """
     season_lookup = _load_season_lengths(registry, root_dir)
-    ref_year = 2020  # arbitrary, seasons wrap across Dec 31 as needed
+    ref_years = [2020, 2021]
 
-    def date_range(crop, planting_code):
+    def date_ranges(crop, planting_code):
+        """Return intervals for two consecutive years to catch cross-year overlap."""
         mmdd = planting_code_to_mmdd(planting_code)
         key = (crop, mmdd)
         if key not in season_lookup:
@@ -88,36 +87,47 @@ def validate_no_overlap(farm_config, registry, root_dir):
                 f"must exist in planting_windows-research.csv"
             )
         length = season_lookup[key]
-        start = datetime.strptime(f"{ref_year}-{mmdd}", "%Y-%m-%d")
-        end = start + timedelta(days=length)
-        return start, end
+        intervals = []
+        for y in ref_years:
+            start = datetime.strptime(f"{y}-{mmdd}", "%Y-%m-%d")
+            end = start + timedelta(days=length)
+            intervals.append((start, end))
+        return intervals
 
     def ranges_overlap(a, b):
         """Intervals (start, end) overlap iff start_a < end_b and start_b < end_a."""
-        start_a, end_a = a
-        start_b, end_b = b
-        return start_a < end_b and start_b < end_a
+        return a[0] < b[1] and b[0] < a[1]
 
     errors = []
     for farm in farm_config.get("farms", []):
         for field in farm.get("fields", []):
             name = field.get("name", "?")
             flat = normalize_plantings(field)
-            ranges = []
+            # Collect (crop, planting_code, interval) for all plantings x both years
+            all_intervals = []
             for p in flat:
                 try:
-                    r = date_range(p["crop"], p["planting"])
-                    ranges.append((p["crop"], p["planting"], r))
+                    intervals = date_ranges(p["crop"], p["planting"])
+                    for interval in intervals:
+                        all_intervals.append((p["crop"], p["planting"], interval))
                 except ValueError as e:
                     errors.append(f"Field {name}: {e}")
-            # Check all pairs
-            for i, (c1, pl1, r1) in enumerate(ranges):
-                for (c2, pl2, r2) in ranges[i + 1:]:
+            # Check all pairs (skip same planting in different years against itself
+            # only when both crop and planting_code match -- same annual event)
+            reported = set()
+            for i, (c1, pl1, r1) in enumerate(all_intervals):
+                for c2, pl2, r2 in all_intervals[i + 1:]:
+                    if c1 == c2 and pl1 == pl2:
+                        # Same planting in year N vs year N+1 -- not an overlap
+                        continue
                     if ranges_overlap(r1, r2):
-                        errors.append(
-                            f"Field {name}: overlapping plantings "
-                            f"{c1} {pl1} and {c2} {pl2}"
-                        )
+                        pair_key = tuple(sorted([(c1, pl1), (c2, pl2)]))
+                        if pair_key not in reported:
+                            reported.add(pair_key)
+                            errors.append(
+                                f"Field {name}: overlapping plantings "
+                                f"{c1} {pl1} and {c2} {pl2}"
+                            )
 
     if errors:
         raise ValueError(

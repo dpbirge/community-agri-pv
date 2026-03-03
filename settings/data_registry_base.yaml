@@ -20,6 +20,7 @@ energy_supply:
 crops:
   growth_params:           data/crops/crop_params/crop_growth_params-research.csv
   yield_response_factors:  data/crops/crop_params/yield_response_factors-research.csv
+  planting_windows:        data/crops/crop_params/planting_windows-research.csv
   daily_growth_dir:        data/crops/crop_daily_growth
 
 # --- Water Supply ---

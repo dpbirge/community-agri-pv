@@ -30,10 +30,11 @@
 - `src/crop_yield.py` — fully implemented; FAO Paper 33 water-yield response for post-simulation
   harvest prediction; used in dynamic irrigation mode
 - `src/water.py` — fully implemented; central mixing tank model for daily water supply dispatch
-  with three strategies (`minimize_cost`, `minimize_treatment`, `minimize_draw`), BWRO treatment
-  with TDS-band snap, tank state with flush/drain logic, monthly cap enforcement with look-ahead;
-  public API: `compute_water_supply`, `save_water_supply`, `load_water_supply`,
-  `size_water_system`
+  with four strategies (`minimize_cost`, `minimize_treatment`, `minimize_draw`,
+  `maximize_treatment_efficiency`), BWRO treatment with TDS-band snap and utilization-based
+  efficiency curve, tank state with flush/drain logic, monthly cap enforcement with look-ahead,
+  treatment smoothing with tank feedback and fallow treatment; public API:
+  `compute_water_supply`, `save_water_supply`, `load_water_supply`
 - `src/water_balance.py` — fully implemented; composes irrigation demand, water supply dispatch,
   and community demand into a unified daily DataFrame with application energy, community municipal
   cost, over-delivery tracking, and conservation balance check; public API:
@@ -143,8 +144,12 @@ Where `feed_volume_m3 = treated_product_m3 / (recovery_rate_pct / 100)`.
 
 ## Policy & Dispatch
 
-Policy is configured in `water_policy_base.yaml`. The MVP uses rule-based priority dispatch.
-Three strategies are selectable via `strategy`:
+Policy is configured in `water_policy_base.yaml`. Four strategies are selectable via `strategy`.
+The first three are **demand-matching** — they source exactly what's needed each day, no more.
+The fourth is **buffer-based** — it runs treatment at a steady rate and uses the storage tank
+as a buffer between treatment output and irrigation draw.
+
+### Demand-Matching Strategies
 
 - `minimize_cost` — prefer cheapest untreated groundwater first; treat only as needed to meet
   TDS; municipal fills remaining gap (default)
@@ -156,11 +161,137 @@ Three strategies are selectable via `strategy`:
 After strategy-based sourcing, a TDS correction step adds municipal water if the blend still
 exceeds the crop requirement, regardless of strategy.
 
+### `maximize_treatment_efficiency`
+
+Operates the BWRO treatment plant as a duty cycle: the plant either runs at its efficiency
+sweet spot (70-85% of rated capacity) or shuts off entirely, using the storage tank as a
+buffer between treatment runs and irrigation draw. On treatment days, surplus treated water
+accumulates in the tank; on off days, demand is served from tank stock. Tank fill level
+controls the on/off decision via hysteresis thresholds (`high_mark` / `low_mark`). This
+replaces the demand-matching pattern: source volume is determined by the treatment target
+and tank state, not by today's demand.
+
+Source priority within this strategy (the order for sourcing groundwater vs municipal to feed
+the treatment target) is independently configurable via `treatment_smoothing.source_priority`,
+which accepts any of the three demand-matching strategy names.
+
 ### Monthly Cap Enforcement
 
 - `look_ahead: true` (the current default) — remaining monthly cap divided evenly across the
   remaining days of the month; this daily allowance replaces the cap floor on each day
 - `look_ahead: false` — enforce only a running cumulative cap (simpler, can front-load consumption)
+
+### Prefill Buffer
+
+After meeting daily irrigation demand, demand-matching strategies can use remaining source
+capacity to prefill the tank when upcoming demand is forecast to exceed daily throughput.
+Configured via `prefill.enabled` and `prefill.look_ahead_days` in the water policy.
+
+- Scans the next N days of demand and identifies days where demand exceeds today's treatment
+  and extraction capacity
+- Sources additional water into the tank up to available headroom
+- Reduces deficit days by buffering water ahead of peak demand periods
+- **Not used by `maximize_treatment_efficiency`** — the smoothing strategy handles buffer
+  accumulation via its steady-rate treatment target and tank feedback loop
+
+---
+
+## Treatment Smoothing
+
+The `maximize_treatment_efficiency` strategy uses a steady-rate treatment model with tank
+feedback. All treatment smoothing configuration lives in the `treatment_smoothing` block of
+`water_policy_base.yaml` and is ignored by demand-matching strategies.
+
+### Treatment Target Calculation
+
+At simulation start, `_compute_treatment_target()` analyzes the full demand series to find
+a constant daily treatment feed rate:
+
+1. Compute `f_treat` — the blending fraction (0-1) indicating what share of delivered water
+   must be treated, based on volume-weighted raw groundwater TDS vs the strictest crop TDS
+   requirement across the simulation
+2. Compute season-total treated product and divide by operating days (all days when
+   `fallow_treatment: true`, active days only when false)
+3. Clamp the resulting average daily feed to the BWRO sweet spot: 70-85% of rated capacity
+   (`throughput_m3_hr × 24`)
+4. Convert feed target to source-product volume using recovery rate and `f_treat`
+
+The sweet spot bounds (70-85%) are fixed based on BWRO engineering literature — below 70%,
+intermittent operation causes startup/shutdown cycling and membrane drying risk; above 85%,
+accelerated fouling increases maintenance and shortens membrane life.
+
+### Treatment Efficiency Curve
+
+The efficiency curve (`data/water/treatment_efficiency_curve-toy.csv`) models how BWRO
+energy consumption varies with utilization. During daily dispatch, after all sourcing
+completes, the actual utilization ratio (`treatment_feed_m3 / max_daily_feed`) is computed
+and snapped to the nearest band in the curve. The `energy_multiplier` from the matched band
+is applied to `treatment_energy_kwh`.
+
+This applies to **all four strategies** — demand-matching strategies that run treatment at
+low utilization (e.g. 5-10% of rated capacity) incur a 1.25-1.40x energy penalty, reflecting
+the real-world cost of intermittent BWRO operation. The smoothing strategy targets 70-85%
+utilization where the multiplier is 1.0 (no penalty).
+
+| Utilization | Energy Multiplier | Maintenance Multiplier | Membrane Life Multiplier |
+| ----------- | ----------------- | ---------------------- | ------------------------ |
+| 10%         | 1.40              | 1.10                   | 1.15                     |
+| 30%         | 1.25              | 1.05                   | 1.10                     |
+| 50%         | 1.12              | 1.02                   | 1.05                     |
+| 70-85%      | 1.00              | 1.00                   | 1.00                     |
+| 95%         | 1.08              | 1.15                   | 0.85                     |
+| 100%        | 1.15              | 1.30                   | 0.75                     |
+
+Only the `energy_multiplier` is applied during daily dispatch. Maintenance and membrane life
+multipliers are used by `src/water_sizing.py` for system sizing metrics.
+
+### Tank Feedback (Duty-Cycle Model)
+
+`_effective_treatment_target()` uses a duty-cycle model with hysteresis to decide whether
+the treatment plant runs on a given day. When it runs, it runs at the optimal feed target
+(70-85% of rated capacity). When it doesn't, sourcing is zero and demand is served from
+tank stock. This ensures every kWh of treatment energy is spent at the efficiency sweet
+spot (multiplier = 1.0), unlike a proportional throttle which would run at low utilization
+on high-tank days and incur energy penalties.
+
+The decision uses two tank fill thresholds configured via `tank_feedback`:
+
+- **Above `high_mark`** (default 0.90) — treatment is **off**. Demand is served from
+  tank stock only. No sourcing, no treatment energy.
+- **Below `low_mark`** (default 0.15) — treatment is **on at max capacity**. Sources at
+  full rated capacity to rapidly refill the tank.
+- **Between marks** — **hysteresis**: the plant stays in whatever state it was in
+  yesterday. If it was running, it keeps running at the base target. If it was off, it
+  stays off. This prevents rapid on/off cycling near threshold boundaries.
+
+On treatment-on days, the source volume is the pre-computed base target (or max capacity
+when boosting below low mark). On treatment-off days, source volume is zero — demand is
+met entirely from tank stock. If tank stock is insufficient to meet today's demand on an
+off day, treatment turns on regardless (demand override).
+
+The effective volume never exceeds available tank headroom.
+
+### Fallow Day Treatment
+
+When `fallow_treatment: true` (default), the treatment plant continues operating during
+fallow periods (no irrigation demand) to build tank buffer for the next active season.
+A `fallow_horizon_days` parameter (default 14) limits this: treatment only continues if
+active irrigation resumes within N days. During fallow treatment, the TDS target is set
+to the next active day's crop requirement.
+
+When `fallow_treatment: false`, the plant shuts down on fallow days (no sourcing, tank
+sits idle).
+
+### Second Source Pass
+
+When demand exceeds what a single tank fill-and-drain cycle can deliver (peak demand >
+tank capacity, especially when the tank starts empty after a flush), a second source+draw
+pass uses the freed tank headroom to source and deliver the remainder. Accounting from
+both passes is accumulated into a single daily output row.
+
+Example: tank capacity 100 m3, demand 150 m3. First pass: source 100 m3, deliver 100 m3
+(tank empty). Second pass: source 50 m3 into freed headroom, deliver 50 m3. Total
+delivered: 150 m3.
 
 ---
 
@@ -168,35 +299,50 @@ exceeds the crop requirement, regardless of strategy.
 
 The output DataFrame from `src/water.py` includes:
 
-| Column                           | Description                                                    |
-| -------------------------------- | -------------------------------------------------------------- |
-| `day`                            | date                                                           |
-| `{well_name}_extraction_m3`      | m3 drawn from each well (one col per well)                     |
-| `{well_name}_tds_ppm`            | TDS of each well (static from config)                          |
-| `gw_untreated_to_tank_m3`        | untreated groundwater volume piped to tank                     |
-| `gw_treated_to_tank_m3`          | treated groundwater product volume piped to tank               |
-| `municipal_to_tank_m3`           | municipal water volume piped to tank                           |
-| `total_sourced_to_tank_m3`       | total volume sourced to tank (untreated + treated + municipal) |
-| `total_groundwater_extracted_m3` | total extracted across all wells (includes brine feed)         |
-| `treatment_reject_m3`            | brine/reject volume lost                                       |
-| `treatment_energy_kwh`           | energy consumed by treatment                                   |
-| `pumping_energy_kwh`             | energy consumed by all pumps                                   |
-| `municipal_cost`                 | cost of municipal water                                        |
-| `groundwater_cost`               | pumping + treatment cost (amortized O&M, not CAPEX)            |
-| `total_water_cost`               | municipal + groundwater cost                                   |
-| `delivered_tds_ppm`              | TDS of water actually delivered to fields from tank            |
-| `crop_tds_requirement_ppm`       | required TDS threshold for the day (from irrigation demand)    |
-| `tds_exceedance_ppm`             | delivered TDS minus crop requirement (0 when compliant)        |
-| `total_delivered_m3`             | total water delivered to fields from tank                      |
-| `tank_flush_delivered_m3`        | volume delivered via safety flush or look-ahead drain          |
-| `deficit_m3`                     | unmet demand when supply cannot fill request                   |
-| `tank_volume_m3`                 | tank fill level at end of day                                  |
-| `tank_tds_ppm`                   | tank TDS at end of day                                         |
-| `total_sourcing_energy_kwh`      | pumping + treatment combined                                   |
-| `policy_strategy`                | dispatch strategy used                                         |
-| `policy_primary_source`          | dominant water source for the day                              |
-| `policy_flush_reason`            | why a tank flush occurred (none, tds_exceedance, look_ahead)   |
-| `policy_deficit`                 | boolean flag for deficit days                                  |
+| Column                           | Description                                                                |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `day`                            | date                                                                       |
+| `{well_name}_extraction_m3`      | m3 drawn from each well (one col per well)                                 |
+| `{well_name}_tds_ppm`            | TDS of each well (static from config)                                      |
+| `{well_name}_pumping_kwh`        | pumping energy for each well                                               |
+| `gw_untreated_to_tank_m3`        | untreated groundwater volume piped to tank                                 |
+| `gw_treated_to_tank_m3`          | treated groundwater product volume piped to tank                           |
+| `municipal_to_tank_m3`           | municipal water volume piped to tank                                       |
+| `total_sourced_to_tank_m3`       | total volume sourced to tank (untreated + treated + municipal)             |
+| `total_groundwater_extracted_m3` | total extracted across all wells (includes brine feed)                     |
+| `sourced_tds_ppm`                | TDS of the blended sourced water entering the tank                         |
+| `treatment_feed_m3`              | volume fed into treatment (before recovery loss)                           |
+| `treatment_max_feed_m3`          | rated daily treatment capacity (throughput x 24)                           |
+| `treatment_reject_m3`            | brine/reject volume lost                                                   |
+| `treatment_energy_kwh`           | energy consumed by treatment (after efficiency curve multiplier)           |
+| `pumping_energy_kwh`             | energy consumed by all pumps                                               |
+| `municipal_cost`                 | cost of municipal water                                                    |
+| `groundwater_cost`               | pumping + treatment cost (amortized O&M, not CAPEX)                        |
+| `total_water_cost`               | municipal + groundwater cost                                               |
+| `delivered_tds_ppm`              | TDS of water actually delivered to fields from tank                        |
+| `crop_tds_requirement_ppm`       | required TDS threshold for the day (from irrigation demand)                |
+| `tds_exceedance_ppm`             | delivered TDS minus crop requirement (0 when compliant)                    |
+| `total_delivered_m3`             | total water delivered to fields from tank                                  |
+| `tank_flush_delivered_m3`        | volume delivered via safety flush or look-ahead drain combined             |
+| `safety_flush_m3`                | volume delivered via safety flush (tank TDS exceeded crop TDS)             |
+| `look_ahead_drain_m3`            | volume delivered via look-ahead drain (next day TDS is stricter)           |
+| `deficit_m3`                     | unmet demand when supply cannot fill request                               |
+| `tank_volume_m3`                 | tank fill level at end of day                                              |
+| `tank_tds_ppm`                   | tank TDS at end of day                                                     |
+| `total_sourcing_energy_kwh`      | pumping + treatment combined                                               |
+| `policy_strategy`                | dispatch strategy used                                                     |
+| `policy_primary_source`          | dominant water source for the day                                          |
+| `policy_flush_reason`            | why a tank flush occurred (none, tds_exceedance, look_ahead_drain)         |
+| `policy_deficit`                 | boolean flag for deficit days                                              |
+| `gw_cap_used_month_m3`           | cumulative groundwater extracted this calendar month                       |
+| `muni_cap_used_month_m3`         | cumulative municipal water used this calendar month                        |
+| `gw_monthly_cap_m3`              | monthly groundwater cap (inf if unlimited)                                 |
+| `muni_monthly_cap_m3`            | monthly municipal cap (inf if unlimited)                                   |
+| `prefill_m3`                     | buffer water sourced for upcoming peak days (demand-matching only)         |
+| `treatment_target_m3`            | smoothing: pre-computed daily feed target (0 for demand-matching)          |
+| `treatment_utilization_pct`      | smoothing: actual feed as pct of rated capacity (0 for demand-matching)    |
+| `treatment_energy_multiplier`    | efficiency curve multiplier applied to treatment energy (1.0 = sweet spot) |
+| `treatment_on`                   | boolean: whether treatment plant ran this day (smoothing only)             |
 
 ---
 
@@ -502,19 +648,50 @@ are pure functions.
 
 ### Key Logic in `_dispatch_day`
 
-1. Determine today's demand and TDS target
-2. **Safety flush:** if tank TDS exceeds crop requirement, flush all tank water to fields
-3. Draw from existing tank water to meet demand (if tank TDS is acceptable)
-4. Source only the shortfall — never fill past today's demand
-5. Apply strategy-based sourcing (`_source_water`):
-   a. Compute groundwater split (treated vs untreated) to meet TDS target
-   b. Add municipal per strategy priority
-   c. TDS correction: add municipal if blend still exceeds crop requirement
-6. Draw remaining demand from freshly sourced water in tank
-7. **Look-ahead drain:** if next day's TDS requirement is stricter than tank TDS, deliver
-   all remaining tank water to fields now
-8. Compute delivery totals, blended TDS, deficit, energy, and cost
-9. Record policy metadata (primary source, flush reason, deficit flag)
+`_dispatch_day` handles all four strategies through a shared skeleton with two divergent
+sourcing paths. Steps 1-3 and 7-11 are shared; step 4 branches by strategy type.
+
+**Shared entry (all strategies):**
+
+1. **Fallow check:** if demand is zero or TDS requirement is NaN, the day is fallow.
+   Demand-matching strategies return immediately (tank sits idle). The smoothing strategy
+   checks `fallow_treatment` and `fallow_horizon_days` — if active irrigation resumes
+   within the horizon, sourcing continues using the next active day's TDS as the target.
+2. **Safety flush:** if tank TDS exceeds crop requirement, flush all tank water to fields.
+3. **Draw existing:** draw from tank to meet demand (if tank TDS is acceptable).
+
+**Sourcing path — demand-matching (`minimize_cost`, `minimize_treatment`, `minimize_draw`):**
+
+4a. Source volume = `demand_remaining` (shortfall after tank draw).
+    Apply strategy-based sourcing (`_source_water`):
+    a. Compute groundwater split (treated vs untreated) to meet TDS target
+    b. Add municipal per strategy priority
+    c. TDS correction: add municipal if blend still exceeds crop requirement
+
+**Sourcing path — `maximize_treatment_efficiency`:**
+
+4b. Source volume = `_effective_treatment_target()` (duty-cycle decision).
+    If tank fill is above `high_mark`, source volume is 0 (plant off, serve from tank).
+    If below `low_mark`, source at max capacity. Between marks, hysteresis holds the
+    previous day's on/off state. Demand override: if tank stock cannot meet today's
+    demand, plant turns on regardless. Source priority taken from
+    `treatment_smoothing.source_priority` (defaults to `minimize_cost`). Same
+    `_source_water` call, different volume and priority inputs.
+
+**Shared continuation (all strategies):**
+
+1. **Draw fresh:** draw remaining demand from tank (now contains freshly sourced water).
+2. **Second source pass:** if demand still unmet and tank is empty, source and draw again
+   using freed headroom (handles peak demand exceeding tank capacity).
+3. **Prefill** (demand-matching only): if enabled, source buffer water for upcoming peak
+   days into the tank. Skipped by smoothing (handled via target-rate sourcing).
+4. **Apply efficiency curve:** compute treatment utilization from final `treatment_feed_m3 /
+   max_daily_feed` (including all source passes and prefill), snap to nearest band in
+   efficiency curve CSV, multiply `treatment_energy_kwh` by `energy_multiplier`.
+5. **Look-ahead drain:** if next day's TDS requirement is stricter than tank TDS, deliver
+   all remaining tank water to fields now.
+6. **Finalize:** compute delivery totals, blended TDS, deficit, energy, and cost.
+7. **Policy metadata:** record primary source, flush reason, deficit flag.
 
 ### Assumptions
 

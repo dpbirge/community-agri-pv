@@ -55,3 +55,16 @@ strategy: minimize_cost
 prefill:
   enabled: true
   look_ahead_days: 3          # how many days ahead to scan for demand spikes
+
+# --- Treatment Smoothing ---
+# Read only when strategy = maximize_treatment_efficiency.
+# Ignored by demand-matching strategies (minimize_cost, minimize_treatment,
+# minimize_draw).
+# Treatment target is clamped to the BWRO sweet spot (70-85% of rated capacity).
+treatment_smoothing:
+  source_priority: minimize_cost  # source ordering: minimize_cost | minimize_treatment | minimize_draw
+  fallow_treatment: true          # continue treating during fallow days to build buffer
+  fallow_horizon_days: 14         # only treat through fallow if next active day is within N days
+  tank_feedback:
+    high_mark: 0.90               # tank fill fraction above which treatment throttles down
+    low_mark: 0.15                # tank fill fraction below which treatment boosts up

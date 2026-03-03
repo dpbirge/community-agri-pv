@@ -228,8 +228,8 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
     registry = _load_yaml(registry_path)
     paths = _resolve_energy_paths(registry, root_dir)
 
-    solar_config = config['community_solar']
-    wind_config = config['wind_turbines']
+    solar_config = config.get('community_solar') or {}
+    wind_config = config.get('wind_turbines') or {}
 
     pv_df = _load_csv(paths['pv_energy'])
     wind_df = _load_csv(paths['wind_energy'])
@@ -255,7 +255,17 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
 
     df = parts[0]
     for part in parts[1:]:
-        df = df.merge(part, on='day')
+        df = df.merge(part, on='day', validate='one_to_one')
+
+    expected_rows = len(pv_df)
+    if len(df) < expected_rows:
+        import logging
+        drop_pct = (expected_rows - len(df)) / expected_rows * 100
+        msg = (f'Energy date merge dropped {expected_rows - len(df)} rows '
+               f'({drop_pct:.1f}%) — PV and wind data have different date ranges')
+        if drop_pct > 5:
+            raise ValueError(msg)
+        logging.getLogger(__name__).warning(msg)
 
     # Reorder: day first, then agripv, community solar, wind
     agripv_cols = [c for c in agripv.columns if c != 'day'] if not agripv.empty else []

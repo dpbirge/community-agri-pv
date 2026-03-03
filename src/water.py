@@ -9,8 +9,11 @@ tank is flushed to the fields (no water wasted) and refilled with fresh
 water at the correct TDS. At the daily timestep, both flush and refill
 are assumed to occur within a single day.
 
-Supports three dispatch strategies: minimize_cost, minimize_treatment,
-and minimize_draw.
+Supports four dispatch strategies: minimize_cost, minimize_treatment,
+minimize_draw, and maximize_treatment_efficiency. The first three are
+demand-matching (source exactly what's needed each day). The fourth runs
+the BWRO treatment plant at a steady rate near its efficiency sweet spot
+(70-85% utilization), using the storage tank as a buffer.
 
 System sizing and optimization functions are in src.water_sizing.
 
@@ -620,6 +623,10 @@ def _init_dispatch_row(wells, tds_req, treatment_throughput_m3_hr,
         'policy_primary_source': 'none',
         'policy_flush_reason': 'none',
         'policy_deficit': False,
+        'treatment_target_m3': 0.0,
+        'treatment_utilization_pct': 0.0,
+        'treatment_energy_multiplier': 1.0,
+        'treatment_on': True,
     })
     return row
 
@@ -701,6 +708,153 @@ def _prefill_tank(row, tank, wells, treatment, municipal,
         row['municipal_cost'] += pf_row['municipal_cost']
 
     return prefill_vol
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers — treatment smoothing
+# ---------------------------------------------------------------------------
+
+def _compute_treatment_target(demand_df, raw_gw_tds, treatment, tank_capacity_m3,
+                               smoothing_cfg):
+    """Compute the steady-state daily treatment feed target.
+
+    Analyzes the full demand series to find a constant treatment rate that
+    produces enough treated water to meet season-total treated demand while
+    falling within the BWRO sweet spot (70-85% of rated capacity).
+
+    Args:
+        demand_df: Full demand DataFrame with total_demand_m3, crop_tds_requirement_ppm.
+        raw_gw_tds: Volume-weighted raw groundwater TDS across all wells.
+        treatment: Treatment config dict (goal_output_tds_ppm, throughput_m3_hr, lookup_df).
+        tank_capacity_m3: Storage tank capacity.
+        smoothing_cfg: Dict from policy['treatment_smoothing'].
+
+    Returns:
+        Dict with keys:
+            feed_target_m3: Daily treatment feed target (m3).
+            source_target_m3: Equivalent source volume (m3) to achieve feed target.
+            f_treat: Blending fraction (0-1) — share of product that must be treated.
+            recovery_rate: BWRO recovery rate (0-1).
+    """
+    goal_tds = treatment['goal_output_tds_ppm']
+    max_daily_feed = treatment['throughput_m3_hr'] * 24
+
+    # Compute treatment fraction from GW TDS vs strictest crop TDS requirement
+    tds_vals = demand_df['crop_tds_requirement_ppm'].dropna()
+    if tds_vals.empty:
+        return {'feed_target_m3': 0.0, 'source_target_m3': 0.0,
+                'f_treat': 0.0, 'recovery_rate': 0.0}
+    strictest_tds = tds_vals.min()
+
+    if raw_gw_tds <= strictest_tds:
+        f_treat = 0.0
+    elif goal_tds >= strictest_tds:
+        f_treat = 1.0
+    elif abs(raw_gw_tds - goal_tds) < 1e-9:
+        f_treat = 1.0
+    else:
+        f_treat = (raw_gw_tds - strictest_tds) / (raw_gw_tds - goal_tds)
+        f_treat = max(0.0, min(1.0, f_treat))
+
+    if f_treat <= 0:
+        return {'feed_target_m3': 0.0, 'source_target_m3': 0.0,
+                'f_treat': 0.0, 'recovery_rate': 0.0}
+
+    # Recovery rate from treatment lookup for the raw GW TDS band
+    treatment_row = _snap_tds_to_band(raw_gw_tds, treatment['lookup_df'])
+    recovery_rate = treatment_row['recovery_rate_pct'] / 100.0
+
+    # Total season treated product and feed
+    active_mask = demand_df['crop_tds_requirement_ppm'].notna()
+    active_demands = demand_df.loc[active_mask, 'total_demand_m3']
+    total_treated_product = (active_demands * f_treat).sum()
+    total_feed = total_treated_product / recovery_rate if recovery_rate > 0 else total_treated_product
+
+    # Divide by operating days
+    fallow_treatment = smoothing_cfg.get('fallow_treatment', True)
+    if fallow_treatment:
+        n_days = len(demand_df)
+    else:
+        n_days = active_mask.sum()
+    if n_days <= 0:
+        return {'feed_target_m3': 0.0, 'source_target_m3': 0.0,
+                'f_treat': f_treat, 'recovery_rate': recovery_rate}
+
+    avg_daily_feed = total_feed / n_days
+
+    # Clamp to sweet spot (70-85% of rated capacity)
+    feed_target = max(0.70 * max_daily_feed, min(0.85 * max_daily_feed, avg_daily_feed))
+
+    # Convert feed target to source volume: source = feed * recovery_rate / f_treat
+    # (treated_product = feed * recovery_rate, then source = treated_product / f_treat)
+    source_target = feed_target * recovery_rate / f_treat if f_treat > 0 else feed_target
+
+    # Validate tank capacity as buffer
+    if tank_capacity_m3 > 0:
+        peak_daily_demand = active_demands.max()
+        surplus_per_day = source_target - peak_daily_demand
+        if surplus_per_day > 0 and surplus_per_day * 7 > tank_capacity_m3:
+            logger.warning(
+                'Tank may be undersized for treatment smoothing: %.0f m3 capacity '
+                'vs %.0f m3 weekly surplus. Tank feedback will handle overflow.',
+                tank_capacity_m3, surplus_per_day * 7)
+
+    return {
+        'feed_target_m3': feed_target,
+        'source_target_m3': source_target,
+        'f_treat': f_treat,
+        'recovery_rate': recovery_rate,
+    }
+
+
+def _effective_treatment_target(base_target_m3, tank, demand_remaining,
+                                 max_source_m3, smoothing_cfg, treatment_on):
+    """Duty-cycle treatment decision: run at optimal or shut off.
+
+    Uses hysteresis to prevent rapid on/off cycling. When the plant is on,
+    it runs at the base target rate (70-85% sweet spot). When off, demand
+    is served from tank stock.
+
+    Args:
+        base_target_m3: Pre-computed daily source target (m3 product).
+        tank: Current tank state dict (fill_m3, capacity_m3).
+        demand_remaining: Today's unmet demand after tank draw (m3).
+        max_source_m3: Max daily source volume.
+        smoothing_cfg: Dict with tank_feedback.high_mark, low_mark.
+        treatment_on: Boolean -- was the plant on yesterday?
+
+    Returns:
+        Tuple of (effective_volume_m3, treatment_on_today).
+    """
+    feedback = smoothing_cfg.get('tank_feedback', {})
+    high_mark = feedback.get('high_mark', 0.90)
+    low_mark = feedback.get('low_mark', 0.15)
+
+    fill_fraction = tank['fill_m3'] / tank['capacity_m3'] if tank['capacity_m3'] > 0 else 1.0
+
+    if fill_fraction > high_mark:
+        effective = 0.0
+        treatment_on = False
+    elif fill_fraction < low_mark:
+        effective = max_source_m3
+        treatment_on = True
+    else:
+        # Hysteresis band — keep previous state
+        if treatment_on:
+            effective = base_target_m3
+        else:
+            effective = 0.0
+
+    # Demand override: if tank stock alone cannot serve today's demand,
+    # turn the plant on regardless of hysteresis state
+    if demand_remaining > tank['fill_m3'] and not treatment_on:
+        effective = base_target_m3
+        treatment_on = True
+
+    # Cap at tank headroom
+    effective = min(effective, tank['capacity_m3'] - tank['fill_m3'])
+
+    return (max(0.0, effective), treatment_on)
 
 
 def _finalize_dispatch_row(row, tank, demand_m3, tds_req, flush_reason,
@@ -800,15 +954,36 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
     row = _init_dispatch_row(wells, tds_req, treatment['throughput_m3_hr'],
                              tank['fill_m3'], tank['tds_ppm'], strategy)
 
-    # Fallow day — tank sits idle
-    if demand_m3 <= 0 or math.isnan(tds_req):
+    # Fallow day — tank sits idle (demand-matching strategies)
+    # Treatment smoothing may continue sourcing on fallow days to build buffer
+    is_fallow = demand_m3 <= 0 or math.isnan(tds_req)
+    if is_fallow:
         if demand_m3 > 0 and math.isnan(tds_req):
             logger.warning(
                 'Day %s: positive demand (%.1f m3) but TDS requirement is NaN '
                 '— no water dispatched. Check crop TDS lookup coverage.',
                 gw_cap_state['day'], demand_m3,
             )
-        return row, tank
+
+        smoothing_cfg = policy.get('treatment_smoothing', {})
+        if (strategy != 'maximize_treatment_efficiency'
+                or not smoothing_cfg.get('fallow_treatment', False)):
+            return row, tank
+
+        # Smoothing: check fallow horizon — only treat if active irrigation
+        # resumes within N days
+        horizon = smoothing_cfg.get('fallow_horizon_days', 14)
+        future_tds = upcoming_tds or []
+        has_active_ahead = any(not math.isnan(t) for t in future_tds[:horizon])
+        if not has_active_ahead:
+            return row, tank
+
+        # Use the next active day's TDS requirement for blending decisions
+        demand_m3 = 0.0
+        tds_req = next(
+            (t for t in future_tds if not math.isnan(t)),
+            treatment['goal_output_tds_ppm'])
+        row['crop_tds_requirement_ppm'] = tds_req
 
     tank = dict(tank)
     flush_vol = 0.0
@@ -838,10 +1013,27 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             tank['fill_m3'] = 0.0
             tank['tds_ppm'] = 0.0
 
-    # Source only the shortfall — never fill past today's demand
-    if demand_remaining > 0:
-        _source_water(demand_remaining, tds_req, wells, treatment, municipal,
-                      tank, gw_cap_state, muni_cap_state, row, strategy)
+    # Step 3: Compute source volume — strategy-dependent
+    if strategy == 'maximize_treatment_efficiency':
+        source_vol, treatment_on_today = _effective_treatment_target(
+            policy['_treatment_target_m3'], tank, demand_remaining,
+            policy['_max_source_m3'], policy.get('treatment_smoothing', {}),
+            policy.get('_treatment_on', True))
+        policy['_treatment_on'] = treatment_on_today
+        source_priority = policy.get('treatment_smoothing', {}).get(
+            'source_priority', 'minimize_cost')
+    else:
+        source_vol = demand_remaining
+        source_priority = strategy
+
+    if source_vol > 0:
+        _source_water(source_vol, tds_req, wells, treatment, municipal,
+                      tank, gw_cap_state, muni_cap_state, row, source_priority)
+
+    # Treatment target diagnostic (set early; utilization computed after all passes)
+    if strategy == 'maximize_treatment_efficiency':
+        row['treatment_target_m3'] = policy.get('_feed_target_m3', 0.0)
+        row['treatment_on'] = policy.get('_treatment_on', True)
 
     # Draw remaining demand from tank (now contains fresh sourced water)
     draw_fresh = 0.0
@@ -855,9 +1047,60 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             tank['fill_m3'] = 0.0
             tank['tds_ppm'] = 0.0
 
+    # Second source+draw pass: when demand exceeds single-pass tank throughput
+    # (e.g. smoothing with empty tank and peak demand > tank_capacity), the
+    # first pass fills and drains the tank but leaves unmet demand. A second
+    # pass uses the freed headroom to source+draw the remainder.
+    # Uses a scratch row to avoid overwriting first-pass accounting.
+    if demand_remaining > 0 and tank['fill_m3'] < 1e-9:
+        p2_row = {}
+        for w in wells:
+            p2_row[f'{w["name"]}_extraction_m3'] = 0.0
+            p2_row[f'{w["name"]}_pumping_kwh'] = 0.0
+        p2_row.update({
+            'treatment_feed_m3': 0.0, 'treatment_reject_m3': 0.0,
+            'treatment_energy_kwh': 0.0, 'pumping_energy_kwh': 0.0,
+            'groundwater_cost': 0.0, 'municipal_cost': 0.0,
+            'sourced_tds_ppm': 0.0,
+            'gw_untreated_to_tank_m3': 0.0, 'gw_treated_to_tank_m3': 0.0,
+            'municipal_to_tank_m3': 0.0, 'total_groundwater_extracted_m3': 0.0,
+        })
+
+        _source_water(demand_remaining, tds_req, wells, treatment, municipal,
+                      tank, gw_cap_state, muni_cap_state, p2_row, source_priority)
+
+        # Accumulate second-pass accounting into main row
+        for w in wells:
+            row[f'{w["name"]}_extraction_m3'] += p2_row[f'{w["name"]}_extraction_m3']
+            row[f'{w["name"]}_pumping_kwh'] += p2_row[f'{w["name"]}_pumping_kwh']
+        row['gw_untreated_to_tank_m3'] += p2_row['gw_untreated_to_tank_m3']
+        row['gw_treated_to_tank_m3'] += p2_row['gw_treated_to_tank_m3']
+        row['municipal_to_tank_m3'] += p2_row['municipal_to_tank_m3']
+        row['total_groundwater_extracted_m3'] += p2_row['total_groundwater_extracted_m3']
+        row['pumping_energy_kwh'] += p2_row['pumping_energy_kwh']
+        row['treatment_energy_kwh'] += p2_row['treatment_energy_kwh']
+        row['treatment_feed_m3'] += p2_row['treatment_feed_m3']
+        row['treatment_reject_m3'] += p2_row['treatment_reject_m3']
+        row['groundwater_cost'] += p2_row['groundwater_cost']
+        row['municipal_cost'] += p2_row['municipal_cost']
+
+        if tank['fill_m3'] > 0:
+            draw2 = min(demand_remaining, tank['fill_m3'])
+            draw_fresh_tds = _blend_tds(
+                [draw_fresh, draw2],
+                [draw_fresh_tds, tank['tds_ppm']])
+            draw_fresh += draw2
+            tank['fill_m3'] -= draw2
+            demand_remaining -= draw2
+            if tank['fill_m3'] < 1e-9:
+                tank['fill_m3'] = 0.0
+                tank['tds_ppm'] = 0.0
+
     # Look-ahead prefill: buffer water for upcoming peak days
+    # Smoothing strategy handles buffer accumulation via target-rate sourcing
     prefill_vol = 0.0
-    if (policy.get('prefill_enabled', False)
+    if (strategy != 'maximize_treatment_efficiency'
+            and policy.get('prefill_enabled', False)
             and upcoming_demands
             and tank['capacity_m3'] - tank['fill_m3'] > 1.0):
         prefill_vol = _prefill_tank(
@@ -865,6 +1108,25 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             gw_cap_state, muni_cap_state, strategy,
             tds_req, upcoming_demands, upcoming_tds)
     row['prefill_m3'] = prefill_vol
+
+    # Apply treatment efficiency curve: adjust treatment energy by
+    # utilization-based multiplier from the efficiency curve CSV.
+    efficiency_df = treatment.get('efficiency_df')
+    if efficiency_df is not None and row['treatment_feed_m3'] > 0:
+        max_feed = treatment['throughput_m3_hr'] * 24
+        if max_feed > 0:
+            util_pct = (row['treatment_feed_m3'] / max_feed) * 100
+            idx = (efficiency_df['utilization_pct'] - util_pct).abs().idxmin()
+            eff_row = efficiency_df.loc[idx]
+            multiplier = eff_row['energy_multiplier']
+            row['treatment_energy_kwh'] *= multiplier
+            row['treatment_energy_multiplier'] = multiplier
+
+    # Compute utilization after all source passes + prefill have finalized
+    if strategy == 'maximize_treatment_efficiency':
+        max_feed = treatment['throughput_m3_hr'] * 24
+        row['treatment_utilization_pct'] = (
+            row['treatment_feed_m3'] / max_feed * 100 if max_feed > 0 else 0.0)
 
     # Post-irrigation drain: if next day needs stricter TDS than what the
     # tank currently holds, deliver all remaining tank water to fields now
@@ -930,6 +1192,29 @@ def _run_simulation(demand_df, wells, treatment, municipal, tank_init, policy,
     tds_col = demand_df['crop_tds_requirement_ppm'].values
     n_days = len(demand_df)
 
+    # Pre-compute treatment target for smoothing strategy
+    if policy.get('strategy') == 'maximize_treatment_efficiency':
+        raw_gw_tds = _volume_weighted_tds(wells, sum(w['max_daily_m3'] for w in wells))
+        smoothing_cfg = policy.get('treatment_smoothing', {})
+        target_info = _compute_treatment_target(
+            demand_df, raw_gw_tds, treatment, tank['capacity_m3'], smoothing_cfg)
+        policy['_treatment_target_m3'] = target_info['source_target_m3']
+        policy['_feed_target_m3'] = target_info['feed_target_m3']
+        policy['_treatment_on'] = True
+        # Max source volume: max feed converted to source-volume units
+        max_daily_feed = treatment['throughput_m3_hr'] * 24
+        f_treat = target_info['f_treat']
+        rr = target_info['recovery_rate']
+        policy['_max_source_m3'] = (
+            max_daily_feed * rr / f_treat if f_treat > 0 else max_daily_feed)
+        if max_daily_feed > 0:
+            logger.info(
+                'Treatment smoothing: feed target %.1f m3/day (%.0f%% utilization), '
+                'source target %.1f m3/day',
+                target_info['feed_target_m3'],
+                target_info['feed_target_m3'] / max_daily_feed * 100,
+                target_info['source_target_m3'])
+
     for i, (_, demand_row) in enumerate(demand_df.iterrows()):
         day = demand_row['day']
 
@@ -945,10 +1230,15 @@ def _run_simulation(demand_df, wells, treatment, municipal, tank_init, policy,
                 break
 
         prefill_days = policy.get('prefill_look_ahead_days', 0)
+        # Smoothing needs a longer look-ahead for fallow horizon checks
+        smoothing_horizon = policy.get('treatment_smoothing', {}).get(
+            'fallow_horizon_days', 0)
+        look_ahead_days = max(prefill_days, smoothing_horizon)
+
         upcoming_demands = []
         upcoming_tds = []
-        if prefill_days > 0:
-            for j in range(i + 1, min(i + 1 + prefill_days, n_days)):
+        if look_ahead_days > 0:
+            for j in range(i + 1, min(i + 1 + look_ahead_days, n_days)):
                 upcoming_demands.append(demand_df.iloc[j]['total_demand_m3'])
                 upcoming_tds.append(tds_col[j])
 
@@ -1036,10 +1326,15 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
     wells = _load_well_specs(system, pump_df)
 
     treatment_df = _load_treatment_lookup(paths['treatment_research'])
+    efficiency_df = None
+    if 'treatment_efficiency' in paths:
+        efficiency_df = _load_csv(paths['treatment_efficiency'])
+        efficiency_df = efficiency_df.sort_values('utilization_pct').reset_index(drop=True)
     treatment = {
         'goal_output_tds_ppm': system['treatment']['goal_output_tds_ppm'],
         'throughput_m3_hr': system['treatment']['throughput_m3_hr'],
         'lookup_df': treatment_df,
+        'efficiency_df': efficiency_df,
     }
 
     muni_cfg = system['municipal_source']
@@ -1076,6 +1371,19 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
         'prefill_look_ahead_days': prefill_cfg.get('look_ahead_days', 3),
     }
 
+    # Treatment smoothing config (only used by maximize_treatment_efficiency)
+    if strategy == 'maximize_treatment_efficiency':
+        smoothing = (pol_config or {}).get('treatment_smoothing', {})
+        policy['treatment_smoothing'] = {
+            'source_priority': smoothing.get('source_priority', 'minimize_cost'),
+            'fallow_treatment': smoothing.get('fallow_treatment', True),
+            'fallow_horizon_days': smoothing.get('fallow_horizon_days', 14),
+            'tank_feedback': smoothing.get('tank_feedback', {
+                'high_mark': 0.90,
+                'low_mark': 0.15,
+            }),
+        }
+
     df = _run_simulation(
         demand_df=irrigation_demand_df,
         wells=wells,
@@ -1111,6 +1419,8 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
         'gw_cap_used_month_m3', 'muni_cap_used_month_m3',
         'gw_monthly_cap_m3', 'muni_monthly_cap_m3',
         'prefill_m3',
+        'treatment_target_m3', 'treatment_utilization_pct',
+        'treatment_energy_multiplier', 'treatment_on',
     ]
 
     df = df[['day'] + well_cols + agg_cols]

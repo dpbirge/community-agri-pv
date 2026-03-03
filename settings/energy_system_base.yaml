@@ -34,9 +34,9 @@ generator:
 
 # --- Battery System ---
 battery:
-  has_battery: false
-  type: null                   # row key in batteries-toy.csv (e.g., lithium_iron_phosphate_medium)
-  capacity_kwh: null
+  has_battery: true
+  type: lithium_iron_phosphate_medium   # row key in batteries-toy.csv (200 kWh LFP)
+  capacity_kwh: 200
 
 # --- Grid Connection ---
 grid_connection: full_grid

@@ -498,7 +498,7 @@ def main(
         crop_growth = growth[growth["crop"] == crop_name].iloc[0].to_dict()
         crop_growth["max_fpar"] = MAX_FPAR.get(crop_name, 0.85)
 
-        yr_row = yield_resp[yield_resp["crop_name"] == crop_name]
+        yr_row = yield_resp[yield_resp["crop"] == crop_name]
         crop_yield_resp = (yr_row.iloc[0].to_dict() if len(yr_row) > 0
                            else {"ky_whole_season": 1.0})
 

@@ -160,20 +160,24 @@ def _match_pump(depth_m, pump_df):
 def _build_well_candidates(well_df, pump_df):
     """Build candidate list from well and pump catalogs.
 
-    Each candidate combines a well catalog row with its cheapest matching pump.
-    Effective daily flow is min(aquifer yield, pump capacity).
+    Each depth in the well catalog represents one aquifer layer with a fixed
+    TDS determined by geology. One well is selected per depth — the highest
+    flow option whose yield does not exceed pump capacity. TDS is looked up
+    from the catalog's depth-to-TDS mapping.
 
     Returns:
-        List of candidate dicts.
+        List of candidate dicts, one per depth level.
     """
-    candidates = []
+    # Group by depth — each depth is one aquifer layer with one TDS value
+    by_depth = {}
     for _, row in well_df.iterrows():
-        pump = _match_pump(row['well_depth_m'], pump_df)
+        depth = int(row['well_depth_m'])
+        pump = _match_pump(depth, pump_df)
         if pump is None:
             continue
         effective_flow = min(row['flow_rate_m3_day'], pump['rated_flow_m3_hr'] * 24)
-        candidates.append({
-            'depth_m': int(row['well_depth_m']),
+        candidate = {
+            'depth_m': depth,
             'tds_ppm': int(row['tds_ppm']),
             'flow_m3_day': effective_flow,
             'well_capital': float(row['capital_cost_per_well']),
@@ -182,8 +186,11 @@ def _build_well_candidates(well_df, pump_df):
             'pump_efficiency': float(pump['pump_efficiency']),
             'pump_capital': float(pump['capital_cost']),
             'pump_om': float(pump['om_cost_per_year']),
-        })
-    return candidates
+        }
+        # Keep the highest-flow option at each depth
+        if depth not in by_depth or candidate['flow_m3_day'] > by_depth[depth]['flow_m3_day']:
+            by_depth[depth] = candidate
+    return list(by_depth.values())
 
 
 def _sort_well_candidates(cdf, objective):
