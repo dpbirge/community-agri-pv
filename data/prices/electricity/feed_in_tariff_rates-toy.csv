@@ -1,0 +1,17 @@
+# SOURCE: Synthetic summary of Egypt FIT rates from EgyptERA decrees
+# DATE: 2026-03-03
+# DESCRIPTION: Egypt feed-in tariff rates for solar PV by project size category
+# NOTES: Round 1 (2014) and Round 2 (2016). EGP rates for small-scale have not been adjusted for devaluation.
+# NOTES: Program effectively closed to new large-scale applications as of 2020.
+# UNITS: rate_usd_kwh (USD per kWh), rate_egp_kwh (EGP per kWh)
+# LOGIC: Rates from EgyptERA FIT program decrees; small-scale EGP rates set in 2014 piasters converted to EGP
+# DEPENDENCIES: None
+# ASSUMPTIONS: USD rates at time of contract signing; EGP small-scale rates frozen at 2014 levels
+# CURRENCY: USD for utility-scale, EGP for small-scale (as denominated in original decrees)
+date_effective,project_size_category,min_capacity_kw,max_capacity_kw,rate_usd_kwh,rate_egp_kwh,currency_denomination,contract_years,program_round,status
+2014-10-01,utility_scale,20000,,0.1434,,USD,25,1,closed
+2016-10-01,utility_scale,20000,,0.084,,USD,25,2,closed
+2016-10-01,commercial_large,500,20000,0.136,,USD,25,2,closed
+2014-10-01,household,0,10,,0.848,EGP,25,1,closed
+2014-10-01,commercial_small,10,200,,0.901,EGP,25,1,closed
+2014-10-01,commercial_medium,200,500,,0.973,EGP,25,1,closed

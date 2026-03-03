@@ -614,7 +614,7 @@ def _init_dispatch_row(wells, tds_req, treatment_throughput_m3_hr,
         'deficit_m3': 0.0,
         'tank_volume_m3': tank_fill_m3,
         'tank_tds_ppm': tank_tds_ppm,
-        'total_energy_kwh': 0.0,
+        'total_sourcing_energy_kwh': 0.0,
         'prefill_m3': 0.0,
         'policy_strategy': strategy,
         'policy_primary_source': 'none',
@@ -739,7 +739,7 @@ def _finalize_dispatch_row(row, tank, demand_m3, tds_req, flush_reason,
     row['total_sourced_to_tank_m3'] = (row['gw_untreated_to_tank_m3'] +
                                        row['gw_treated_to_tank_m3'] +
                                        row['municipal_to_tank_m3'])
-    row['total_energy_kwh'] = row['pumping_energy_kwh'] + row['treatment_energy_kwh']
+    row['total_sourcing_energy_kwh'] = row['pumping_energy_kwh'] + row['treatment_energy_kwh']
     row['total_water_cost'] = row['municipal_cost'] + row['groundwater_cost']
     row['tank_volume_m3'] = tank['fill_m3']
     row['tank_tds_ppm'] = tank['tds_ppm']
@@ -1106,7 +1106,7 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
         'total_delivered_m3', 'tank_flush_delivered_m3',
         'safety_flush_m3', 'look_ahead_drain_m3',
         'deficit_m3',
-        'tank_volume_m3', 'tank_tds_ppm', 'total_energy_kwh',
+        'tank_volume_m3', 'tank_tds_ppm', 'total_sourcing_energy_kwh',
         'policy_strategy', 'policy_primary_source', 'policy_flush_reason', 'policy_deficit',
         'gw_cap_used_month_m3', 'muni_cap_used_month_m3',
         'gw_monthly_cap_m3', 'muni_monthly_cap_m3',
@@ -1170,7 +1170,7 @@ if __name__ == '__main__':
     print(f'Saved {len(df)} rows to {out}')
     print(f'Total delivered: {df["total_delivered_m3"].sum():.0f} m3')
     print(f'Total deficit: {df["deficit_m3"].sum():.0f} m3')
-    print(f'Total energy: {df["total_energy_kwh"].sum():.1f} kWh')
+    print(f'Total energy: {df["total_sourcing_energy_kwh"].sum():.1f} kWh')
     flush_days = (df['tank_flush_delivered_m3'] > 0).sum()
     print(f'Tank flush days: {flush_days}')
     print(df.head(3).to_string())

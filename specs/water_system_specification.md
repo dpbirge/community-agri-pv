@@ -192,7 +192,7 @@ The output DataFrame from `src/water.py` includes:
 | `deficit_m3`                     | unmet demand when supply cannot fill request                   |
 | `tank_volume_m3`                 | tank fill level at end of day                                  |
 | `tank_tds_ppm`                   | tank TDS at end of day                                         |
-| `total_energy_kwh`               | pumping + treatment combined                                   |
+| `total_sourcing_energy_kwh`      | pumping + treatment combined                                   |
 | `policy_strategy`                | dispatch strategy used                                         |
 | `policy_primary_source`          | dominant water source for the day                              |
 | `policy_flush_reason`            | why a tank flush occurred (none, tds_exceedance, look_ahead)   |
@@ -352,7 +352,7 @@ Extract performance metrics:
 | ----------------------- | ---------------------------------------------------------------------------- |
 | Deficit fraction        | `sum(deficit_m3) / sum(total_demand_m3)`                                     |
 | Cost per m3 delivered   | `sum(total_water_cost) / sum(total_delivered_m3)`                            |
-| Energy per m3 delivered | `sum(total_energy_kwh) / sum(total_delivered_m3)`                            |
+| Energy per m3 delivered | `sum(total_sourcing_energy_kwh) / sum(total_delivered_m3)`                   |
 | GW fraction             | `sum(total_groundwater_extracted_m3) / sum(total_delivered_m3)`              |
 | Municipal fraction      | `sum(municipal_to_tank_m3) / sum(total_delivered_m3)`                        |
 | Treatment fraction      | `sum(gw_treated_to_tank_m3) / sum(total_delivered_m3)`                       |

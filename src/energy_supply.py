@@ -180,7 +180,7 @@ def _add_energy_totals(df, solar_cols, wind_cols):
     df = df.copy()
     df['total_solar_kwh'] = df[solar_cols].sum(axis=1)
     df['total_wind_kwh'] = df[wind_cols].sum(axis=1)
-    df['total_energy_kwh'] = df['total_solar_kwh'] + df['total_wind_kwh']
+    df['total_renewable_kwh'] = df['total_solar_kwh'] + df['total_wind_kwh']
     return df
 
 
@@ -189,7 +189,7 @@ def _add_energy_totals(df, solar_cols, wind_cols):
 # ---------------------------------------------------------------------------
 
 def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None, root_dir=None,
-                         degradation_rate=0.005, degradation_start=None):
+                         degradation_rate=0.006, degradation_start=None):
     """Compute daily community energy supply from solar and wind generators.
 
     Combines precomputed per-unit energy output data with energy system
@@ -205,8 +205,8 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
         root_dir: Repository root directory. Defaults to the parent of the
             directory containing registry_path (i.e., parent of settings/).
         degradation_rate: Annual solar degradation rate as a fraction
-            (default 0.005 = 0.5%/yr per IEC 61215). Set to 0 or None
-            to disable degradation.
+            (default 0.006 = 0.6%/yr per N-type TOPCon panel spec). Set
+            to 0 or None to disable degradation.
         degradation_start: Reference date for year-zero (installation date).
             Accepts any value parseable by pd.Timestamp. Defaults to the
             first date in the dataset when None.
@@ -219,7 +219,7 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
             - {turbine}_wind_kwh      (per turbine type, total across all units)
             - total_solar_kwh         (agri-PV + community solar)
             - total_wind_kwh
-            - total_energy_kwh
+            - total_renewable_kwh
     """
     if root_dir is None:
         root_dir = Path(registry_path).parent.parent
@@ -273,7 +273,7 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
         start = pd.Timestamp(degradation_start) if degradation_start else df['day'].iloc[0]
         df = _apply_degradation(df, solar_cols, degradation_rate, start)
         df['total_solar_kwh'] = df[solar_cols].sum(axis=1)
-        df['total_energy_kwh'] = df['total_solar_kwh'] + df['total_wind_kwh']
+        df['total_renewable_kwh'] = df['total_solar_kwh'] + df['total_wind_kwh']
 
     return df
 

@@ -37,7 +37,7 @@ def _gen_cols(df):
     """Return individual generation columns, excluding subtotals and grand total.
 
     Keeps per-source columns (e.g. 'low_density_solar_kwh', 'small_turbine_wind_kwh')
-    and drops aggregates ('total_solar_kwh', 'total_wind_kwh', 'total_energy_kwh').
+    and drops aggregates ('total_solar_kwh', 'total_wind_kwh', 'total_renewable_kwh').
     """
     return [c for c in df.columns if c.endswith('_kwh') and not c.startswith('total_')]
 
@@ -272,6 +272,65 @@ def plot_water_policy_heatmap(df, *, years=1, figsize=(14, 6)):
     axes[-1].set_xticklabels([days.iloc[i].strftime('%Y-%m-%d') for i in tick_idx],
                               rotation=45, ha='right')
     axes[0].set_title('Daily Water Policy Decisions')
+    fig.tight_layout()
+    return fig
+
+
+def plot_water_balance(df, *, years=1, ylim=1000):
+    """Combined water supply, demand, and tank state on a single plot.
+
+    Shows stacked supply areas (GW sources), demand lines, and end-of-day
+    tank volume across all years on one continuous horizontal axis with
+    monthly tick labels.
+
+    Args:
+        df: DataFrame from compute_daily_water_balance or load_daily_water_balance.
+        years: Number of years to plot from the start. Default 1.
+        ylim: Upper limit of the y-axis in m3. Default 1000.
+
+    Returns:
+        matplotlib Figure.
+    """
+    import matplotlib.dates as mdates
+
+    sub = _subset_years(df, years)
+    fig, ax = plt.subplots(figsize=(14, 5))
+
+    # Tank state (behind everything)
+    if 'tank_volume_m3' in sub.columns:
+        ax.fill_between(sub['day'], sub['tank_volume_m3'],
+                        color='#b8e6b8', edgecolor='#4caf50',
+                        linewidth=0.6, alpha=0.45, label='Tank State', zorder=1)
+
+    # Stacked supply areas (irrigation sources only)
+    supply_data, supply_labels, supply_colors = [], [], []
+    for col, label, color in [
+        ('gw_treated_to_tank_m3', 'GW Treated', '#5b9bd5'),
+        ('gw_untreated_to_tank_m3', 'GW Untreated', '#a8d4f0'),
+        ('municipal_to_tank_m3', 'Municipal (Irrigation)', '#1a3a5c'),
+    ]:
+        if col in sub.columns:
+            supply_data.append(sub[col].values)
+            supply_labels.append(label)
+            supply_colors.append(color)
+    if supply_data:
+        ax.stackplot(sub['day'], supply_data, labels=supply_labels,
+                     colors=supply_colors, alpha=0.7, zorder=2)
+
+    # Demand line (irrigation only)
+    if 'irrigation_demand_m3' in sub.columns:
+        ax.plot(sub['day'], sub['irrigation_demand_m3'],
+                color='black', linewidth=0.8, label='Irrigation Demand', zorder=4)
+
+    # Monthly x-axis labels (3-letter abbreviations), clamp to data range
+    ax.set_xlim(sub['day'].min(), sub['day'].max())
+    ax.xaxis.set_major_locator(mdates.MonthLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+
+    ax.set_ylabel('Water (m\u00b3/day)')
+    ax.set_ylim(0, ylim)
+    ax.legend(loc='upper right', fontsize=8)
     fig.tight_layout()
     return fig
 

@@ -182,7 +182,7 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
 
     # Start with supply_df (has day + all water supply columns)
     result = supply_df.copy()
-    result = result.drop(columns=['total_energy_kwh'], errors='ignore')
+    result = result.drop(columns=['total_sourcing_energy_kwh'], errors='ignore')
 
     # Merge irrigation demand (total and per-field)
     result = result.rename(columns={'total_delivered_m3': 'irrigation_delivered_m3'})

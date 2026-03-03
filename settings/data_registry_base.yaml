@@ -36,3 +36,18 @@ water_supply:
 water_pricing:
   municipal_research:      data/prices/water/historical_municipal_water_prices-research.csv
   agricultural_bulk_toy:   data/prices/water/historical_municipal_water_prices-toy.csv
+
+# --- Energy Equipment ---
+energy_equipment:
+  generators:              data/energy/generators-toy.csv
+  batteries:               data/energy/batteries-toy.csv
+
+# --- Electricity Pricing ---
+electricity_pricing:
+  agricultural:            data/prices/electricity/historical_grid_electricity_prices-toy.csv
+  commercial:              data/prices/electricity/historical_grid_electricity_prices_unsubsidized-toy.csv
+  feed_in_tariff:          data/prices/electricity/feed_in_tariff_rates-toy.csv
+
+# --- Fuel Pricing ---
+fuel_pricing:
+  diesel:                  data/prices/diesel/historical_diesel_prices-toy.csv

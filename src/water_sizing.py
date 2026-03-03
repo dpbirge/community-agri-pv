@@ -429,7 +429,7 @@ def _compute_sizing_metrics(sim_df, demand_df, wells, storage,
     total_treated = sim_df['gw_treated_to_tank_m3'].sum()
     total_reject = sim_df['treatment_reject_m3'].sum()
     total_cost = sim_df['total_water_cost'].sum()
-    total_energy = sim_df['total_energy_kwh'].sum()
+    total_energy = sim_df['total_sourcing_energy_kwh'].sum()
 
     # CAPEX: wells + pumps + treatment plant + storage
     well_capex = sum(w['well_capital'] + w['pump_capital'] for w in wells)
@@ -494,7 +494,7 @@ def _apply_efficiency_adjustment(sim_df, treatment_throughput_m3_hr, efficiency_
     """Post-process simulation output with utilization-based multipliers.
 
     Adjusts treatment_energy_kwh and groundwater_cost columns based on
-    daily treatment utilization. Also adjusts total_energy_kwh and
+    daily treatment utilization. Also adjusts total_sourcing_energy_kwh and
     total_water_cost to stay consistent.
 
     Args:
@@ -524,7 +524,7 @@ def _apply_efficiency_adjustment(sim_df, treatment_throughput_m3_hr, efficiency_
         new_energy = old_energy * eff_row['energy_multiplier']
         energy_delta = new_energy - old_energy
         df.at[i, 'treatment_energy_kwh'] = new_energy
-        df.at[i, 'total_energy_kwh'] += energy_delta
+        df.at[i, 'total_sourcing_energy_kwh'] += energy_delta
 
         # Adjust maintenance cost within groundwater_cost
         # groundwater_cost includes pumping O&M + treatment maintenance

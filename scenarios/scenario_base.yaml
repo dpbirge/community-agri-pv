@@ -17,25 +17,25 @@ simulation:
 # Central index mapping logical data names to file paths.
 # Swap to an alternate registry to change data quality tiers (toy vs research)
 # across multiple domains at once.
-data_registry: settings/data_registry.yaml
+data_registry: settings/data_registry_base.yaml
 
 # --- Domain Settings ---
 # Each key points to the settings file for that domain.
 # Swap any single entry to run an alternative configuration for that domain.
-community:     settings/community_demands.yaml
-energy_system: settings/energy_system.yaml
-farm_profiles: settings/farm_profiles.yaml
-water_systems: settings/water_systems.yaml
+community:     settings/community_demands_base.yaml
+energy_system: settings/energy_system_base.yaml
+farm_profiles: settings/farm_profile_base.yaml
+water_systems: settings/water_systems_base.yaml
 
 # --- Water Policy ---
 # Defines dispatch rules: source priority order, blending logic,
 # monthly cap enforcement, and deficit irrigation handling.
-water_policy: settings/water_policy_base.yaml
+water_policy:  settings/water_policy_base.yaml
 
-# --- Energy Policy (not yet created) ---
+# --- Energy Policy ---
 # Defines dispatch rules: grid import/export logic, battery charge/discharge
 # scheduling, generator dispatch thresholds, and demand curtailment priorities.
-# energy_policy: settings/energy_policy.yaml
+energy_policy:  settings/energy_policy_base.yaml
 
 # --- Food Processing (not yet created) ---
 # Defines post-harvest processing steps (washing, cooling, packing, storage)

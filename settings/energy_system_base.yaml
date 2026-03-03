@@ -28,15 +28,15 @@ wind_turbines:
 
 # --- Generator System ---
 generator:
-  has_generator: true 
-  generator_type: null
-  generator_capacity: null
+  has_generator: true
+  type: diesel_100kw          # row key in generators-toy.csv (capacity_kw=100)
+  rated_capacity_kw: 100
 
 # --- Battery System ---
 battery:
   has_battery: false
-  battery_type: null
-  battery_capacity: null
+  type: null                   # row key in batteries-toy.csv (e.g., lithium_iron_phosphate_medium)
+  capacity_kwh: null
 
 # --- Grid Connection ---
-grid_connect: full
+grid_connection: full_grid

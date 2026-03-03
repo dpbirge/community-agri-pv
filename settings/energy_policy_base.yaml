@@ -1,0 +1,55 @@
+# Energy Policy Configuration
+# Defines dispatch rules and constraints, separate from physical infrastructure.
+# Swap to an alternative policy file to test different dispatch strategies
+# without changing the energy system hardware.
+
+energy_policy_name: baseline_energy_policy
+
+# --- Dispatch Strategy ---
+# minimize_cost:                merit-order by marginal cost (renewables > battery > grid > generator)
+# maximize_self_consumption:    minimize grid import (renewables > battery > generator > grid)
+# minimize_generator:           minimize diesel use (renewables > battery > grid > generator)
+strategy: minimize_cost
+
+# --- Grid Interaction ---
+grid:
+  mode: self_consumption    # full_grid | net_metering | feed_in_tariff | self_consumption
+                            # | limited_grid | off_grid
+  import_cap_kwh: null      # null = unlimited; max daily grid import (kWh)
+  export_rate_usd_kwh: null # feed-in tariff rate; null when mode != feed_in_tariff
+
+# --- Grid Cap Enforcement ---
+cap_enforcement:
+  look_ahead: true
+
+# --- Tariff Assignment ---
+# Agricultural rate applies to water system electricity (pumping, treatment,
+# irrigation application). Commercial rate applies to community building
+# electricity (households, offices, warehouses, cold storage).
+tariff:
+  water_energy: agricultural     # registry key under electricity_pricing
+  building_energy: commercial    # registry key under electricity_pricing
+
+# --- Net Metering ---
+# Egypt EgyptERA rules: monthly credit offset against consumption, annual
+# settlement in June. Excess beyond annual offset purchased at EETC solar
+# PPA price (~0.04 USD/kWh).
+net_metering:
+  credit_period: monthly         # credits accumulate monthly
+  settlement_period: annual      # annual true-up in June
+  settlement_month: 6            # June fiscal year end
+  excess_buyback_usd_kwh: 0.04  # EETC solar PPA approximate rate
+
+# --- Battery Dispatch ---
+# Only active when energy_system has_battery: true
+battery:
+  soc_min: 0.20             # minimum state of charge (fraction of capacity)
+  soc_max: 0.95             # maximum state of charge
+  soc_initial: 0.50         # starting SOC for simulation
+
+# --- Generator Dispatch ---
+# Only active when energy_system has_generator: true
+generator:
+  soc_start_threshold: 0.25 # start generator when battery SOC drops below this
+  min_load_fraction: 0.30   # minimum operating load as fraction of rated capacity
+  monthly_fuel_cap_liters: null  # null = unlimited

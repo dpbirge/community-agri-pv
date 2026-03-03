@@ -112,7 +112,7 @@ def _add_totals(df, hh_energy_cols, hh_water_cols, bld_energy_cols, bld_water_co
     df = df.copy()
     df['total_household_energy_kwh'] = df[hh_energy_cols].sum(axis=1)
     df['total_building_energy_kwh'] = df[bld_energy_cols].sum(axis=1)
-    df['total_energy_kwh'] = df['total_household_energy_kwh'] + df['total_building_energy_kwh']
+    df['total_community_energy_kwh'] = df['total_household_energy_kwh'] + df['total_building_energy_kwh']
     df['total_household_water_m3'] = df[hh_water_cols].sum(axis=1)
     df['total_building_water_m3'] = df[bld_water_cols].sum(axis=1)
     df['total_water_m3'] = df['total_household_water_m3'] + df['total_building_water_m3']
@@ -144,7 +144,7 @@ def compute_daily_demands(config_path, registry_path, *, root_dir=None):
             - {hh_type}_water_m3    (per household type, total across all units)
             - {bld_type}_energy_kwh (per building type)
             - {bld_type}_water_m3   (per building type)
-            - total_household_energy_kwh, total_building_energy_kwh, total_energy_kwh
+            - total_household_energy_kwh, total_building_energy_kwh, total_community_energy_kwh
             - total_household_water_m3, total_building_water_m3, total_water_m3
     """
     if root_dir is None:

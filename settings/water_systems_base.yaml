@@ -42,7 +42,7 @@ systems:
     # --- Storage (optional) ---
     storage:
       type: underground_tank
-      capacity_m3: 1000
-      initial_level_m3: 500
+      capacity_m3: 500
+      initial_level_m3: 400
       max_output_m3_hr: 50
       initial_tds_ppm: 500
