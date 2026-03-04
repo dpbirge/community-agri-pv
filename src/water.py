@@ -1498,18 +1498,6 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
     return df
 
 
-def load_water_supply(path):
-    """Load a saved water supply CSV.
-
-    Args:
-        path: Path to the water supply CSV file.
-
-    Returns:
-        DataFrame with the same structure as compute_water_supply output.
-    """
-    return pd.read_csv(path, parse_dates=['day'])
-
-
 # ---------------------------------------------------------------------------
 # Entry point for quick verification
 # ---------------------------------------------------------------------------

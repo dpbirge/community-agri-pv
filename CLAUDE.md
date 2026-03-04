@@ -18,7 +18,7 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
 ## Directory Structure
 
 - `/data` - Pre-computed physical data libraries (Layer 1)
-    - `./_plotting` - Data validation notebooks
+    - `./_plotting` - Data validation notebooks (crop growth, weather scenarios)
     - `./_scripts` - Data generation scripts (generate_*.py)
     - `./building_demands` - Household and community building energy/water per unit
     - `./crops` - Crop growth parameters and daily growth CSVs by crop/planting/condition
@@ -30,35 +30,41 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
     - `./water` - Wells, pumps, treatment, storage, irrigation system specs
     - `./weather` - Daily weather CSVs (openfield + underpv variants)
 - `/docs` - Project documentation
+    - `./codereview` - Code review and investigation reports
     - `./planning` - Design and modeling docs
     - `./plans` - Feature implementation plans
-- `/notebooks` - User-facing Jupyter notebooks for running and analyzing simulations
+    - `./prompts` - Reusable prompt templates
+- `/notebooks` - User-facing Jupyter notebooks
+    - `./helpers` - Analysis and debugging notebooks (water balance viz, energy checks, sizing)
 - `/scenarios` - Scenario composition files (Layer 2 entry points)
 - `/settings` - Domain-specific YAML configuration files (Layer 2)
 - `/simulation` - Output CSVs from simulation runs (Layer 3 outputs)
-- `/specs` - Simulation design specifications
+- `/specs` - Simulation design specifications (water, energy, farming, labor, food processing)
 - `/src` - Simulation engine source code (Layer 3)
-- `/tests` - Test suites (pytest + unittest)
+- `/stress_testing` - Stress testing scripts and configs (empty)
+- `/tests` - Test suites (pytest)
 
 ## Key Files
 
 - `scenarios/scenario_base.yaml` - Scenario entry point composing all domain settings
 - `settings/data_registry_base.yaml` - Central index mapping logical data names to file paths
 - `settings/farm_profile_base.yaml` - Farm/field definitions with crops, areas, irrigation
-- `settings/energy_system_base.yaml` - Community solar areas, wind turbine counts
+- `settings/energy_system_base.yaml` - Community solar areas, wind turbine counts, battery/generator flags
+- `settings/energy_policy_base.yaml` - Energy dispatch strategy, grid mode, battery/generator policy
 - `settings/water_systems_base.yaml` - Wells, treatment, municipal source, storage tank
-- `settings/water_policy_base.yaml` - Dispatch strategy, caps, irrigation mode
+- `settings/water_policy_base.yaml` - Water dispatch strategy, caps, irrigation mode
 - `settings/community_demands_base.yaml` - Household counts and building areas
-- `src/water_balance.py` - Top-level orchestrator composing irrigation + supply + community
+- `src/energy_balance.py` - Energy balance dispatch (solar/wind → demand → battery → grid → generator)
+- `src/water_balance.py` - Top-level water orchestrator composing irrigation + supply + community
 - `src/water.py` - Central mixing tank water supply dispatch
 - `src/water_sizing.py` - System sizing and treatment-anchored optimization
 - `src/irrigation_demand.py` - Daily field-level irrigation demand from crop growth data
 - `src/energy_supply.py` - Daily energy generation (solar + wind + agri-PV)
 - `src/community_demand.py` - Daily household/building energy and water demands
-- `src/crop_yield.py` - FAO Paper 33 water-yield response function
+- `src/crop_yield.py` - FAO Paper 33 water-yield response function and community harvest
 - `src/farm_profile.py` - Planting normalization and overlap validation
 - `src/plots.py` - Stacked area and policy heatmap visualizations
-- `notebooks/water_balance_visualization.ipynb` - Water balance analysis notebook
+- `notebooks/simulation.ipynb` - Main simulation notebook (primary user entry point)
 
 ## Conventions
 
@@ -72,7 +78,8 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
 
 ## Key Functions
 
-- `compute_daily_water_balance()` — top-level orchestrator in `src/water_balance.py`; calls irrigation demand, water supply dispatch, and community demand, then composes a unified daily DataFrame with demands, sources, energy, costs, tank state, and policy decisions
+- `compute_daily_energy_balance()` — top-level energy dispatch in `src/energy_balance.py`; matches renewable generation against demand, dispatches surplus/deficit through battery → grid → generator with SOC tracking, monthly caps, and three strategies (minimize_cost, minimize_grid_reliance, minimize_generator)
+- `compute_daily_water_balance()` — top-level water orchestrator in `src/water_balance.py`; calls irrigation demand, water supply dispatch, and community demand, then composes a unified daily DataFrame with demands, sources, energy, costs, tank state, and policy decisions
 - `compute_water_supply()` — central mixing tank dispatch in `src/water.py`; supports three strategies (minimize_cost, minimize_treatment, minimize_draw) with monthly caps, TDS blending, and tank flush logic
 - `size_water_system()` — from-scratch system sizing in `src/water_sizing.py`; selects wells, treatment, storage, and municipal from catalogs to meet demand under a chosen objective
 - `optimize_water_system()` — treatment-anchored optimization in `src/water_sizing.py`; takes a fixed BWRO throughput and sizes wells/storage/municipal around it using an efficiency curve to target the treatment sweet spot (70-85% utilization)
@@ -80,6 +87,7 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
 - `compute_daily_energy()` — community energy supply in `src/energy_supply.py`; scales per-unit PV/wind output by configuration, includes agri-PV from farm profiles and solar degradation
 - `compute_daily_demands()` — community building demands in `src/community_demand.py`; scales per-unit data by household count or building area with optional multipliers
 - `compute_harvest_yield()` — FAO water-yield response in `src/crop_yield.py`; computes final yield from cumulative ETa/ETc ratio after dynamic irrigation simulation
+- `compute_community_harvest()` — community-level harvest in `src/crop_yield.py`; runs yield model for all fields in the water balance, returns daily growth and final yields per field
 
 ## Development
 
