@@ -1,0 +1,30 @@
+# Stress Test Farm Profile — FP-S: SMALL DRIP, NO PV
+# Minimal water demand (drip efficiency ~0.90), no agri-PV.
+# For testing oversupply behavior when demand is small.
+
+config_name: stress_test_farm_drip_small
+
+farms:
+  - name: farm_stress_1
+    fields:
+      - name: field_a
+        area_ha: 0.5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: openfield
+        plantings:
+          - crop: tomato
+            plantings: [feb15]
+          - crop: kale
+            plantings: [oct01]
+
+      - name: field_b
+        area_ha: 0.5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: openfield
+        plantings:
+          - crop: cucumber
+            plantings: [sep01]
+          - crop: onion
+            plantings: [jan15]

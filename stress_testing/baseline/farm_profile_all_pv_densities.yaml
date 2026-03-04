@@ -1,0 +1,49 @@
+# Stress Test Farm Profile — FP-D: ALL PV DENSITIES
+# One field per PV density level (openfield, underpv_low, underpv_medium, underpv_high).
+# Mixed irrigation (2 drip, 2 sprinkler). 1.5 ha each.
+# Verifies agri-PV scaling across density levels.
+
+config_name: stress_test_farm_all_pv_densities
+
+farms:
+  - name: farm_stress_1
+    fields:
+      - name: field_openfield
+        area_ha: 1.5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: openfield
+        plantings:
+          - crop: tomato
+            plantings: [feb15]
+          - crop: kale
+            plantings: [oct01]
+
+      - name: field_underpv_low
+        area_ha: 1.5
+        water_system: main_irrigation
+        irrigation_system: drip
+        condition: underpv_low
+        plantings:
+          - crop: cucumber
+            plantings: [apr01, sep01]
+
+  - name: farm_stress_2
+    fields:
+      - name: field_underpv_medium
+        area_ha: 1.5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_medium
+        plantings:
+          - crop: potato
+            plantings: [jan15, sep15]
+
+      - name: field_underpv_high
+        area_ha: 1.5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_high
+        plantings:
+          - crop: tomato
+            plantings: [apr01, nov01]

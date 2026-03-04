@@ -306,7 +306,10 @@ def save_energy(df, output_dir, *, filename='daily_energy_generation.csv', decim
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / filename
-    df.round(decimals).to_csv(path, index=False)
+    numeric_cols = df.select_dtypes(include='number').columns
+    out = df.copy()
+    out[numeric_cols] = out[numeric_cols].round(decimals)
+    out.to_csv(path, index=False)
     return path
 
 

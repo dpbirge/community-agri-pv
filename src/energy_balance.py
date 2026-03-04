@@ -401,7 +401,8 @@ def _daily_cap_allowance(monthly_cap, used, day, look_ahead):
         return remaining
     days_in_month = calendar.monthrange(day.year, day.month)[1]
     remaining_days = days_in_month - day.day + 1
-    return remaining / remaining_days
+    # Clamp to remaining to prevent floating-point accumulation from exceeding the cap
+    return min(remaining / remaining_days, remaining)
 
 
 # ---------------------------------------------------------------------------
@@ -1295,7 +1296,10 @@ def save_energy_balance(df, output_dir, *, filename='daily_energy_balance.csv',
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / filename
-    df.round(decimals).to_csv(path, index=False)
+    numeric_cols = df.select_dtypes(include='number').columns
+    out = df.copy()
+    out[numeric_cols] = out[numeric_cols].round(decimals)
+    out.to_csv(path, index=False)
     return path
 
 

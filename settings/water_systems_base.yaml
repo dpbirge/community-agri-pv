@@ -30,19 +30,19 @@ systems:
     # --- Treatment ---
     treatment:
       type: bwro
-      throughput_m3_hr: 50
+      throughput_m3_hr: 100
       goal_output_tds_ppm: 400
 
     # --- Municipal Source ---
     municipal_source:
       tds_ppm: 200
       cost_per_m3: 0.50
-      throughput_m3_hr: 200
+      throughput_m3_hr: 100
 
     # --- Storage (optional) ---
     storage:
       type: underground_tank
-      capacity_m3: 500
-      initial_level_m3: 400
+      capacity_m3: 300
+      initial_level_m3: 300
       max_output_m3_hr: 50
       initial_tds_ppm: 500

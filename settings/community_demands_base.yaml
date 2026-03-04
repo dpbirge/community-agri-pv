@@ -12,7 +12,7 @@ config_name: baseline_community
 # --- Households ---
 households:
   small_household:
-    count: 6
+    count: 8
     energy_multiplier: 1.0
     water_multiplier: 1.0
   medium_household:
@@ -31,7 +31,7 @@ community_buildings:
     energy_multiplier: 1.0
     water_multiplier: 1.0
   non_conditioned_warehouse:
-    area_m2: 400
+    area_m2: 250
     energy_multiplier: 1.0
     water_multiplier: 1.0
   climate_controlled_warehouse:

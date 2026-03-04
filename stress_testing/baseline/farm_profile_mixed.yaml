@@ -1,0 +1,51 @@
+# Stress Test Baseline Farm Profile
+# High water demand: 2+ ha fields with sprinkler irrigation (efficiency 0.75)
+# Mixed conditions: openfield and underpv_medium
+# Year-round demand: tightly sequenced plantings
+
+config_name: stress_test_farm
+
+farms:
+  - name: farm_stress_1
+    fields:
+      - name: field_a
+        area_ha: 2.5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: tomato
+            plantings: [feb15]
+          - crop: kale
+            plantings: [oct01]
+
+      - name: field_b
+        area_ha: 2.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_medium
+        plantings:
+          - crop: cucumber
+            plantings: [sep01]
+          - crop: onion
+            plantings: [jan15]
+
+  - name: farm_stress_2
+    fields:
+      - name: field_c
+        area_ha: 2.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: potato
+            plantings: [jan15, sep15]
+
+      - name: field_d
+        area_ha: 2.5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_medium
+        plantings:
+          - crop: tomato
+            plantings: [apr01, nov01]

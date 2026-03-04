@@ -12,6 +12,7 @@ Usage:
 """
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 
@@ -73,6 +74,7 @@ def _stacked_area(df, cols, suffix, ylabel, title, years):
     ax.set_title(title)
     ax.set_xlabel('Date')
     ax.set_ylabel(ylabel)
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
     ax.legend(loc='upper left', fontsize=8, ncol=2)
     fig.tight_layout()
     return fig
@@ -168,6 +170,7 @@ def plot_water_demand_by_source(df, *, title='Daily Water Demand by Source', yea
     ax.set_title(title)
     ax.set_xlabel('Date')
     ax.set_ylabel('Water (m\u00b3/day)')
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
     ax.legend(loc='upper right')
     ax.set_ylim(bottom=0)
     fig.tight_layout()
@@ -202,107 +205,48 @@ def plot_water_supply_by_source(df, *, title='Daily Water Supply by Source', yea
     ax.set_title(title)
     ax.set_xlabel('Date')
     ax.set_ylabel('Water (m\u00b3/day)')
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
     ax.legend(loc='upper right')
     ax.set_ylim(bottom=0)
     fig.tight_layout()
     return fig
 
 
-def plot_water_policy_heatmap(df, *, years=1, figsize=(14, 6)):
-    """Strip chart of daily policy decisions: primary source, flush reason, deficit.
+def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
+    """Combined water balance on a five-panel plot.
+
+    Panel 1: Stacked supply sources, demand line, tank state (red).
+    Panel 2: Cumulative municipal water used for irrigation.
+    Panels 3-5: Policy decision heatmaps (primary source, flush reason, deficit).
 
     Args:
         df: DataFrame from compute_daily_water_balance or load_daily_water_balance.
         years: Number of years to plot from the start. Default 1.
-        figsize: Figure size.
+        ylim: Upper limit for supply panel y-axis (m3). None = auto (nearest 250).
+        hspace: Vertical spacing between subplots. Default 0.35.
 
     Returns:
         matplotlib Figure.
     """
+    import math
+    import matplotlib.dates as mdates
     from matplotlib.colors import ListedColormap, BoundaryNorm
     from matplotlib.patches import Patch
 
     sub = _subset_years(df, years)
-    required = ['policy_primary_source', 'policy_flush_reason', 'policy_deficit']
-    missing = [c for c in required if c not in sub.columns]
-    if missing:
-        raise ValueError(f"Water balance DataFrame missing policy columns: {missing}")
 
-    n_days = len(sub)
-    days = pd.to_datetime(sub['day'])
+    fig, axes = plt.subplots(
+        5, 1, figsize=(14, 15), sharex=False,
+        gridspec_kw={'height_ratios': [3, 1.5, 0.45, 0.45, 0.45], 'hspace': hspace}
+    )
+    ax_balance, ax_cumul, ax_src, ax_flush, ax_deficit = axes
 
-    source_categories = ['none', 'tank_stock', 'gw_untreated', 'gw_treated', 'municipal', 'mixed']
-    source_colors = ['#d9d9d9', '#9ecae1', '#a1d99b', '#31a354', '#fdae6b', '#9467bd']
-    source_map = {cat: i for i, cat in enumerate(source_categories)}
-    source_vals = sub['policy_primary_source'].map(lambda x: source_map.get(str(x), 0)).values
+    # ---- Panel 1: Supply, demand, tank state ----
 
-    flush_categories = ['none', 'tds_exceedance', 'look_ahead_drain']
-    flush_colors = ['#d9d9d9', '#e6550d', '#fdae6b']
-    flush_map = {cat: i for i, cat in enumerate(flush_categories)}
-    flush_vals = sub['policy_flush_reason'].map(lambda x: flush_map.get(str(x), 0)).values
-
-    deficit_categories = ['No deficit', 'Deficit']
-    deficit_colors = ['#d9d9d9', '#de2d26']
-    deficit_vals = sub['policy_deficit'].astype(int).values
-
-    fig, axes = plt.subplots(3, 1, figsize=figsize, sharex=True,
-                              gridspec_kw={'height_ratios': [1, 1, 1], 'hspace': 0.4})
-
-    n_ticks = min(12, max(2, n_days))
-    tick_idx = np.linspace(0, n_days - 1, n_ticks).astype(int)
-
-    rows = [
-        (axes[0], source_vals, source_colors, source_categories, 'Primary Source'),
-        (axes[1], flush_vals, flush_colors, flush_categories, 'Flush Reason'),
-        (axes[2], deficit_vals, deficit_colors, deficit_categories, 'Deficit'),
-    ]
-
-    for ax, vals, colors, categories, ylabel in rows:
-        cmap = ListedColormap(colors)
-        norm = BoundaryNorm(list(range(len(colors) + 1)), cmap.N)
-        ax.imshow(vals.reshape(1, -1), aspect='auto', interpolation='nearest',
-                  cmap=cmap, norm=norm)
-        ax.set_yticks([])
-        ax.set_ylabel(ylabel, fontsize=9)
-        patches = [Patch(facecolor=c, label=cat) for c, cat in zip(colors, categories)]
-        ax.legend(handles=patches, loc='upper left', fontsize=7, ncol=len(categories),
-                  bbox_to_anchor=(0, -0.1), frameon=False)
-
-    axes[-1].set_xticks(tick_idx)
-    axes[-1].set_xticklabels([days.iloc[i].strftime('%Y-%m-%d') for i in tick_idx],
-                              rotation=45, ha='right')
-    axes[0].set_title('Daily Water Policy Decisions')
-    fig.tight_layout()
-    return fig
-
-
-def plot_water_balance(df, *, years=1, ylim=1000):
-    """Combined water supply, demand, and tank state on a single plot.
-
-    Shows stacked supply areas (GW sources), demand lines, and end-of-day
-    tank volume across all years on one continuous horizontal axis with
-    monthly tick labels.
-
-    Args:
-        df: DataFrame from compute_daily_water_balance or load_daily_water_balance.
-        years: Number of years to plot from the start. Default 1.
-        ylim: Upper limit of the y-axis in m3. Default 1000.
-
-    Returns:
-        matplotlib Figure.
-    """
-    import matplotlib.dates as mdates
-
-    sub = _subset_years(df, years)
-    fig, ax = plt.subplots(figsize=(14, 5))
-
-    # Tank state (behind everything)
     if 'tank_volume_m3' in sub.columns:
-        ax.fill_between(sub['day'], sub['tank_volume_m3'],
-                        color='#b8e6b8', edgecolor='#4caf50',
-                        linewidth=0.6, alpha=0.45, label='Tank State', zorder=1)
+        ax_balance.plot(sub['day'], sub['tank_volume_m3'],
+                        color='red', linewidth=1.0, label='Tank State', zorder=5)
 
-    # Stacked supply areas (irrigation sources only)
     supply_data, supply_labels, supply_colors = [], [], []
     for col, label, color in [
         ('gw_treated_to_tank_m3', 'GW Treated', '#5b9bd5'),
@@ -314,23 +258,87 @@ def plot_water_balance(df, *, years=1, ylim=1000):
             supply_labels.append(label)
             supply_colors.append(color)
     if supply_data:
-        ax.stackplot(sub['day'], supply_data, labels=supply_labels,
-                     colors=supply_colors, alpha=0.7, zorder=2)
+        ax_balance.stackplot(sub['day'], supply_data, labels=supply_labels,
+                             colors=supply_colors, alpha=0.7, zorder=2)
 
-    # Demand line (irrigation only)
     if 'irrigation_demand_m3' in sub.columns:
-        ax.plot(sub['day'], sub['irrigation_demand_m3'],
-                color='black', linewidth=0.8, label='Irrigation Demand', zorder=4)
+        ax_balance.plot(sub['day'], sub['irrigation_demand_m3'],
+                        color='black', linewidth=0.8, label='Irrigation Demand', zorder=4)
 
-    # Monthly x-axis labels (3-letter abbreviations), clamp to data range
-    ax.set_xlim(sub['day'].min(), sub['day'].max())
-    ax.xaxis.set_major_locator(mdates.MonthLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
-    plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+    ax_balance.set_title('Water Balance — Supply, Demand & Tank State')
+    ax_balance.set_ylabel('Water (m\u00b3/day)')
+    if ylim is None:
+        water_cols = [c for c in ['irrigation_demand_m3', 'total_sourced_to_tank_m3',
+                                   'tank_volume_m3'] if c in sub.columns]
+        peak = max(sub[c].max() for c in water_cols) if water_cols else 250
+        ylim = math.ceil(peak / 250) * 250
+    ax_balance.set_ylim(0, ylim)
+    ax_balance.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
+    ax_balance.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5, alpha=0.7)
+    ax_balance.legend(loc='upper right', fontsize=7, ncol=2)
 
-    ax.set_ylabel('Water (m\u00b3/day)')
-    ax.set_ylim(0, ylim)
-    ax.legend(loc='upper right', fontsize=8)
+    # ---- Panel 2: Cumulative municipal ----
+
+    if 'municipal_to_tank_m3' in sub.columns:
+        cumulative = sub['municipal_to_tank_m3'].cumsum()
+        ax_cumul.fill_between(sub['day'], cumulative, color='#1a3a5c', alpha=0.5)
+        ax_cumul.plot(sub['day'], cumulative, color='#1a3a5c', linewidth=0.8)
+    ax_cumul.set_title('Cumulative Municipal Water — Irrigation')
+    ax_cumul.set_ylabel('Cumulative (m\u00b3)')
+    cumul_peak = cumulative.iloc[-1] if 'municipal_to_tank_m3' in sub.columns else 0
+    ax_cumul.set_ylim(0, max(100, cumul_peak * 1.05))
+    ax_cumul.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
+    ax_cumul.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5, alpha=0.7)
+
+    # ---- Panels 3-5: Policy decision heatmaps ----
+
+    source_categories = ['none', 'tank_stock', 'gw_untreated', 'gw_treated', 'municipal', 'mixed']
+    source_colors = ['#f0f0f0', '#9ecae1', '#a1d99b', '#31a354', '#fdae6b', '#9467bd']
+    source_map = {cat: i for i, cat in enumerate(source_categories)}
+
+    flush_categories = ['none', 'tds_exceedance', 'look_ahead_drain']
+    flush_colors = ['#f0f0f0', '#e6550d', '#fdae6b']
+    flush_map = {cat: i for i, cat in enumerate(flush_categories)}
+
+    deficit_categories = ['No deficit', 'Deficit']
+    deficit_colors = ['#f0f0f0', '#de2d26']
+
+    policy_rows = [
+        (ax_src, sub['policy_primary_source'].map(lambda x: source_map.get(str(x), 0)).values,
+         source_colors, source_categories, 'Primary Source'),
+        (ax_flush, sub['policy_flush_reason'].map(lambda x: flush_map.get(str(x), 0)).values,
+         flush_colors, flush_categories, 'Flush Reason'),
+        (ax_deficit, sub['policy_deficit'].astype(int).values,
+         deficit_colors, deficit_categories, 'Deficit'),
+    ]
+
+    for ax, vals, colors, categories, ylabel in policy_rows:
+        cmap = ListedColormap(colors)
+        norm = BoundaryNorm(list(range(len(colors) + 1)), cmap.N)
+        ax.imshow(vals.reshape(1, -1), aspect='auto', interpolation='nearest',
+                  cmap=cmap, norm=norm,
+                  extent=[mdates.date2num(sub['day'].iloc[0]),
+                          mdates.date2num(sub['day'].iloc[-1]), 0, 1])
+        ax.set_yticks([])
+        ax.set_ylabel(ylabel, fontsize=7)
+        ax.set_facecolor('white')
+        patches = [Patch(facecolor=c, label=cat) for c, cat in zip(colors, categories)]
+        ax.legend(handles=patches, loc='upper right', fontsize=7, ncol=len(categories))
+
+    ax_src.set_title('Daily Water Policy Decisions')
+
+    # Month labels on all panels
+    for ax in axes:
+        if ax in (ax_src, ax_flush, ax_deficit):
+            ax.xaxis_date()
+            ax.set_xlim(mdates.date2num(sub['day'].iloc[0]),
+                        mdates.date2num(sub['day'].iloc[-1]))
+        else:
+            ax.set_xlim(sub['day'].min(), sub['day'].max())
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=10.5)
+
     fig.tight_layout()
     return fig
 
@@ -339,20 +347,24 @@ def plot_water_balance(df, *, years=1, ylim=1000):
 # Energy balance visualization
 # ---------------------------------------------------------------------------
 
-def plot_energy_balance(df, *, years=1, ylim=None):
-    """Combined energy supply, demand, and battery state on a two-panel plot.
+def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35):
+    """Combined energy supply, demand, and battery state on a three-panel plot.
 
     Top panel: stacked supply sources meeting demand (renewable consumed,
     battery discharge, grid import, generator) with total demand as a line
-    overlay and battery SOC as a background fill.
+    overlay and battery SOC as a red line on a secondary axis.
 
-    Bottom panel: stacked surplus disposition (battery charge, grid export,
-    curtailed) with renewable surplus as a line overlay.
+    Middle panel: stacked surplus disposition (battery charge, grid export,
+    curtailed) with renewable surplus as a solid green line overlay.
+
+    Bottom panel: cumulative net metering (export - import) with green fill
+    for net credit and red fill for net debit.
 
     Args:
         df: DataFrame from compute_daily_energy_balance.
         years: Number of years to plot from the start. Default 1.
         ylim: Upper limit for the supply panel y-axis (kWh). None = auto.
+        hspace: Vertical spacing between subplots. Default 0.35.
 
     Returns:
         matplotlib Figure.
@@ -360,26 +372,19 @@ def plot_energy_balance(df, *, years=1, ylim=None):
     import matplotlib.dates as mdates
 
     sub = _subset_years(df, years)
-    fig, (ax_supply, ax_surplus) = plt.subplots(
-        2, 1, figsize=(14, 9), sharex=True,
-        gridspec_kw={'height_ratios': [3, 2], 'hspace': 0.12}
+    fig, (ax_supply, ax_surplus, ax_net) = plt.subplots(
+        3, 1, figsize=(14, 11), sharex=False,
+        gridspec_kw={'height_ratios': [3, 2, 1], 'hspace': hspace}
     )
 
     # --- Top panel: supply sources meeting demand ---
 
-    # Battery SOC background (like tank state in water balance)
+    # Battery SOC (red line, same y-axis as supply for proportional context)
     if 'battery_soc_kwh' in sub.columns:
-        ax_soc = ax_supply.twinx()
-        ax_soc.fill_between(
+        ax_supply.plot(
             sub['day'], sub['battery_soc_kwh'],
-            color='#b8e6b8', edgecolor='#4caf50',
-            linewidth=0.6, alpha=0.35, label='Battery SOC', zorder=1
+            color='red', linewidth=1.0, label='Battery SOC', zorder=5
         )
-        ax_soc.set_ylabel('Battery SOC (kWh)', fontsize=8, color='#4caf50')
-        ax_soc.tick_params(axis='y', labelcolor='#4caf50', labelsize=7)
-        soc_max = sub['battery_soc_kwh'].max()
-        ax_soc.set_ylim(0, soc_max * 2.5 if soc_max > 0 else 10)
-        ax_soc.legend(loc='upper left', fontsize=7, framealpha=0.7)
 
     # Stacked supply areas
     supply_data, supply_labels, supply_colors = [], [], []
@@ -397,7 +402,11 @@ def plot_energy_balance(df, *, years=1, ylim=None):
         ax_supply.stackplot(sub['day'], supply_data, labels=supply_labels,
                             colors=supply_colors, alpha=0.7, zorder=2)
 
-    # Total demand line
+    # Demand lines
+    if 'community_energy_demand_kwh' in sub.columns:
+        ax_supply.plot(sub['day'], sub['community_energy_demand_kwh'],
+                       color='black', linewidth=0.8, dashes=(10, 2),
+                       label='Community Demand', zorder=4)
     if 'total_demand_kwh' in sub.columns:
         ax_supply.plot(sub['day'], sub['total_demand_kwh'],
                        color='black', linewidth=0.8, label='Total Demand',
@@ -408,6 +417,8 @@ def plot_energy_balance(df, *, years=1, ylim=None):
         ax_supply.set_ylim(0, ylim)
     else:
         ax_supply.set_ylim(bottom=0)
+    ax_supply.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
+    ax_supply.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5, alpha=0.7)
     ax_supply.legend(loc='upper right', fontsize=7, ncol=2)
     ax_supply.set_title('Energy Balance — Supply & Demand')
 
@@ -430,19 +441,40 @@ def plot_energy_balance(df, *, years=1, ylim=None):
     # Renewable surplus line
     if 'renewable_surplus_kwh' in sub.columns:
         ax_surplus.plot(sub['day'], sub['renewable_surplus_kwh'],
-                        color='#2e7d32', linewidth=0.8, linestyle='--',
+                        color='green', linewidth=0.8, linestyle='-',
                         label='Renewable Surplus', zorder=4)
 
     ax_surplus.set_ylabel('Energy (kWh/day)')
     ax_surplus.set_ylim(bottom=0)
+    ax_surplus.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
+    ax_surplus.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5, alpha=0.7)
     ax_surplus.legend(loc='upper right', fontsize=7, ncol=2)
     ax_surplus.set_title('Energy Balance — Surplus Disposition')
 
-    # Shared x-axis: monthly tick labels
-    ax_surplus.set_xlim(sub['day'].min(), sub['day'].max())
-    ax_surplus.xaxis.set_major_locator(mdates.MonthLocator())
-    ax_surplus.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
-    plt.setp(ax_surplus.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+    # --- Bottom panel: cumulative net metering ---
+    has_import = 'grid_import_kwh' in sub.columns
+    has_export = 'grid_export_kwh' in sub.columns
+    if has_import or has_export:
+        net_daily = (sub.get('grid_export_kwh', 0) - sub.get('grid_import_kwh', 0))
+        cumulative_net = net_daily.cumsum()
+        ax_net.fill_between(sub['day'], cumulative_net, 0,
+                            where=cumulative_net >= 0, color='#66bb6a', alpha=0.5)
+        ax_net.fill_between(sub['day'], cumulative_net, 0,
+                            where=cumulative_net < 0, color='#ef5350', alpha=0.5)
+        ax_net.plot(sub['day'], cumulative_net, color='black', linewidth=0.8)
+        ax_net.axhline(0, color='gray', linewidth=0.5, linestyle='-')
 
-    fig.subplots_adjust(left=0.06, right=0.92, top=0.95, bottom=0.08)
+    ax_net.set_ylabel('Cumulative (kWh)')
+    ax_net.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
+    ax_net.grid(True, which='major', axis='both', linestyle='--', linewidth=0.5, alpha=0.7)
+    ax_net.set_title('Cumulative Net Metering')
+
+    # Month labels on all three panels
+    for ax in (ax_supply, ax_surplus, ax_net):
+        ax.set_xlim(sub['day'].min(), sub['day'].max())
+        ax.xaxis.set_major_locator(mdates.MonthLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+        plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=10.5)
+
+    fig.tight_layout()
     return fig

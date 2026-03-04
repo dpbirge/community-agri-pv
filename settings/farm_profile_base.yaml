@@ -23,7 +23,7 @@ farms:
   - name: farm_1
     fields:
       - name: north_field
-        area_ha: 1
+        area_ha: 4.9
         water_system: main_irrigation
         irrigation_system: drip
         condition: openfield
@@ -34,10 +34,10 @@ farms:
             plantings: [feb15]
 
       - name: south_field
-        area_ha: 1
+        area_ha: 0.1
         water_system: main_irrigation
         irrigation_system: drip
-        condition: underpv_medium
+        condition: underpv_low
         plantings:
           - crop: potato
             plantings: [sep15]
@@ -47,19 +47,19 @@ farms:
   - name: farm_2
     fields:
       - name: east_field
-        area_ha: 1
+        area_ha: 4.9
         water_system: main_irrigation
         irrigation_system: drip
-        condition: underpv_low
+        condition: openfield
         plantings:
           - crop: cucumber
             plantings: [feb15, sep01]
 
       - name: west_field
-        area_ha: 1
+        area_ha: 0.1
         water_system: main_irrigation
         irrigation_system: sprinkler
-        condition: openfield
+        condition: underpv_low
         plantings:
           - crop: tomato
             plantings: [apr01]

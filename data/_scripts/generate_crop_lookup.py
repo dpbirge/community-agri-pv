@@ -60,9 +60,11 @@ import numpy as np
 import pandas as pd
 
 LATITUDE_DEG = 28.0
-SOLAR_CONSTANT = 0.0820  # MJ m-2 min-1
+ELEVATION_M = 100.0       # approximate elevation, Sinai coastal plain
+SOLAR_CONSTANT = 0.0820   # MJ m-2 min-1
 PAR_FRACTION = 0.48
 KWH_TO_MJ = 3.6
+WIND_MEAS_HEIGHT_M = 10.0 # NASA POWER wind speed measurement height
 
 IRRIGATION_POLICIES = {
     "full_eto": 1.00,
@@ -132,13 +134,69 @@ def _extraterrestrial_radiation(doy: int, lat_deg: float) -> float:
     return max(ra, 0.0)
 
 
-def hargreaves_eto(tmax: float, tmin: float, doy: int,
-                   lat_deg: float = LATITUDE_DEG) -> float:
-    """Hargreaves ETo (mm/day) — FAO-56 Eq. 52."""
-    ra = _extraterrestrial_radiation(doy, lat_deg)
+def _saturation_vapor_pressure(t):
+    """Saturation vapor pressure (kPa) at temperature t (°C) — FAO-56 Eq. 11."""
+    return 0.6108 * math.exp(17.27 * t / (t + 237.3))
+
+
+def _wind_speed_2m(u_z, z=WIND_MEAS_HEIGHT_M):
+    """Convert wind speed from height z (m) to 2m — FAO-56 Eq. 47."""
+    return u_z * 4.87 / math.log(67.8 * z - 5.42)
+
+
+def penman_monteith_eto(tmax, tmin, rs_mj, wind_speed_ms, doy,
+                        lat_deg=LATITUDE_DEG, elevation_m=ELEVATION_M):
+    """FAO-56 Penman-Monteith reference ETo (mm/day).
+
+    Implements FAO-56 Eq. 6 for the short grass reference surface.
+    Humidity estimated from Tmin - 2°C (FAO arid-region approximation).
+
+    Args:
+        tmax: Daily maximum temperature (°C).
+        tmin: Daily minimum temperature (°C).
+        rs_mj: Incoming solar radiation (MJ/m²/day).
+        wind_speed_ms: Wind speed at measurement height (m/s).
+        doy: Day of year (1-366).
+        lat_deg: Latitude in degrees.
+        elevation_m: Site elevation (m above sea level).
+
+    Returns:
+        Reference evapotranspiration ETo (mm/day).
+    """
     tmean = (tmax + tmin) / 2.0
-    td = max(tmax - tmin, 0.0)
-    return 0.0023 * (tmean + 17.8) * (td ** 0.5) * ra
+    u2 = _wind_speed_2m(wind_speed_ms)
+
+    # Saturation vapor pressure (Eq. 11-12)
+    es = (_saturation_vapor_pressure(tmax) + _saturation_vapor_pressure(tmin)) / 2.0
+
+    # Actual vapor pressure from dewpoint (Tdew ≈ Tmin - 2 for arid regions)
+    tdew = tmin - 2.0
+    ea = _saturation_vapor_pressure(tdew)
+
+    # Slope of saturation vapor pressure curve (Eq. 13)
+    delta = (4098 * _saturation_vapor_pressure(tmean)) / (tmean + 237.3) ** 2
+
+    # Atmospheric pressure and psychrometric constant (Eq. 7, 8)
+    p = 101.3 * ((293.0 - 0.0065 * elevation_m) / 293.0) ** 5.26
+    gamma = 0.000665 * p
+
+    # Net radiation (Eq. 37-40)
+    ra = _extraterrestrial_radiation(doy, lat_deg)
+    rso = (0.75 + 2e-5 * elevation_m) * ra  # clear-sky radiation (Eq. 37)
+    rns = (1.0 - 0.23) * rs_mj              # net shortwave (Eq. 38)
+
+    # Net longwave (Eq. 39)
+    rs_rso_ratio = min(rs_mj / rso, 1.0) if rso > 0 else 0.75
+    sigma = 4.903e-9  # Stefan-Boltzmann (MJ/m²/day/K⁴)
+    rnl = (sigma * ((tmax + 273.16) ** 4 + (tmin + 273.16) ** 4) / 2.0
+           * (0.34 - 0.14 * math.sqrt(ea))
+           * (1.35 * rs_rso_ratio - 0.35))
+    rn = rns - rnl
+
+    # FAO-56 Eq. 6 (G = 0 for daily time step)
+    num = 0.408 * delta * rn + gamma * (900.0 / (tmean + 273.0)) * u2 * (es - ea)
+    den = delta + gamma * (1.0 + 0.34 * u2)
+    return max(num / den, 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -306,16 +364,19 @@ def simulate_season(
                 tmax = float(wr["temp_max_c"])
                 tmin = float(wr["temp_min_c"])
                 solar_kwh = float(wr["solar_irradiance_kwh_m2"])
+                wind_speed = float(wr["wind_speed_ms"])
                 precip = float(wr["precip_mm"])
                 doy = current_date.timetuple().tm_yday
+                rs_mj = solar_kwh * KWH_TO_MJ
 
-                eto = hargreaves_eto(tmax, tmin, doy)
+                eto = penman_monteith_eto(tmax, tmin, rs_mj, wind_speed, doy)
                 kc_val = float(kc_curve[d])
                 fpar_val = float(fpar_curve[d])
 
                 if temp_adj_c > 0:
-                    eto_ref = hargreaves_eto(
-                        tmax + temp_adj_c, tmin + temp_adj_c, doy)
+                    eto_ref = penman_monteith_eto(
+                        tmax + temp_adj_c, tmin + temp_adj_c,
+                        rs_mj, wind_speed, doy)
                     etc = kc_val * eto_ref * (1.0 - total_et_reduction)
                 else:
                     etc = kc_val * eto
@@ -365,6 +426,7 @@ def simulate_season(
                     "fpar": round(fpar_val, 3),
                     "eto_mm": round(eto, 2),
                     "etc_mm": round(etc, 2),
+                    "irrigation_mm": round(water_from_irrig, 2),
                     "water_applied_mm": round(water_applied, 2),
                     "water_stress_coeff": round(ks, 3),
                     "temp_stress_coeff": round(kt, 3),
@@ -411,11 +473,13 @@ def generate_header(
         f"# CONDITION: {condition}\n"
         f"# SEASON_LENGTH: {season_length} days\n"
         f"# IRRIGATION_POLICIES: {irrig_str}\n"
-        f"# UNITS: eto_mm=mm/day, etc_mm=mm/day, water_applied_mm=mm/day,\n"
+        f"# UNITS: eto_mm=mm/day, etc_mm=mm/day, irrigation_mm=mm/day (irrigation only),\n"
+        f"#   water_applied_mm=mm/day (irrigation+precip, capped at 1.1*ETc),\n"
         f"#   fpar=fraction (0-1), biomass_kg_ha=kg DM/ha/day,\n"
         f"#   cumulative_biomass_kg_ha=kg DM/ha,\n"
         f"#   yield_fresh_kg_ha=kg fresh weight/ha (final day only)\n"
-        f"# LOGIC: ETo via Hargreaves (FAO-56 Eq.52). ETc = Kc * ETo_ref * (1-ET_red).\n"
+        f"# LOGIC: ETo via FAO-56 Penman-Monteith (Eq.6). ETc = Kc * ETo_ref * (1-ET_red).\n"
+        f"#   Humidity estimated as Tdew = Tmin - 2C (FAO arid-region approximation).\n"
         f"#   Under PV, ETo_ref uses openfield temps to avoid double-counting.\n"
         f"#   Canopy interception fPAR ramps with growth stage (seedling→full canopy).\n"
         f"#   Daily biomass = RUE * PAR * fPAR * Ks * Kt (tracks growth dynamics).\n"

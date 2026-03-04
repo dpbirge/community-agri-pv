@@ -1,0 +1,28 @@
+water_policy_name: balanced_water_policy
+
+irrigation:
+  mode: static
+  static_policy: full_eto
+
+groundwater:
+  monthly_cap_m3: 15000
+
+municipal:
+  monthly_cap_m3: null
+
+cap_enforcement:
+  look_ahead: true
+
+strategy: minimize_cost
+
+prefill:
+  enabled: true
+  look_ahead_days: 3
+
+treatment_smoothing:
+  source_priority: minimize_cost
+  fallow_treatment: true
+  fallow_horizon_days: 14
+  tank_feedback:
+    high_mark: 0.90
+    low_mark: 0.2

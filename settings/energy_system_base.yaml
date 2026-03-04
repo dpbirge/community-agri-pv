@@ -11,32 +11,32 @@ config_name: baseline_energy_system
 # --- Solar System ---
 community_solar:
   low_density:
-    area_ha: 0.2
+    area_ha: 0.
   medium_density:
-    area_ha: 0.2
+    area_ha: 0.0
   high_density:
-    area_ha: 0.25
+    area_ha: 0.05
  
 # --- Wind System ---
 wind_turbines:
   small_turbine:
-    number: 20
+    number: 5
   medium_turbine:
-    number: 6
+    number: 0
   large_turbine:
-    number: 4
+    number: 0
 
 # --- Generator System ---
 generator:
   has_generator: true
   type: diesel_100kw          # row key in generators-toy.csv (capacity_kw=100)
-  rated_capacity_kw: 100
+  rated_capacity_kw: 50
 
 # --- Battery System ---
 battery:
   has_battery: true
   type: lithium_iron_phosphate_medium   # row key in batteries-toy.csv (200 kWh LFP)
-  capacity_kwh: 200
+  capacity_kwh: 250
 
 # --- Grid Connection ---
 grid_connection: full_grid

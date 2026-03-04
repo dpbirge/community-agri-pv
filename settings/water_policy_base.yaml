@@ -26,11 +26,11 @@ irrigation:
 # All wells are drawn equally — each supplies an equal share of total groundwater
 # extracted on a given day, regardless of depth or TDS.
 groundwater:
-  monthly_cap_m3: null      # null = unlimited; set a value to cap monthly extraction
+  monthly_cap_m3: 15000      # null = unlimited; set a value to cap monthly extraction
 
 # --- Municipal Source ---
 municipal:
-  monthly_cap_m3: 500       # maximum municipal water per calendar month (m3)
+  monthly_cap_m3: null       # maximum municipal water per calendar month (m3)
 
 # --- Monthly Cap Enforcement ---
 # Controls how the system responds when a monthly cap is projected to be exceeded.
@@ -67,4 +67,4 @@ treatment_smoothing:
   fallow_horizon_days: 14         # only treat through fallow if next active day is within N days
   tank_feedback:
     high_mark: 0.90               # tank fill fraction above which treatment throttles down
-    low_mark: 0.15                # tank fill fraction below which treatment boosts up
+    low_mark: 0.2               # tank fill fraction below which treatment boosts up

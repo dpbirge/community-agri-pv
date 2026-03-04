@@ -1,0 +1,50 @@
+# Stress Test Farm Profile — FP-H: ALL UNDERPV_HIGH
+# Maximum agri-PV generation. All fields underpv_high, 3 ha each.
+# Use for energy surplus tests (curtailment, export, battery saturation).
+
+config_name: stress_test_farm_heavy_pv
+
+farms:
+  - name: farm_stress_1
+    fields:
+      - name: field_a
+        area_ha: 3.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_high
+        plantings:
+          - crop: tomato
+            plantings: [feb15]
+          - crop: kale
+            plantings: [oct01]
+
+      - name: field_b
+        area_ha: 3.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_high
+        plantings:
+          - crop: cucumber
+            plantings: [sep01]
+          - crop: onion
+            plantings: [jan15]
+
+  - name: farm_stress_2
+    fields:
+      - name: field_c
+        area_ha: 3.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_high
+        plantings:
+          - crop: potato
+            plantings: [jan15, sep15]
+
+      - name: field_d
+        area_ha: 3.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: underpv_high
+        plantings:
+          - crop: tomato
+            plantings: [apr01, nov01]

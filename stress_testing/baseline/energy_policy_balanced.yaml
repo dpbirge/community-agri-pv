@@ -1,0 +1,28 @@
+energy_policy_name: balanced_energy_policy
+
+strategy: minimize_cost
+
+grid:
+  mode: full_grid
+  monthly_import_cap_kwh: null
+  monthly_export_cap_kwh: null
+  export_rate_usd_kwh: null
+  capacity_tier: null
+
+cap_enforcement:
+  look_ahead: true
+
+tariff:
+  water_energy: agricultural
+  building_energy: commercial
+
+net_metering:
+  credit_period: monthly
+
+battery:
+  soc_min: 0.20
+  soc_max: 0.95
+  soc_initial: 0.75
+
+generator:
+  min_load_fraction: 0.30

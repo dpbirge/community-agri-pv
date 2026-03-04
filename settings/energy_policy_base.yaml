@@ -11,15 +11,15 @@ energy_policy_name: baseline_energy_policy
 
 # --- Dispatch Strategy ---
 # minimize_cost:                merit-order by marginal cost (renewables > battery > grid > generator)
-# minimize_grid_reliance:    minimize grid reliance (renewables > battery > generator > grid)
+# minimize_grid_reliance:       minimize grid reliance (renewables > battery > generator > grid)
 # minimize_generator:           minimize diesel use (renewables > battery > grid > generator)
-strategy: minimize_cost
+strategy: minimize_generator
 
 # --- Grid Interaction ---
 grid:
-  mode: self_consumption    # full_grid | net_metering | feed_in_tariff | self_consumption
+  mode: full_grid   # full_grid | net_metering | feed_in_tariff | self_consumption
                             # | limited_grid | off_grid
-  monthly_import_cap_kwh: null  # null = unlimited; max monthly grid import (kWh)
+  monthly_import_cap_kwh: 5000  # null = unlimited; max monthly grid import (kWh)
   monthly_export_cap_kwh: null  # null = unlimited; max monthly grid export (kWh)
   export_rate_usd_kwh: null     # explicit FIT rate override; null = look up from CSV by capacity_tier
   capacity_tier: null           # project_size_category in feed_in_tariff_rates CSV
@@ -28,7 +28,7 @@ grid:
 
 # --- Grid Cap Enforcement ---
 cap_enforcement:
-  look_ahead: true    # true = spread remaining monthly cap evenly over remaining days
+  look_ahead: false    # true = spread remaining monthly cap evenly over remaining days
                       # false = draw freely until monthly cap exhausted
 
 # --- Tariff Assignment ---
@@ -52,9 +52,9 @@ net_metering:
 # Only active when energy_system has_battery: true.
 # SOC limits here override the equipment CSV defaults for this scenario.
 battery:
-  soc_min: 0.20             # minimum state of charge (fraction of capacity)
-  soc_max: 0.95             # maximum state of charge
-  soc_initial: 0.50         # starting SOC for simulation
+  soc_min: 0.2             # minimum state of charge (fraction of capacity)
+  soc_max: 0.8           # maximum state of charge
+  soc_initial: 0.75         # starting SOC for simulation
 
 # --- Generator Dispatch ---
 # Only active when energy_system has_generator: true.

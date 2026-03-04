@@ -542,7 +542,7 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
                 gw_untreated, gw_treated, muni_vol,
                 raw_gw_tds, treated_tds, municipal['tds_ppm'])
             if trim_tds > tds_req:
-                logger.warning(
+                logger.debug(
                     'Tank headroom limited TDS correction: sourced TDS %.0f ppm '
                     'exceeds crop requirement %.0f ppm', trim_tds, tds_req)
 

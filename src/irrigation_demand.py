@@ -5,7 +5,8 @@ precomputed crop daily growth files to produce daily irrigation water demand
 per field, aggregated per water system, with crop TDS requirements.
 
 Conversion: 1 mm of water over 1 ha = 10 m3.
-Delivery demand = water_applied_mm * area (ha) * 10 / irrigation_efficiency.
+Delivery demand = irrigation_mm * area (ha) * 10 / irrigation_efficiency.
+irrigation_mm is the irrigation-only portion (excludes precipitation).
 
 Usage:
     from src.irrigation_demand import compute_irrigation_demand, save_irrigation_demand
@@ -75,17 +76,17 @@ def _load_crop_tds(path):
 
 
 def _load_daily_water_applied(growth_dir, crop, planting, condition, irrigation_policy):
-    """Load daily water application from a crop growth file, filtered by irrigation policy.
+    """Load daily irrigation water from a crop growth file, filtered by irrigation policy.
 
-    Returns DataFrame with columns: date, water_applied_mm, etc_mm, crop.
-    water_applied_mm reflects the irrigation policy (e.g. deficit_60 applies ~60% of ETc).
+    Returns DataFrame with columns: date, irrigation_mm, etc_mm, crop.
+    irrigation_mm is the irrigation-only portion (excludes precipitation).
     etc_mm is the biological crop water need, identical across policies (used by yield model).
     One row per calendar date across all weather years (dates are unique).
     """
     path = growth_dir / crop / f"{crop}_{planting}_{condition}-research.csv"
     df = pd.read_csv(path, comment='#', parse_dates=['date'])
     df = df[df['irrigation_policy'] == irrigation_policy]
-    result = df[['date', 'water_applied_mm', 'etc_mm']].copy()
+    result = df[['date', 'irrigation_mm', 'etc_mm']].copy()
     result['crop'] = crop
     return result
 
@@ -102,7 +103,7 @@ def _compute_field_demand(growth_dir, field, irrigation_lookup, irrigation_polic
     Returns:
         DataFrame with columns: date, {name}_etc_mm_per_ha, {name}_demand_m3,
             {name}_etc_m3, {name}_crop.
-        demand_m3 uses water_applied_mm (policy-adjusted).
+        demand_m3 uses irrigation_mm (policy-adjusted, excludes precipitation).
         etc_m3 uses etc_mm (biological crop water need, for yield model).
     """
     name = field['name']
@@ -126,8 +127,8 @@ def _compute_field_demand(growth_dir, field, irrigation_lookup, irrigation_polic
         return pd.DataFrame(columns=['date', col_etc, col_demand, col_etc_m3, col_crop])
 
     combined = pd.concat(parts, ignore_index=True).sort_values('date')
-    combined[col_etc] = combined['water_applied_mm'].round(2)
-    combined[col_demand] = (combined['water_applied_mm'] * area_ha * 10 / efficiency).round(3)
+    combined[col_etc] = combined['irrigation_mm'].round(2)
+    combined[col_demand] = (combined['irrigation_mm'] * area_ha * 10 / efficiency).round(3)
     combined[col_etc_m3] = (combined['etc_mm'] * area_ha * 10 / efficiency).round(3)
     combined[col_crop] = combined['crop']
 
@@ -187,7 +188,7 @@ def compute_irrigation_demand(farm_profiles_path, registry_path, *,
     Returns:
         DataFrame with columns:
             - day
-            - {field}_etc_mm_per_ha  (per field, policy-adjusted water_applied_mm)
+            - {field}_etc_mm_per_ha  (per field, policy-adjusted irrigation_mm)
             - {field}_demand_m3      (per field, policy-adjusted, area + efficiency scaled)
             - {field}_etc_m3         (per field, full ETc reference for yield model)
             - {field}_crop           (crop name active on that date, 'none' if fallow)
@@ -319,7 +320,10 @@ def save_irrigation_demand(df, output_dir, *, filename='daily_irrigation_demand.
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / filename
-    df.round(decimals).to_csv(path, index=False)
+    numeric_cols = df.select_dtypes(include='number').columns
+    out = df.copy()
+    out[numeric_cols] = out[numeric_cols].round(decimals)
+    out.to_csv(path, index=False)
     return path
 
 

@@ -1,6 +1,3 @@
-# Energy System — OVERSUPPLY regime
-# Large solar + wind + battery
-
 config_name: stress_energy_oversupply
 
 community_solar:
@@ -13,11 +10,11 @@ community_solar:
 
 wind_turbines:
   small_turbine:
-    number: 20
+    number: 4
   medium_turbine:
-    number: 10
+    number: 2
   large_turbine:
-    number: 6
+    number: 2
 
 generator:
   has_generator: true
