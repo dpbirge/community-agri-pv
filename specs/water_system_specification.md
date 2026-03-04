@@ -94,6 +94,9 @@ saline for the incoming crop. Two flush mechanisms handle this:
   current tank TDS, deliver all remaining tank water to fields at end of day so the tank
   starts empty tomorrow morning for a fresh fill at the correct TDS.
 
+If either flush mechanism delivers more water than today's demand, the excess is tracked as
+`over_delivery_m3` in the water balance module (`src/water_balance.py`).
+
 ### Water Flow
 
 - All sourced water enters the tank before delivery
@@ -169,7 +172,8 @@ buffer between treatment runs and irrigation draw. On treatment days, surplus tr
 accumulates in the tank; on off days, demand is served from tank stock. Tank fill level
 controls the on/off decision via hysteresis thresholds (`high_mark` / `low_mark`). This
 replaces the demand-matching pattern: source volume is determined by the treatment target
-and tank state, not by today's demand.
+and tank state, not by today's demand. (See Treatment Smoothing section for full
+implementation details.)
 
 Source priority within this strategy (the order for sourcing groundwater vs municipal to feed
 the treatment target) is independently configurable via `treatment_smoothing.source_priority`,
@@ -639,6 +643,13 @@ load_water_supply(path)
 `irrigation_demand_df` is the DataFrame produced by `src/irrigation_demand.py`
 (`compute_irrigation_demand`), providing `total_demand_m3` and `crop_tds_requirement_ppm` per day.
 
+### Input Data Contracts
+
+`irrigation_demand_df` must contain these columns: `day` (date), `total_demand_m3` (float,
+daily irrigation volume), and `crop_tds_requirement_ppm` (float, strictest active-crop TDS
+threshold; NaN on fallow days). All other columns are passed through but not consumed by
+`src/water.py`.
+
 ### Simulation Loop
 
 `compute_water_supply` calls `_run_simulation`, which iterates over each row of `irrigation_demand_df`
@@ -702,6 +713,12 @@ sourcing paths. Steps 1-3 and 7-11 are shared; step 4 branches by strategy type.
 - Treated groundwater may be cheaper than municipal at amortized O&M rates (no CAPEX in daily cost)
 - Well draw is split equally across all active wells (v1); weighted dispatch is a future extension
 - Tank outflow is unconstrained; irrigation system and treatment throughput are the binding limits
+
+### Boundary Conditions
+
+- **Day 1:** tank state initialized from config; no "yesterday" for hysteresis -- treatment starts ON
+- **Months with zero demand:** monthly cap look-ahead divides remaining cap by remaining calendar days (not demand days), so no divide-by-zero
+- **Empty demand series:** if all days are fallow, no sourcing occurs and the tank sits idle at its initial state
 
 ---
 

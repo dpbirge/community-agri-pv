@@ -1,14 +1,16 @@
-"""Visualization functions for community energy, water demand, and water balance.
+"""Visualization functions for community energy, water demand, and balance plots.
 
-Provides stacked area plots for daily energy/water demands and line/heatmap
-plots for water balance analysis (demand by source, supply by source, and
-daily policy decision strips).
+Provides stacked area plots for daily energy/water demands, combined balance
+plots for water and energy systems (supply stacks, demand lines, storage
+state), and heatmap strips for daily policy decisions.
 
 Usage:
     from src.plots import plot_demands, plot_water_balance_summary
+    from src.plots import plot_energy_balance
 
     energy_fig, water_fig = plot_demands(demands_df)
     demand_fig, supply_fig, heatmap_fig = plot_water_balance_summary(balance_df)
+    fig = plot_energy_balance(energy_balance_df, years=3)
 """
 
 import matplotlib.pyplot as plt
@@ -349,3 +351,116 @@ def plot_water_balance_summary(df, *, years=1):
     supply_fig = plot_water_supply_by_source(df, years=years)
     heatmap_fig = plot_water_policy_heatmap(df, years=years)
     return demand_fig, supply_fig, heatmap_fig
+
+
+# ---------------------------------------------------------------------------
+# Energy balance visualization
+# ---------------------------------------------------------------------------
+
+def plot_energy_balance(df, *, years=1, ylim=None):
+    """Combined energy supply, demand, and battery state on a two-panel plot.
+
+    Top panel: stacked supply sources meeting demand (renewable consumed,
+    battery discharge, grid import, generator) with total demand as a line
+    overlay and battery SOC as a background fill.
+
+    Bottom panel: stacked surplus disposition (battery charge, grid export,
+    curtailed) with renewable surplus as a line overlay.
+
+    Args:
+        df: DataFrame from compute_daily_energy_balance or load_energy_balance.
+        years: Number of years to plot from the start. Default 1.
+        ylim: Upper limit for the supply panel y-axis (kWh). None = auto.
+
+    Returns:
+        matplotlib Figure.
+    """
+    import matplotlib.dates as mdates
+
+    sub = _subset_years(df, years)
+    fig, (ax_supply, ax_surplus) = plt.subplots(
+        2, 1, figsize=(14, 9), sharex=True,
+        gridspec_kw={'height_ratios': [3, 2], 'hspace': 0.12}
+    )
+
+    # --- Top panel: supply sources meeting demand ---
+
+    # Battery SOC background (like tank state in water balance)
+    if 'battery_soc_kwh' in sub.columns:
+        ax_soc = ax_supply.twinx()
+        ax_soc.fill_between(
+            sub['day'], sub['battery_soc_kwh'],
+            color='#b8e6b8', edgecolor='#4caf50',
+            linewidth=0.6, alpha=0.35, label='Battery SOC', zorder=1
+        )
+        ax_soc.set_ylabel('Battery SOC (kWh)', fontsize=8, color='#4caf50')
+        ax_soc.tick_params(axis='y', labelcolor='#4caf50', labelsize=7)
+        soc_max = sub['battery_soc_kwh'].max()
+        ax_soc.set_ylim(0, soc_max * 2.5 if soc_max > 0 else 10)
+        ax_soc.legend(loc='upper left', fontsize=7, framealpha=0.7)
+
+    # Stacked supply areas
+    supply_data, supply_labels, supply_colors = [], [], []
+    for col, label, color in [
+        ('renewable_consumed_kwh', 'Renewable (direct)', '#66bb6a'),
+        ('battery_discharge_kwh', 'Battery Discharge', '#ffa726'),
+        ('grid_import_kwh', 'Grid Import', '#5b9bd5'),
+        ('generator_kwh', 'Generator', '#ef5350'),
+    ]:
+        if col in sub.columns:
+            supply_data.append(sub[col].values)
+            supply_labels.append(label)
+            supply_colors.append(color)
+    if supply_data:
+        ax_supply.stackplot(sub['day'], supply_data, labels=supply_labels,
+                            colors=supply_colors, alpha=0.7, zorder=2)
+
+    # Total demand line
+    if 'total_demand_kwh' in sub.columns:
+        ax_supply.plot(sub['day'], sub['total_demand_kwh'],
+                       color='black', linewidth=0.8, label='Total Demand',
+                       zorder=4)
+
+    ax_supply.set_ylabel('Energy (kWh/day)')
+    if ylim is not None:
+        ax_supply.set_ylim(0, ylim)
+    else:
+        ax_supply.set_ylim(bottom=0)
+    ax_supply.legend(loc='upper right', fontsize=7, ncol=2)
+    ax_supply.set_title('Energy Balance — Supply & Demand')
+
+    # --- Bottom panel: surplus disposition ---
+
+    surplus_data, surplus_labels, surplus_colors = [], [], []
+    for col, label, color in [
+        ('battery_charge_kwh', 'Battery Charge', '#ffa726'),
+        ('grid_export_kwh', 'Grid Export', '#42a5f5'),
+        ('curtailed_kwh', 'Curtailed', '#bdbdbd'),
+    ]:
+        if col in sub.columns:
+            surplus_data.append(sub[col].values)
+            surplus_labels.append(label)
+            surplus_colors.append(color)
+    if surplus_data:
+        ax_surplus.stackplot(sub['day'], surplus_data, labels=surplus_labels,
+                             colors=surplus_colors, alpha=0.7, zorder=2)
+
+    # Renewable surplus line
+    if 'renewable_surplus_kwh' in sub.columns:
+        ax_surplus.plot(sub['day'], sub['renewable_surplus_kwh'],
+                        color='#2e7d32', linewidth=0.8, linestyle='--',
+                        label='Renewable Surplus', zorder=4)
+
+    ax_surplus.set_ylabel('Energy (kWh/day)')
+    ax_surplus.set_ylim(bottom=0)
+    ax_surplus.legend(loc='upper right', fontsize=7, ncol=2)
+    ax_surplus.set_title('Energy Balance — Surplus Disposition')
+
+    # Shared x-axis: monthly tick labels
+    ax_surplus.set_xlim(sub['day'].min(), sub['day'].max())
+    ax_surplus.xaxis.set_major_locator(mdates.MonthLocator())
+    ax_surplus.xaxis.set_major_formatter(mdates.DateFormatter('%b'))
+    plt.setp(ax_surplus.get_xticklabels(), rotation=45, ha='right', fontsize=7)
+
+    fig.subplots_adjust(left=0.06, right=0.92, top=0.95, bottom=0.08)
+    return fig

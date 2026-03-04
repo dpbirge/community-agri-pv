@@ -124,19 +124,22 @@ by `_validate_energy_system_config()` and `_validate_energy_policy_config()` res
 called at the start of `compute_daily_energy_balance()`. Validation covers:
 
 **Energy system config** — required top-level keys: `community_solar`, `wind_turbines`,
-`generator`, `battery`, `grid_connection`. Generator section requires `has_generator`
-(bool), and when true: `type` (str), `rated_capacity_kw` (positive number). Battery
-section requires `has_battery` (bool), and when true: `type` (str), `capacity_kwh`
-(positive number). `grid_connection` must be one of `full_grid`, `limited_grid`,
-`off_grid`. Each `community_solar` entry must have `area_ha` (non-negative number).
-Each `wind_turbines` entry must have `number` (non-negative integer).
+`generator`, `battery`, `grid_connection`.
+
+- `generator`: requires `has_generator` (bool); when true: `type` (str), `rated_capacity_kw` (positive number)
+- `battery`: requires `has_battery` (bool); when true: `type` (str), `capacity_kwh` (positive number)
+- `grid_connection`: one of `full_grid`, `limited_grid`, `off_grid`
+- `community_solar` entries: `area_ha` (non-negative number)
+- `wind_turbines` entries: `number` (non-negative integer)
 
 **Energy policy config** — required top-level keys: `strategy`, `grid`, `cap_enforcement`,
-`tariff`, `battery`, `generator`. `strategy` must be one of `minimize_cost`,
-`minimize_grid_reliance`, `minimize_generator`. `grid.mode` must be one of `full_grid`,
-`net_metering`, `feed_in_tariff`, `self_consumption`, `limited_grid`, `off_grid`.
-Battery SOC fractions (`soc_min`, `soc_max`, `soc_initial`) must be in [0, 1] with
-`soc_min < soc_max`. `generator.min_load_fraction` must be in (0, 1]. When `grid.mode` is `limited_grid`, `monthly_import_cap_kwh` must not be null.
+`tariff`, `battery`, `generator`.
+
+- `strategy`: one of `minimize_cost`, `minimize_grid_reliance`, `minimize_generator`
+- `grid.mode`: one of `full_grid`, `net_metering`, `feed_in_tariff`, `self_consumption`, `limited_grid`, `off_grid`
+- `battery.soc_min`, `soc_max`, `soc_initial`: floats in [0, 1]; `soc_min < soc_max`
+- `generator.min_load_fraction`: float in (0, 1]
+- When `grid.mode` is `limited_grid`: `monthly_import_cap_kwh` must not be null
 
 All validation errors raise `ValueError` with a descriptive message identifying the
 config file and the specific issue.
@@ -242,10 +245,8 @@ where `a` = `sfc_coefficient_a` (no-load coefficient) and `b` = `sfc_coefficient
 - **Generator min-load excess and battery renewable tracking**: when the generator runs at
 minimum load, excess energy beyond the deficit is offered to the battery first, then
 curtailed. This generator-sourced charge is the only non-renewable energy that enters the
-battery. All other battery charge comes from renewable surplus. The
-`battery_renewable_fraction` state variable tracks what share of stored energy is
-renewable-origin: it is updated on each charge (weighted blend of current fraction and
-source fraction) and read on discharge to compute `renewable_fraction` metrics.
+battery. The `battery_renewable_fraction` state variable tracks the renewable-origin share
+of stored energy (see Metrics section for full accounting).
 
 ---
 
@@ -334,6 +335,9 @@ and uses `pd.merge_asof` (or equivalent forward-fill) to map each simulation day
 most recent monthly rate. This produces one scalar rate per day per tariff category, which
 is passed to `_dispatch_day()`.
 
+**Weighted cost formula**: `grid_import_cost = import_kwh × (water_kwh/total_kwh × ag_tariff + community_kwh/total_kwh × commercial_tariff)`.
+When `total_kwh` is zero (no demand), cost is zero.
+
 ### Net Metering Accounting
 
 When `grid.mode: net_metering`:
@@ -349,6 +353,16 @@ from the change in the monthly net billable position. Each day, the billable pos
 the billable position × weighted tariff rate. On days when exports reduce the net
 position, cost is zero. This ensures the sum of daily costs equals the correct monthly
 net-metered bill.
+
+**Worked example** (single tariff for simplicity):
+
+| Day | Import | Export | Monthly Net Position | Daily Cost        |
+| --- | ------ | ------ | -------------------- | ----------------- |
+| 1   | 10     | 0      | 10                   | 10 × rate         |
+| 2   | 2      | 8      | 4                    | 0 (position fell) |
+| 3   | 6      | 0      | 10                   | 6 × rate          |
+
+Day 3 cost is 6 × rate because only the incremental increase from 4 → 10 is billable.
 
 ### Feed-In Tariff Accounting
 
@@ -466,11 +480,11 @@ The output DataFrame from `src/energy_balance.py` includes:
 
 Only present when `has_battery: true`. When false, these columns are omitted.
 
-| Column                           | Description                                              |
-| -------------------------------- | -------------------------------------------------------- |
-| `battery_soc_kwh`                | battery state of charge at end of day                    |
-| `battery_soc_fraction`           | SOC as fraction of capacity                              |
-| `battery_renewable_fraction`     | fraction of stored energy from renewable sources (0–1)   |
+| Column                           | Description                                                 |
+| -------------------------------- | ----------------------------------------------------------- |
+| `battery_soc_kwh`                | battery state of charge at end of day                       |
+| `battery_soc_fraction`           | SOC as fraction of capacity                                 |
+| `battery_renewable_fraction`     | renewable share of stored energy, 0–1 (see Metrics section) |
 
 
 ### Generator State
@@ -562,6 +576,16 @@ compute_daily_energy_balance(
 
 Returns a DataFrame with all columns listed above.
 
+### Input Data Contracts
+
+Required columns from upstream modules passed to (or called by) `compute_daily_energy_balance`:
+
+- **`compute_daily_energy()`**: `day`, `total_solar_kwh`, `total_wind_kwh`, `total_renewable_kwh`, plus per-source columns (e.g., `{key}_solar_kwh`, `{key}_wind_kwh`)
+- **`compute_daily_demands()`**: `day`, `total_energy_demand_kwh`
+- **`water_balance_df`** (optional): `day`, `total_water_energy_kwh`
+
+When `water_balance_df` is `None`, water energy demand is zero for all days.
+
 ### Date Range Alignment
 
 The energy balance module must align date ranges across its input sources:
@@ -597,6 +621,47 @@ the module raises `ValueError`.
 10. Run `_run_simulation()` which calls `_dispatch_day()` for each day in date order,
     carrying battery SOC and monthly cap/metering state forward
 11. Assemble and return the unified DataFrame via `_order_energy_balance_columns()`
+
+### Helper Functions
+
+These helpers are called by `_dispatch_day` and `_run_simulation`.
+
+- `_load_yaml(path)` → dict (parsed YAML)
+- `_load_csv(path)` → DataFrame (with `comment='#'`)
+- `_resolve_energy_balance_paths(registry, root_dir)` → dict mapping registry keys to Paths
+- `_load_price_series(csv_path, column)` → Series indexed by date (monthly, for ffill)
+- `_daily_price_lookup(price_series, dates)` → Series of daily rates (forward-filled)
+- `_load_equipment_specs(csv_path, type_id)` → dict (single row matched by `type_id`)
+- `_build_battery_specs(energy_system_config, policy_config, equipment_path)` → dict or None
+- `_build_generator_specs(energy_system_config, policy_config, equipment_path)` → dict or None
+- `_resolve_export_rate(policy_grid, registry_paths)` → float (USD/kWh)
+- `_validate_grid_config(grid_connection, grid_mode)` → None (raises ValueError if invalid)
+- `_validate_energy_system_config(config)` → None (raises ValueError on invalid config)
+- `_validate_energy_policy_config(config)` → None (raises ValueError on invalid config)
+- `_daily_cap_allowance(monthly_cap, used, day, look_ahead)` → float (available for today)
+- `_charge_battery(surplus_kwh, battery_specs, battery_state, renewable=True)` →
+`(accepted_kwh, stored_kwh)`. Stores up to SOC ceiling with charge efficiency losses.
+Updates `battery_state['renewable_fraction']` using weighted blend.
+- `_discharge_battery(deficit_kwh, battery_specs, battery_state)` →
+`(delivered_kwh, soc_draw_kwh, renewable_delivered_kwh)`. Delivers up to SOC floor with
+discharge efficiency losses. Returns the renewable-origin share of discharged energy.
+- `_grid_import_available(grid_mode, grid_cap_state)` → `float` (daily allowance)
+- `_grid_export_available(grid_mode, grid_cap_state)` → `float` (daily allowance)
+- `_run_generator(deficit_kwh, generator_specs)` →
+`(delivered_kwh, excess_kwh, fuel_liters, runtime_hours)`
+- `_compute_grid_import_cost(import_kwh, community_kwh, water_kwh, total_kwh,
+ag_tariff, commercial_tariff)` → `float` (weighted by demand share)
+- `_compute_net_metering_cost(import_kwh, export_kwh, net_metering_state,
+ag_tariff, commercial_tariff, community_kwh, water_kwh, total_kwh)` →
+`float` (credit-adjusted daily cost)
+- `_init_energy_dispatch_row(...)` → zeroed row dict with all output keys
+- `_finalize_energy_dispatch_row(row, battery_specs, battery_state)` → computes
+metrics (SSR, SCR, renewable fraction) and cost totals
+- `_order_energy_balance_columns(df)` → DataFrame with columns grouped semantically:
+day, demands, generation, dispatch, battery state, generator state, cost, metrics,
+policy, monthly caps
+- `_run_simulation(...)` → DataFrame (daily loop; manages battery state, monthly cap
+resets, net metering state)
 
 ### Internal Dispatch Function
 
@@ -653,45 +718,6 @@ day's row is returned. The dispatch function receives read-only snapshots.
 - **Strategy branching uses ordered action lists** — surplus and deficit priority orders
 are defined as lists of action strings (`['battery', 'export', 'curtail']`), then
 iterated. This keeps dispatch logic DRY and makes adding strategies trivial.
-
-**Helper functions:**
-
-- `_load_yaml(path)` → dict (parsed YAML)
-- `_load_csv(path)` → DataFrame (with `comment='#'`)
-- `_resolve_energy_balance_paths(registry, root_dir)` → dict mapping registry keys to Paths
-- `_load_price_series(csv_path, column)` → Series indexed by date (monthly, for ffill)
-- `_daily_price_lookup(price_series, dates)` → Series of daily rates (forward-filled)
-- `_load_equipment_specs(csv_path, type_id)` → dict (single row matched by `type_id`)
-- `_build_battery_specs(energy_system_config, policy_config, equipment_path)` → dict or None
-- `_build_generator_specs(energy_system_config, policy_config, equipment_path)` → dict or None
-- `_resolve_export_rate(policy_grid, registry_paths)` → float (USD/kWh)
-- `_validate_grid_config(grid_connection, grid_mode)` → None (raises ValueError if invalid)
-- `_validate_energy_system_config(config)` → None (raises ValueError on invalid config)
-- `_validate_energy_policy_config(config)` → None (raises ValueError on invalid config)
-- `_daily_cap_allowance(monthly_cap, used, day, look_ahead)` → float (available for today)
-- `_charge_battery(surplus_kwh, battery_specs, battery_state, renewable=True)` →
-`(accepted_kwh, stored_kwh)`. Stores up to SOC ceiling with charge efficiency losses.
-Updates `battery_state['renewable_fraction']` using weighted blend.
-- `_discharge_battery(deficit_kwh, battery_specs, battery_state)` →
-`(delivered_kwh, soc_draw_kwh, renewable_delivered_kwh)`. Delivers up to SOC floor with
-discharge efficiency losses. Returns the renewable-origin share of discharged energy.
-- `_grid_import_available(grid_mode, grid_cap_state)` → `float` (daily allowance)
-- `_grid_export_available(grid_mode, grid_cap_state)` → `float` (daily allowance)
-- `_run_generator(deficit_kwh, generator_specs)` →
-`(delivered_kwh, excess_kwh, fuel_liters, runtime_hours)`
-- `_compute_grid_import_cost(import_kwh, community_kwh, water_kwh, total_kwh,
-ag_tariff, commercial_tariff)` → `float` (weighted by demand share)
-- `_compute_net_metering_cost(import_kwh, export_kwh, net_metering_state,
-ag_tariff, commercial_tariff, community_kwh, water_kwh, total_kwh)` →
-`float` (credit-adjusted daily cost)
-- `_init_energy_dispatch_row(...)` → zeroed row dict with all output keys
-- `_finalize_energy_dispatch_row(row, battery_specs, battery_state)` → computes
-metrics (SSR, SCR, renewable fraction) and cost totals
-- `_order_energy_balance_columns(df)` → DataFrame with columns grouped semantically:
-day, demands, generation, dispatch, battery state, generator state, cost, metrics,
-policy, monthly caps
-- `_run_simulation(...)` → DataFrame (daily loop; manages battery state, monthly cap
-resets, net metering state)
 
 **Dispatch pseudocode:**
 
@@ -750,6 +776,13 @@ forward-filled to daily resolution.
 - Generator startup cost and minimum runtime are not modeled at the daily timestep
 - Battery cycle tracking and degradation are not modeled — the daily timestep does not
 provide sufficient resolution for meaningful cycle counting
+
+### Boundary Conditions
+
+- **Day 1**: battery SOC initialized from `battery.soc_initial` in policy config; no prior state needed
+- **Monthly accumulators**: grid cap and net metering accumulators start at zero and reset at each `(year, month)` boundary
+- **Price data extends beyond simulation**: last available rate is forward-filled
+- **Price data starts after simulation**: raise `ValueError` (no backward-fill)
 
 ---
 
