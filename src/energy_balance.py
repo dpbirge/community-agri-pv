@@ -1270,18 +1270,6 @@ def save_energy_balance(df, output_dir, *, filename='daily_energy_balance.csv',
     return path
 
 
-def load_energy_balance(path):
-    """Load a saved energy balance CSV.
-
-    Args:
-        path: Path to the energy balance CSV file.
-
-    Returns:
-        DataFrame with the same structure as compute_daily_energy_balance output.
-    """
-    return pd.read_csv(path, parse_dates=['day'])
-
-
 # ---------------------------------------------------------------------------
 # Entry point for quick verification
 # ---------------------------------------------------------------------------

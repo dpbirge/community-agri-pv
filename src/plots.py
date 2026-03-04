@@ -5,11 +5,9 @@ plots for water and energy systems (supply stacks, demand lines, storage
 state), and heatmap strips for daily policy decisions.
 
 Usage:
-    from src.plots import plot_demands, plot_water_balance_summary
-    from src.plots import plot_energy_balance
+    from src.plots import plot_demands, plot_energy_balance
 
     energy_fig, water_fig = plot_demands(demands_df)
-    demand_fig, supply_fig, heatmap_fig = plot_water_balance_summary(balance_df)
     fig = plot_energy_balance(energy_balance_df, years=3)
 """
 
@@ -337,22 +335,6 @@ def plot_water_balance(df, *, years=1, ylim=1000):
     return fig
 
 
-def plot_water_balance_summary(df, *, years=1):
-    """Generate all water balance plots: demand, supply, and policy heatmap.
-
-    Args:
-        df: DataFrame from compute_daily_water_balance or load_daily_water_balance.
-        years: Number of years to plot. Default 1.
-
-    Returns:
-        Tuple of (demand_fig, supply_fig, heatmap_fig).
-    """
-    demand_fig = plot_water_demand_by_source(df, years=years)
-    supply_fig = plot_water_supply_by_source(df, years=years)
-    heatmap_fig = plot_water_policy_heatmap(df, years=years)
-    return demand_fig, supply_fig, heatmap_fig
-
-
 # ---------------------------------------------------------------------------
 # Energy balance visualization
 # ---------------------------------------------------------------------------
@@ -368,7 +350,7 @@ def plot_energy_balance(df, *, years=1, ylim=None):
     curtailed) with renewable surplus as a line overlay.
 
     Args:
-        df: DataFrame from compute_daily_energy_balance or load_energy_balance.
+        df: DataFrame from compute_daily_energy_balance.
         years: Number of years to plot from the start. Default 1.
         ylim: Upper limit for the supply panel y-axis (kWh). None = auto.
 

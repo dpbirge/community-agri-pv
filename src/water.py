@@ -18,7 +18,7 @@ the BWRO treatment plant at a steady rate near its efficiency sweet spot
 System sizing and optimization functions are in src.water_sizing.
 
 Usage:
-    from src.water import compute_water_supply, save_water_supply
+    from src.water import compute_water_supply
 
     df = compute_water_supply(
         water_systems_path='settings/water_systems_base.yaml',
@@ -26,7 +26,6 @@ Usage:
         irrigation_demand_df=demand_df,
         water_policy_path='settings/water_policy_base.yaml',
     )
-    save_water_supply(df, output_dir='simulation/')
 """
 
 import calendar
@@ -1428,27 +1427,8 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
     return df
 
 
-def save_water_supply(df, output_dir, *, filename='daily_water_supply.csv', decimals=3):
-    """Save daily water supply DataFrame to CSV.
-
-    Args:
-        df: DataFrame returned by compute_water_supply.
-        output_dir: Directory to write the output file. Created if needed.
-        filename: Output file name.
-        decimals: Decimal places for numeric columns.
-
-    Returns:
-        Path to the saved CSV file.
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / filename
-    df.round(decimals).to_csv(path, index=False)
-    return path
-
-
 def load_water_supply(path):
-    """Load a saved water supply CSV produced by save_water_supply.
+    """Load a saved water supply CSV.
 
     Args:
         path: Path to the water supply CSV file.
@@ -1477,8 +1457,7 @@ if __name__ == '__main__':
         irrigation_demand_df=demand_df,
         water_policy_path=root / 'settings' / 'water_policy_base.yaml',
     )
-    out = save_water_supply(df, output_dir=root / 'simulation')
-    print(f'Saved {len(df)} rows to {out}')
+    print(f'Computed {len(df)} rows')
     print(f'Total delivered: {df["total_delivered_m3"].sum():.0f} m3')
     print(f'Total deficit: {df["deficit_m3"].sum():.0f} m3')
     print(f'Total energy: {df["total_sourcing_energy_kwh"].sum():.1f} kWh')

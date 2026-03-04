@@ -326,18 +326,6 @@ def save_harvest_yields(daily_df, output_dir, *, filename='daily_harvest_yields.
     return path
 
 
-def load_harvest_yields(path):
-    """Load a saved harvest yields CSV.
-
-    Args:
-        path: Path to the daily_harvest_yields CSV file.
-
-    Returns:
-        DataFrame with 'day' parsed as datetime.
-    """
-    return pd.read_csv(path, parse_dates=['day'])
-
-
 # ---------------------------------------------------------------------------
 # Entry point for standalone verification
 # ---------------------------------------------------------------------------

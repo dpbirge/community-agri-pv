@@ -312,18 +312,6 @@ def save_irrigation_demand(df, output_dir, *, filename='daily_irrigation_demand.
     return path
 
 
-def load_irrigation_demand(path):
-    """Load a saved irrigation demand CSV.
-
-    Args:
-        path: Path to the irrigation demand CSV file.
-
-    Returns:
-        DataFrame with the same structure as compute_irrigation_demand output.
-    """
-    return pd.read_csv(path, parse_dates=['day'])
-
-
 # ---------------------------------------------------------------------------
 # Entry point for quick verification
 # ---------------------------------------------------------------------------
