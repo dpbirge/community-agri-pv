@@ -1,0 +1,32 @@
+# Energy System — NEAR-BALANCED regime
+# Moderate solar, no battery
+
+config_name: stress_energy_balanced
+
+community_solar:
+  low_density:
+    area_ha: 0.2
+  medium_density:
+    area_ha: 0.2
+  high_density:
+    area_ha: 0.25
+
+wind_turbines:
+  small_turbine:
+    number: 10
+  medium_turbine:
+    number: 3
+  large_turbine:
+    number: 2
+
+generator:
+  has_generator: true
+  type: diesel_100kw
+  rated_capacity_kw: 100
+
+battery:
+  has_battery: false
+  type: lithium_iron_phosphate_medium
+  capacity_kwh: 200
+
+grid_connection: full_grid

@@ -56,6 +56,7 @@ def _order_balance_columns(result):
     demand_section = ['irrigation_demand_m3', 'community_water_demand_m3', 'total_water_demand_m3']
     demand_section += sorted([c for c in result.columns if c.endswith('_demand_m3')
                               and c not in demand_section])
+    demand_section += sorted([c for c in result.columns if c.endswith('_etc_m3')])
     # Per-building community water breakdown
     demand_section += sorted([c for c in result.columns if c.startswith('community_')
                               and c.endswith('_water_m3') and c != 'community_water_demand_m3'])
@@ -248,11 +249,12 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
     result = supply_df.copy()
     result = result.drop(columns=['total_sourcing_energy_kwh'], errors='ignore')
 
-    # Merge irrigation demand (total and per-field)
+    # Merge irrigation demand (total, per-field demand, and per-field ETc reference)
     result = result.rename(columns={'total_delivered_m3': 'irrigation_delivered_m3'})
     irrig_cols_to_merge = ['day', 'total_demand_m3']
     demand_cols = [c for c in irrig_df.columns if c.endswith('_demand_m3') and c != 'total_demand_m3']
-    irrig_cols_to_merge += demand_cols
+    etc_m3_cols = [c for c in irrig_df.columns if c.endswith('_etc_m3')]
+    irrig_cols_to_merge += demand_cols + etc_m3_cols
     result = result.merge(
         irrig_df[irrig_cols_to_merge].rename(columns={'total_demand_m3': 'irrigation_demand_m3'}),
         on='day', how='left',

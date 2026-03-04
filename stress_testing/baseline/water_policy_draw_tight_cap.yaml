@@ -1,0 +1,33 @@
+# Water Policy — minimize_draw with tight municipal cap
+# Designed to stress-test the minimize_draw strategy by restricting municipal
+# water to ~150 m3/month, forcing the look-ahead cap enforcement to throttle
+# daily municipal allowance and push demand to groundwater.
+
+water_policy_name: draw_tight_cap
+
+irrigation:
+  mode: static
+  static_policy: full_eto
+
+groundwater:
+  monthly_cap_m3: null
+
+municipal:
+  monthly_cap_m3: 150
+
+cap_enforcement:
+  look_ahead: true
+
+strategy: minimize_draw
+
+prefill:
+  enabled: true
+  look_ahead_days: 3
+
+treatment_smoothing:
+  source_priority: minimize_cost
+  fallow_treatment: true
+  fallow_horizon_days: 14
+  tank_feedback:
+    high_mark: 0.90
+    low_mark: 0.15

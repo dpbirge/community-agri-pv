@@ -223,7 +223,7 @@ def compute_community_harvest(water_balance_df, *, farm_profiles_path,
 
     Args:
         water_balance_df: DataFrame from compute_daily_water_balance() with
-            per-field delivered_m3 and demand_m3 columns plus a 'day' column.
+            per-field delivered_m3 and etc_m3 columns plus a 'day' column.
         farm_profiles_path: Path to farm_profile YAML.
         registry_path: Path to data_registry YAML.
         root_dir: Repository root. Defaults to registry_path.parent.parent.
@@ -256,7 +256,7 @@ def compute_community_harvest(water_balance_df, *, farm_profiles_path,
             area_ha = field['area_ha']
             condition = field['condition']
             delivered_col = f'{field_name}_delivered_m3'
-            demand_col = f'{field_name}_demand_m3'
+            etc_col = f'{field_name}_etc_m3'
 
             for planting_entry in field['plantings']:
                 crop = planting_entry['crop']
@@ -278,13 +278,13 @@ def compute_community_harvest(water_balance_df, *, farm_profiles_path,
                             continue
 
                         delivered = season_df.set_index('day')[delivered_col]
-                        demand = season_df.set_index('day')[demand_col]
+                        etc_ref = season_df.set_index('day')[etc_col]
 
                         yield_kg_ha = compute_harvest_yield(
                             crop=crop, planting=planting_code,
                             condition=condition, weather_year=year,
                             delivered_m3_series=delivered,
-                            demand_m3_series=demand,
+                            demand_m3_series=etc_ref,
                             registry_path=registry_path,
                             root_dir=root_dir,
                         )

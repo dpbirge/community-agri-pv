@@ -1,0 +1,37 @@
+# Water Systems — LOW TDS wells for strategy differentiation
+# All wells have TDS below typical crop requirements (510-1070 ppm).
+# This allows untreated GW to be viable, making the strategy ordering matter:
+# - minimize_treatment: uses untreated GW first, then municipal
+# - minimize_draw: uses municipal first, then GW
+
+config_name: stress_water_low_tds
+
+systems:
+  - name: main_irrigation
+
+    wells:
+      - name: well_1
+        depth_m: 20
+        tds_ppm: 300
+        pump_type: medium_submersible
+      - name: well_2
+        depth_m: 35
+        tds_ppm: 450
+        pump_type: medium_submersible
+
+    treatment:
+      type: bwro
+      throughput_m3_hr: 50
+      goal_output_tds_ppm: 100
+
+    municipal_source:
+      tds_ppm: 200
+      cost_per_m3: 0.50
+      throughput_m3_hr: 200
+
+    storage:
+      type: underground_tank
+      capacity_m3: 200
+      initial_level_m3: 100
+      max_output_m3_hr: 50
+      initial_tds_ppm: 350

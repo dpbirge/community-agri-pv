@@ -1,0 +1,38 @@
+# Water Systems — NEAR-BALANCED regime
+# Throughput roughly matches peak demand, small tank
+
+config_name: stress_water_balanced
+
+systems:
+  - name: main_irrigation
+
+    wells:
+      - name: well_1
+        depth_m: 20
+        tds_ppm: 1400
+        pump_type: medium_submersible
+      - name: well_2
+        depth_m: 50
+        tds_ppm: 3500
+        pump_type: medium_submersible
+      - name: well_3
+        depth_m: 100
+        tds_ppm: 6500
+        pump_type: large_submersible
+
+    treatment:
+      type: bwro
+      throughput_m3_hr: 50
+      goal_output_tds_ppm: 400
+
+    municipal_source:
+      tds_ppm: 200
+      cost_per_m3: 0.50
+      throughput_m3_hr: 200
+
+    storage:
+      type: underground_tank
+      capacity_m3: 200
+      initial_level_m3: 100
+      max_output_m3_hr: 50
+      initial_tds_ppm: 500

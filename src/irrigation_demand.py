@@ -5,7 +5,7 @@ precomputed crop daily growth files to produce daily irrigation water demand
 per field, aggregated per water system, with crop TDS requirements.
 
 Conversion: 1 mm of water over 1 ha = 10 m3.
-Delivery demand = ETc (mm/ha) * area (ha) * 10 / irrigation_efficiency.
+Delivery demand = water_applied_mm * area (ha) * 10 / irrigation_efficiency.
 
 Usage:
     from src.irrigation_demand import compute_irrigation_demand, save_irrigation_demand
@@ -74,16 +74,18 @@ def _load_crop_tds(path):
     return dict(zip(df['crop'], df['tds_no_penalty_ppm']))
 
 
-def _load_daily_etc(growth_dir, crop, planting, condition, irrigation_policy):
-    """Load daily ETc from a crop growth file, filtered by irrigation policy.
+def _load_daily_water_applied(growth_dir, crop, planting, condition, irrigation_policy):
+    """Load daily water application from a crop growth file, filtered by irrigation policy.
 
-    Returns DataFrame with columns: date, etc_mm, crop.
+    Returns DataFrame with columns: date, water_applied_mm, etc_mm, crop.
+    water_applied_mm reflects the irrigation policy (e.g. deficit_60 applies ~60% of ETc).
+    etc_mm is the biological crop water need, identical across policies (used by yield model).
     One row per calendar date across all weather years (dates are unique).
     """
     path = growth_dir / crop / f"{crop}_{planting}_{condition}-research.csv"
     df = pd.read_csv(path, comment='#', parse_dates=['date'])
     df = df[df['irrigation_policy'] == irrigation_policy]
-    result = df[['date', 'etc_mm']].copy()
+    result = df[['date', 'water_applied_mm', 'etc_mm']].copy()
     result['crop'] = crop
     return result
 
@@ -98,7 +100,10 @@ def _compute_field_demand(growth_dir, field, irrigation_lookup, irrigation_polic
         irrigation_policy: Irrigation policy to filter (e.g. 'full_eto').
 
     Returns:
-        DataFrame with columns: date, {name}_etc_mm_per_ha, {name}_demand_m3, {name}_crop
+        DataFrame with columns: date, {name}_etc_mm_per_ha, {name}_demand_m3,
+            {name}_etc_m3, {name}_crop.
+        demand_m3 uses water_applied_mm (policy-adjusted).
+        etc_m3 uses etc_mm (biological crop water need, for yield model).
     """
     name = field['name']
     area_ha = field['area_ha']
@@ -107,24 +112,26 @@ def _compute_field_demand(growth_dir, field, irrigation_lookup, irrigation_polic
 
     parts = []
     for p in normalize_plantings(field):
-        etc_df = _load_daily_etc(
+        wa_df = _load_daily_water_applied(
             growth_dir, p['crop'], p['planting'], condition, irrigation_policy
         )
-        parts.append(etc_df)
+        parts.append(wa_df)
 
     col_etc = f'{name}_etc_mm_per_ha'
     col_demand = f'{name}_demand_m3'
+    col_etc_m3 = f'{name}_etc_m3'
     col_crop = f'{name}_crop'
 
     if not parts:
-        return pd.DataFrame(columns=['date', col_etc, col_demand, col_crop])
+        return pd.DataFrame(columns=['date', col_etc, col_demand, col_etc_m3, col_crop])
 
     combined = pd.concat(parts, ignore_index=True).sort_values('date')
-    combined[col_etc] = combined['etc_mm'].round(2)
-    combined[col_demand] = (combined['etc_mm'] * area_ha * 10 / efficiency).round(3)
+    combined[col_etc] = combined['water_applied_mm'].round(2)
+    combined[col_demand] = (combined['water_applied_mm'] * area_ha * 10 / efficiency).round(3)
+    combined[col_etc_m3] = (combined['etc_mm'] * area_ha * 10 / efficiency).round(3)
     combined[col_crop] = combined['crop']
 
-    return combined[['date', col_etc, col_demand, col_crop]]
+    return combined[['date', col_etc, col_demand, col_etc_m3, col_crop]]
 
 
 def _collect_fields(farm_config, water_system_name):
@@ -180,8 +187,9 @@ def compute_irrigation_demand(farm_profiles_path, registry_path, *,
     Returns:
         DataFrame with columns:
             - day
-            - {field}_etc_mm_per_ha  (per field, raw ETc)
-            - {field}_demand_m3      (per field, after area + efficiency scaling)
+            - {field}_etc_mm_per_ha  (per field, policy-adjusted water_applied_mm)
+            - {field}_demand_m3      (per field, policy-adjusted, area + efficiency scaled)
+            - {field}_etc_m3         (per field, full ETc reference for yield model)
             - {field}_crop           (crop name active on that date, 'none' if fallow)
             - total_demand_m3        (sum across all fields)
             - crop_tds_requirement_ppm (min TDS threshold across active crops)
@@ -228,17 +236,20 @@ def compute_irrigation_demand(farm_profiles_path, registry_path, *,
 
     demand_cols = []
     etc_cols = []
+    etc_m3_cols = []
     crop_cols = []
     for fdf in field_dfs:
         demand_col = [c for c in fdf.columns if c.endswith('_demand_m3')][0]
         etc_col = [c for c in fdf.columns if c.endswith('_etc_mm_per_ha')][0]
+        etc_m3_col = [c for c in fdf.columns if c.endswith('_etc_m3')][0]
         crop_col = [c for c in fdf.columns if c.endswith('_crop')][0]
         demand_cols.append(demand_col)
         etc_cols.append(etc_col)
+        etc_m3_cols.append(etc_m3_col)
         crop_cols.append(crop_col)
         result = result.merge(fdf, on='date', how='left')
 
-    for col in demand_cols + etc_cols:
+    for col in demand_cols + etc_cols + etc_m3_cols:
         result[col] = result[col].fillna(0.0)
     for col in crop_cols:
         result[col] = result[col].fillna('none')

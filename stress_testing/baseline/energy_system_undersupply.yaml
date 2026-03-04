@@ -1,0 +1,32 @@
+# Energy System — UNDERSUPPLY regime
+# Minimal solar, no battery, off-grid
+
+config_name: stress_energy_undersupply
+
+community_solar:
+  low_density:
+    area_ha: 0.05
+  medium_density:
+    area_ha: 0.05
+  high_density:
+    area_ha: 0.05
+
+wind_turbines:
+  small_turbine:
+    number: 2
+  medium_turbine:
+    number: 0
+  large_turbine:
+    number: 0
+
+generator:
+  has_generator: true
+  type: diesel_100kw
+  rated_capacity_kw: 100
+
+battery:
+  has_battery: false
+  type: lithium_iron_phosphate_medium
+  capacity_kwh: 200
+
+grid_connection: off_grid

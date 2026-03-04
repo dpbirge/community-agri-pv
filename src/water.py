@@ -346,11 +346,16 @@ def _gw_source(target_vol, tds_req, wells, treatment, gw_cap_state,
         return 0.0, 0.0, 0.0, 0.0, None
 
     raw_gw_tds = _volume_weighted_tds(wells, gw_extraction_limit)
-    goal_tds = treatment['goal_output_tds_ppm']
 
     if raw_gw_tds <= tds_req:
         delivery = min(target_vol, gw_extraction_limit)
         return delivery, 0.0, delivery, delivery, None
+
+    # Treatment unavailable — raw GW exceeds TDS requirement and cannot be treated
+    if treatment['lookup_df'] is None:
+        return 0.0, 0.0, 0.0, 0.0, None
+
+    goal_tds = treatment['goal_output_tds_ppm']
 
     # Blending ratio: fraction of product that must be treated
     if goal_tds >= tds_req:
@@ -511,11 +516,12 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
     # TDS correction: if sourced water blend exceeds tds_req, add municipal
     # to bring it down. This is the default policy (GW -> treatment ->
     # municipal for TDS) and applies regardless of dispatch strategy.
+    treated_tds = treatment['goal_output_tds_ppm'] if treatment['lookup_df'] is not None else 0.0
     sourced_before_tds_fix = gw_untreated + gw_treated + muni_vol
     if sourced_before_tds_fix > 0 and municipal['tds_ppm'] < tds_req:
         blend_tds_check = _sourced_blend_tds(
             gw_untreated, gw_treated, muni_vol,
-            raw_gw_tds, treatment['goal_output_tds_ppm'], municipal['tds_ppm'])
+            raw_gw_tds, treated_tds, municipal['tds_ppm'])
         if blend_tds_check > tds_req:
             muni_for_tds = (sourced_before_tds_fix
                             * (blend_tds_check - tds_req)
@@ -534,7 +540,7 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
         if sourced > 0:
             trim_tds = _sourced_blend_tds(
                 gw_untreated, gw_treated, muni_vol,
-                raw_gw_tds, treatment['goal_output_tds_ppm'], municipal['tds_ppm'])
+                raw_gw_tds, treated_tds, municipal['tds_ppm'])
             if trim_tds > tds_req:
                 logger.warning(
                     'Tank headroom limited TDS correction: sourced TDS %.0f ppm '
@@ -545,7 +551,7 @@ def _source_water(target_vol, tds_req, wells, treatment, municipal,
     if sourced > 0:
         sourced_tds = _sourced_blend_tds(
             gw_untreated, gw_treated, muni_vol,
-            raw_gw_tds, treatment['goal_output_tds_ppm'], municipal['tds_ppm'])
+            raw_gw_tds, treated_tds, municipal['tds_ppm'])
         if tank['fill_m3'] > 0:
             tank['tds_ppm'] = _blend_tds(
                 [tank['fill_m3'], sourced],
@@ -736,6 +742,11 @@ def _compute_treatment_target(demand_df, raw_gw_tds, treatment, tank_capacity_m3
             f_treat: Blending fraction (0-1) — share of product that must be treated.
             recovery_rate: BWRO recovery rate (0-1).
     """
+    # No treatment available — return zero targets
+    if treatment['lookup_df'] is None:
+        return {'feed_target_m3': 0.0, 'source_target_m3': 0.0,
+                'f_treat': 0.0, 'recovery_rate': 0.0}
+
     goal_tds = treatment['goal_output_tds_ppm']
     max_daily_feed = treatment['throughput_m3_hr'] * 24
 
@@ -961,9 +972,10 @@ def _handle_fallow_day(demand_m3, tds_req, policy, treatment, row, gw_cap_state,
         return demand_m3, tds_req, True
 
     demand_m3 = 0.0
+    fallback_tds = treatment['goal_output_tds_ppm'] if treatment['lookup_df'] is not None else 0.0
     tds_req = next(
         (t for t in future_tds if not math.isnan(t)),
-        treatment['goal_output_tds_ppm'])
+        fallback_tds)
     row['crop_tds_requirement_ppm'] = tds_req
     return demand_m3, tds_req, False
 
@@ -1396,17 +1408,25 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
     pump_df = _load_csv(paths['pump_systems'])
     wells = _load_well_specs(system, pump_df)
 
-    treatment_df = _load_treatment_lookup(paths['treatment_research'])
-    efficiency_df = None
-    if 'treatment_efficiency' in paths:
-        efficiency_df = _load_csv(paths['treatment_efficiency'])
-        efficiency_df = efficiency_df.sort_values('utilization_pct').reset_index(drop=True)
-    treatment = {
-        'goal_output_tds_ppm': system['treatment']['goal_output_tds_ppm'],
-        'throughput_m3_hr': system['treatment']['throughput_m3_hr'],
-        'lookup_df': treatment_df,
-        'efficiency_df': efficiency_df,
-    }
+    if 'treatment' in system:
+        treatment_df = _load_treatment_lookup(paths['treatment_research'])
+        efficiency_df = None
+        if 'treatment_efficiency' in paths:
+            efficiency_df = _load_csv(paths['treatment_efficiency'])
+            efficiency_df = efficiency_df.sort_values('utilization_pct').reset_index(drop=True)
+        treatment = {
+            'goal_output_tds_ppm': system['treatment']['goal_output_tds_ppm'],
+            'throughput_m3_hr': system['treatment']['throughput_m3_hr'],
+            'lookup_df': treatment_df,
+            'efficiency_df': efficiency_df,
+        }
+    else:
+        treatment = {
+            'goal_output_tds_ppm': 0,
+            'throughput_m3_hr': 0,
+            'lookup_df': None,
+            'efficiency_df': None,
+        }
 
     muni_cfg = system['municipal_source']
     municipal = {
@@ -1415,12 +1435,19 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
         'throughput_m3_hr': muni_cfg['throughput_m3_hr'],
     }
 
-    stor = system['storage']
-    tank_init = {
-        'fill_m3': stor['initial_level_m3'],
-        'tds_ppm': stor['initial_tds_ppm'],
-        'capacity_m3': stor['capacity_m3'],
-    }
+    if 'storage' in system:
+        stor = system['storage']
+        tank_init = {
+            'fill_m3': stor['initial_level_m3'],
+            'tds_ppm': stor['initial_tds_ppm'],
+            'capacity_m3': stor['capacity_m3'],
+        }
+    else:
+        tank_init = {
+            'fill_m3': 0.0,
+            'tds_ppm': 0.0,
+            'capacity_m3': float('inf'),
+        }
 
     if water_policy_path is not None:
         pol_config = _load_yaml(water_policy_path)
@@ -1435,6 +1462,13 @@ def compute_water_supply(water_systems_path, registry_path, irrigation_demand_df
         muni_monthly_cap = None
         look_ahead = True
         prefill_cfg = {}
+
+    # Fall back from maximize_treatment_efficiency when no treatment is configured
+    if strategy == 'maximize_treatment_efficiency' and treatment['lookup_df'] is None:
+        logger.warning(
+            'Strategy maximize_treatment_efficiency requires treatment config; '
+            'falling back to minimize_cost.')
+        strategy = 'minimize_cost'
 
     policy = {
         'strategy': strategy,

@@ -1,0 +1,52 @@
+# Stress Test Farm Profile — ALL OPENFIELD
+# For energy-deficit stress testing. Identical to farm_profile.yaml except
+# ALL fields use condition: openfield. This removes agri-PV solar generation
+# (~142M kWh/yr) that otherwise dominates the energy balance and makes
+# grid import, generator, battery, and deficit dispatch paths untestable.
+
+config_name: stress_test_farm_openfield
+
+farms:
+  - name: farm_stress_1
+    fields:
+      - name: field_a
+        area_ha: 2.5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: tomato
+            plantings: [feb15]
+          - crop: kale
+            plantings: [oct01]
+
+      - name: field_b
+        area_ha: 2.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: cucumber
+            plantings: [sep01]
+          - crop: onion
+            plantings: [jan15]
+
+  - name: farm_stress_2
+    fields:
+      - name: field_c
+        area_ha: 2.0
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: potato
+            plantings: [jan15, sep15]
+
+      - name: field_d
+        area_ha: 2.5
+        water_system: main_irrigation
+        irrigation_system: sprinkler
+        condition: openfield
+        plantings:
+          - crop: tomato
+            plantings: [apr01, nov01]

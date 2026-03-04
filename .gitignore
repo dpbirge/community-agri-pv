@@ -29,3 +29,4 @@ Thumbs.db
 # Project specific
 results/*
 !results/.gitkeep
+stress_testing/individual_tests/*

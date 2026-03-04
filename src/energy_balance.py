@@ -154,7 +154,7 @@ def _build_battery_specs(energy_system_config, policy_config, equipment_path):
 
     row = _load_equipment_specs(equipment_path, bat_cfg['type'])
     pol_bat = policy_config.get('battery', {})
-    capacity = row['capacity_kwh']
+    capacity = bat_cfg.get('capacity_kwh', row['capacity_kwh'])
 
     return {
         'capacity_kwh': capacity,
@@ -186,7 +186,7 @@ def _build_generator_specs(energy_system_config, policy_config, equipment_path):
 
     row = _load_equipment_specs(equipment_path, gen_cfg['type'])
     pol_gen = policy_config.get('generator', {})
-    rated_kw = row['capacity_kw']
+    rated_kw = gen_cfg.get('rated_capacity_kw', row['capacity_kw'])
     min_load_frac = pol_gen.get('min_load_fraction', row.get('min_load_fraction', 0.30))
 
     return {
