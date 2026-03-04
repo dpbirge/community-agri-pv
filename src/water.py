@@ -916,21 +916,177 @@ def _finalize_dispatch_row(row, tank, demand_m3, tds_req, flush_reason,
         row['policy_primary_source'] = 'tank_stock'
 
 
+def _handle_fallow_day(demand_m3, tds_req, policy, treatment, row, gw_cap_state,
+                       upcoming_tds):
+    """Handle fallow-day logic with optional treatment smoothing.
+
+    On fallow days (zero demand or NaN TDS), demand-matching strategies skip
+    dispatch entirely. The maximize_treatment_efficiency strategy may continue
+    sourcing if active irrigation resumes within the fallow horizon.
+
+    Args:
+        demand_m3: Total irrigation demand (m3).
+        tds_req: Crop TDS requirement (ppm). NaN on fallow days.
+        policy: Policy dict with strategy, treatment_smoothing config.
+        treatment: Treatment spec dict with goal_output_tds_ppm.
+        row: Mutable row dict (updated if smoothing adjusts TDS).
+        gw_cap_state: Cap state dict (day used for warning log).
+        upcoming_tds: List of TDS requirements for upcoming days.
+
+    Returns:
+        Tuple of (demand_m3, tds_req, early_return) where early_return is
+        True if the day should end with no dispatch, or False to continue.
+    """
+    is_fallow = demand_m3 <= 0 or math.isnan(tds_req)
+    if not is_fallow:
+        return demand_m3, tds_req, False
+
+    if demand_m3 > 0 and math.isnan(tds_req):
+        logger.warning(
+            'Day %s: positive demand (%.1f m3) but TDS requirement is NaN '
+            '— no water dispatched. Check crop TDS lookup coverage.',
+            gw_cap_state['day'], demand_m3,
+        )
+
+    strategy = policy['strategy']
+    smoothing_cfg = policy.get('treatment_smoothing', {})
+    if (strategy != 'maximize_treatment_efficiency'
+            or not smoothing_cfg.get('fallow_treatment', False)):
+        return demand_m3, tds_req, True
+
+    horizon = smoothing_cfg.get('fallow_horizon_days', 14)
+    future_tds = upcoming_tds or []
+    has_active_ahead = any(not math.isnan(t) for t in future_tds[:horizon])
+    if not has_active_ahead:
+        return demand_m3, tds_req, True
+
+    demand_m3 = 0.0
+    tds_req = next(
+        (t for t in future_tds if not math.isnan(t)),
+        treatment['goal_output_tds_ppm'])
+    row['crop_tds_requirement_ppm'] = tds_req
+    return demand_m3, tds_req, False
+
+
+def _second_source_pass(demand_remaining, tds_req, wells, treatment, municipal,
+                        tank, gw_cap_state, muni_cap_state, row, source_priority,
+                        draw_fresh, draw_fresh_tds):
+    """Run a second source+draw pass when demand exceeds single-pass throughput.
+
+    When the first pass fills and drains the tank but leaves unmet demand,
+    uses the freed headroom to source+draw the remainder via a scratch row
+    to avoid overwriting first-pass accounting.
+
+    Modifies row and tank in place.
+
+    Args:
+        demand_remaining: Unmet demand after first pass (m3).
+        tds_req: Crop TDS requirement (ppm).
+        wells: List of well spec dicts.
+        treatment: Treatment spec dict.
+        municipal: Municipal source spec dict.
+        tank: Mutable tank state dict.
+        gw_cap_state: Groundwater cap state dict.
+        muni_cap_state: Municipal cap state dict.
+        row: Mutable main row dict (accumulates second-pass volumes).
+        source_priority: Strategy for sourcing priority.
+        draw_fresh: First-pass fresh draw volume (m3).
+        draw_fresh_tds: First-pass fresh draw TDS (ppm).
+
+    Returns:
+        Tuple of (demand_remaining, draw_fresh, draw_fresh_tds).
+    """
+    if not (demand_remaining > 0 and tank['fill_m3'] < 1e-9):
+        return demand_remaining, draw_fresh, draw_fresh_tds
+
+    p2_row = {}
+    for w in wells:
+        p2_row[f'{w["name"]}_extraction_m3'] = 0.0
+        p2_row[f'{w["name"]}_pumping_kwh'] = 0.0
+    p2_row.update({
+        'treatment_feed_m3': 0.0, 'treatment_reject_m3': 0.0,
+        'treatment_energy_kwh': 0.0, 'pumping_energy_kwh': 0.0,
+        'groundwater_cost': 0.0, 'municipal_cost': 0.0,
+        'sourced_tds_ppm': 0.0,
+        'gw_untreated_to_tank_m3': 0.0, 'gw_treated_to_tank_m3': 0.0,
+        'municipal_to_tank_m3': 0.0, 'total_groundwater_extracted_m3': 0.0,
+    })
+
+    _source_water(demand_remaining, tds_req, wells, treatment, municipal,
+                  tank, gw_cap_state, muni_cap_state, p2_row, source_priority)
+
+    # Accumulate second-pass accounting into main row
+    for w in wells:
+        row[f'{w["name"]}_extraction_m3'] += p2_row[f'{w["name"]}_extraction_m3']
+        row[f'{w["name"]}_pumping_kwh'] += p2_row[f'{w["name"]}_pumping_kwh']
+    row['gw_untreated_to_tank_m3'] += p2_row['gw_untreated_to_tank_m3']
+    row['gw_treated_to_tank_m3'] += p2_row['gw_treated_to_tank_m3']
+    row['municipal_to_tank_m3'] += p2_row['municipal_to_tank_m3']
+    row['total_groundwater_extracted_m3'] += p2_row['total_groundwater_extracted_m3']
+    row['pumping_energy_kwh'] += p2_row['pumping_energy_kwh']
+    row['treatment_energy_kwh'] += p2_row['treatment_energy_kwh']
+    row['treatment_feed_m3'] += p2_row['treatment_feed_m3']
+    row['treatment_reject_m3'] += p2_row['treatment_reject_m3']
+    row['groundwater_cost'] += p2_row['groundwater_cost']
+    row['municipal_cost'] += p2_row['municipal_cost']
+
+    if tank['fill_m3'] > 0:
+        draw2 = min(demand_remaining, tank['fill_m3'])
+        draw_fresh_tds = _blend_tds(
+            [draw_fresh, draw2],
+            [draw_fresh_tds, tank['tds_ppm']])
+        draw_fresh += draw2
+        tank['fill_m3'] -= draw2
+        demand_remaining -= draw2
+        if tank['fill_m3'] < 1e-9:
+            tank['fill_m3'] = 0.0
+            tank['tds_ppm'] = 0.0
+
+    return demand_remaining, draw_fresh, draw_fresh_tds
+
+
+def _look_ahead_drain(tank, next_tds_req, flush_reason):
+    """Drain tank if next day needs stricter TDS than current tank holds.
+
+    Delivers all remaining tank water to fields so the tank starts empty
+    tomorrow morning for a fresh fill at the required TDS.
+
+    Modifies tank in place.
+
+    Args:
+        tank: Mutable tank state dict.
+        next_tds_req: Next day's crop TDS requirement (ppm).
+        flush_reason: Current flush reason string.
+
+    Returns:
+        Tuple of (drain_vol, drain_tds, flush_reason).
+    """
+    if (tank['fill_m3'] > 0
+            and not math.isnan(next_tds_req)
+            and tank['tds_ppm'] > next_tds_req):
+        drain_vol = tank['fill_m3']
+        drain_tds = tank['tds_ppm']
+        tank['fill_m3'] = 0.0
+        tank['tds_ppm'] = 0.0
+        if flush_reason == 'none':
+            flush_reason = 'look_ahead_drain'
+        return drain_vol, drain_tds, flush_reason
+    return 0.0, 0.0, flush_reason
+
+
 def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
                   tank, policy, gw_cap_state, muni_cap_state,
                   upcoming_demands=None, upcoming_tds=None):
     """Dispatch water through central mixing tank for a single day.
 
     Daily flow:
-      1. If tank TDS exceeds today's requirement (safety fallback), flush
-         all tank water to fields.
-      2. Draw from tank to meet demand.
-      3. Source only the shortfall (demand minus what the tank already had).
-      4. Draw remaining demand from freshly sourced water.
-      5. Look-ahead prefill: if upcoming demand exceeds today's throughput,
-         source additional water into the tank as buffer.
-      6. Look-ahead drain: if next day's TDS requirement is stricter than
-         the current tank TDS, deliver all remaining tank water to fields.
+      1. Handle fallow days (with optional treatment smoothing).
+      2. Safety flush if tank TDS exceeds today's requirement.
+      3. Draw from existing tank stock to meet demand.
+      4. Source the shortfall and draw from freshly sourced water.
+      5. Second source+draw pass if demand exceeds single-pass throughput.
+      6. Look-ahead prefill for upcoming peak days.
+      7. Look-ahead drain if next day needs stricter TDS.
 
     Args:
         demand_m3: Total irrigation demand (m3).
@@ -954,45 +1110,18 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
     row = _init_dispatch_row(wells, tds_req, treatment['throughput_m3_hr'],
                              tank['fill_m3'], tank['tds_ppm'], strategy)
 
-    # Fallow day — tank sits idle (demand-matching strategies)
-    # Treatment smoothing may continue sourcing on fallow days to build buffer
-    is_fallow = demand_m3 <= 0 or math.isnan(tds_req)
-    if is_fallow:
-        if demand_m3 > 0 and math.isnan(tds_req):
-            logger.warning(
-                'Day %s: positive demand (%.1f m3) but TDS requirement is NaN '
-                '— no water dispatched. Check crop TDS lookup coverage.',
-                gw_cap_state['day'], demand_m3,
-            )
-
-        smoothing_cfg = policy.get('treatment_smoothing', {})
-        if (strategy != 'maximize_treatment_efficiency'
-                or not smoothing_cfg.get('fallow_treatment', False)):
-            return row, tank
-
-        # Smoothing: check fallow horizon — only treat if active irrigation
-        # resumes within N days
-        horizon = smoothing_cfg.get('fallow_horizon_days', 14)
-        future_tds = upcoming_tds or []
-        has_active_ahead = any(not math.isnan(t) for t in future_tds[:horizon])
-        if not has_active_ahead:
-            return row, tank
-
-        # Use the next active day's TDS requirement for blending decisions
-        demand_m3 = 0.0
-        tds_req = next(
-            (t for t in future_tds if not math.isnan(t)),
-            treatment['goal_output_tds_ppm'])
-        row['crop_tds_requirement_ppm'] = tds_req
+    # 1. Fallow day handling
+    demand_m3, tds_req, early = _handle_fallow_day(
+        demand_m3, tds_req, policy, treatment, row, gw_cap_state, upcoming_tds)
+    if early:
+        return row, tank
 
     tank = dict(tank)
     flush_vol = 0.0
     flush_tds = 0.0
-
     flush_reason = 'none'
 
-    # Safety fallback: if tank TDS already exceeds today's requirement,
-    # flush all tank water to fields before sourcing fresh
+    # 2. Safety flush: tank TDS exceeds today's requirement
     if tank['fill_m3'] > 0 and tank['tds_ppm'] > tds_req:
         flush_vol = tank['fill_m3']
         flush_tds = tank['tds_ppm']
@@ -1000,7 +1129,7 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
         tank['tds_ppm'] = 0.0
         flush_reason = 'tds_exceedance'
 
-    # Draw from existing tank water to meet demand
+    # 3. Draw from existing tank water
     demand_remaining = max(0.0, demand_m3 - flush_vol)
     draw_existing = 0.0
     draw_existing_tds = 0.0
@@ -1013,7 +1142,7 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             tank['fill_m3'] = 0.0
             tank['tds_ppm'] = 0.0
 
-    # Step 3: Compute source volume — strategy-dependent
+    # 4. Source shortfall — strategy-dependent
     if strategy == 'maximize_treatment_efficiency':
         source_vol, treatment_on_today = _effective_treatment_target(
             policy['_treatment_target_m3'], tank, demand_remaining,
@@ -1030,7 +1159,6 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
         _source_water(source_vol, tds_req, wells, treatment, municipal,
                       tank, gw_cap_state, muni_cap_state, row, source_priority)
 
-    # Treatment target diagnostic (set early; utilization computed after all passes)
     if strategy == 'maximize_treatment_efficiency':
         row['treatment_target_m3'] = policy.get('_feed_target_m3', 0.0)
         row['treatment_on'] = policy.get('_treatment_on', True)
@@ -1047,57 +1175,13 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             tank['fill_m3'] = 0.0
             tank['tds_ppm'] = 0.0
 
-    # Second source+draw pass: when demand exceeds single-pass tank throughput
-    # (e.g. smoothing with empty tank and peak demand > tank_capacity), the
-    # first pass fills and drains the tank but leaves unmet demand. A second
-    # pass uses the freed headroom to source+draw the remainder.
-    # Uses a scratch row to avoid overwriting first-pass accounting.
-    if demand_remaining > 0 and tank['fill_m3'] < 1e-9:
-        p2_row = {}
-        for w in wells:
-            p2_row[f'{w["name"]}_extraction_m3'] = 0.0
-            p2_row[f'{w["name"]}_pumping_kwh'] = 0.0
-        p2_row.update({
-            'treatment_feed_m3': 0.0, 'treatment_reject_m3': 0.0,
-            'treatment_energy_kwh': 0.0, 'pumping_energy_kwh': 0.0,
-            'groundwater_cost': 0.0, 'municipal_cost': 0.0,
-            'sourced_tds_ppm': 0.0,
-            'gw_untreated_to_tank_m3': 0.0, 'gw_treated_to_tank_m3': 0.0,
-            'municipal_to_tank_m3': 0.0, 'total_groundwater_extracted_m3': 0.0,
-        })
+    # 5. Second source+draw pass
+    demand_remaining, draw_fresh, draw_fresh_tds = _second_source_pass(
+        demand_remaining, tds_req, wells, treatment, municipal,
+        tank, gw_cap_state, muni_cap_state, row, source_priority,
+        draw_fresh, draw_fresh_tds)
 
-        _source_water(demand_remaining, tds_req, wells, treatment, municipal,
-                      tank, gw_cap_state, muni_cap_state, p2_row, source_priority)
-
-        # Accumulate second-pass accounting into main row
-        for w in wells:
-            row[f'{w["name"]}_extraction_m3'] += p2_row[f'{w["name"]}_extraction_m3']
-            row[f'{w["name"]}_pumping_kwh'] += p2_row[f'{w["name"]}_pumping_kwh']
-        row['gw_untreated_to_tank_m3'] += p2_row['gw_untreated_to_tank_m3']
-        row['gw_treated_to_tank_m3'] += p2_row['gw_treated_to_tank_m3']
-        row['municipal_to_tank_m3'] += p2_row['municipal_to_tank_m3']
-        row['total_groundwater_extracted_m3'] += p2_row['total_groundwater_extracted_m3']
-        row['pumping_energy_kwh'] += p2_row['pumping_energy_kwh']
-        row['treatment_energy_kwh'] += p2_row['treatment_energy_kwh']
-        row['treatment_feed_m3'] += p2_row['treatment_feed_m3']
-        row['treatment_reject_m3'] += p2_row['treatment_reject_m3']
-        row['groundwater_cost'] += p2_row['groundwater_cost']
-        row['municipal_cost'] += p2_row['municipal_cost']
-
-        if tank['fill_m3'] > 0:
-            draw2 = min(demand_remaining, tank['fill_m3'])
-            draw_fresh_tds = _blend_tds(
-                [draw_fresh, draw2],
-                [draw_fresh_tds, tank['tds_ppm']])
-            draw_fresh += draw2
-            tank['fill_m3'] -= draw2
-            demand_remaining -= draw2
-            if tank['fill_m3'] < 1e-9:
-                tank['fill_m3'] = 0.0
-                tank['tds_ppm'] = 0.0
-
-    # Look-ahead prefill: buffer water for upcoming peak days
-    # Smoothing strategy handles buffer accumulation via target-rate sourcing
+    # 6. Look-ahead prefill
     prefill_vol = 0.0
     if (strategy != 'maximize_treatment_efficiency'
             and policy.get('prefill_enabled', False)
@@ -1109,8 +1193,7 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             tds_req, upcoming_demands, upcoming_tds)
     row['prefill_m3'] = prefill_vol
 
-    # Apply treatment efficiency curve: adjust treatment energy by
-    # utilization-based multiplier from the efficiency curve CSV.
+    # Apply treatment efficiency curve
     efficiency_df = treatment.get('efficiency_df')
     if efficiency_df is not None and row['treatment_feed_m3'] > 0:
         max_feed = treatment['throughput_m3_hr'] * 24
@@ -1122,26 +1205,14 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             row['treatment_energy_kwh'] *= multiplier
             row['treatment_energy_multiplier'] = multiplier
 
-    # Compute utilization after all source passes + prefill have finalized
     if strategy == 'maximize_treatment_efficiency':
         max_feed = treatment['throughput_m3_hr'] * 24
         row['treatment_utilization_pct'] = (
             row['treatment_feed_m3'] / max_feed * 100 if max_feed > 0 else 0.0)
 
-    # Post-irrigation drain: if next day needs stricter TDS than what the
-    # tank currently holds, deliver all remaining tank water to fields now
-    # so the tank starts empty tomorrow morning for a fresh fill.
-    drain_vol = 0.0
-    drain_tds = 0.0
-    if (tank['fill_m3'] > 0
-            and not math.isnan(next_tds_req)
-            and tank['tds_ppm'] > next_tds_req):
-        drain_vol = tank['fill_m3']
-        drain_tds = tank['tds_ppm']
-        tank['fill_m3'] = 0.0
-        tank['tds_ppm'] = 0.0
-        if flush_reason == 'none':
-            flush_reason = 'look_ahead_drain'
+    # 7. Look-ahead drain
+    drain_vol, drain_tds, flush_reason = _look_ahead_drain(
+        tank, next_tds_req, flush_reason)
 
     # Finalize delivery totals, energy/cost sums, and policy metadata
     deliveries = {

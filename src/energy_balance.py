@@ -774,12 +774,103 @@ _DEFICIT_ORDER = {
 }
 
 
+def _handle_surplus(surplus, strategy, row, battery_specs, battery_state,
+                    grid_mode, grid_cap_state):
+    """Dispatch renewable surplus through battery, export, and curtailment.
+
+    Modifies row dict in place.
+
+    Args:
+        surplus: Surplus energy in kWh (positive).
+        strategy: Dispatch strategy string.
+        row: Mutable row dict to update with dispatch results.
+        battery_specs: Battery specs dict or None.
+        battery_state: Mutable battery state dict.
+        grid_mode: Grid interaction mode string.
+        grid_cap_state: Monthly grid cap tracking dict.
+    """
+    row['renewable_surplus_kwh'] = surplus
+    remaining = surplus
+
+    for action in _SURPLUS_ORDER[strategy]:
+        if remaining <= 0:
+            break
+
+        if action == 'battery' and battery_specs is not None:
+            accepted, stored = _charge_battery(
+                remaining, battery_specs, battery_state, renewable=True)
+            row['battery_charge_kwh'] += accepted
+            row['_battery_charge_renewable_kwh'] = row.get('_battery_charge_renewable_kwh', 0.0) + accepted
+            remaining -= accepted
+
+        elif action == 'export':
+            export_avail = _grid_export_available(grid_mode, grid_cap_state)
+            exported = min(remaining, export_avail)
+            row['grid_export_kwh'] += exported
+            remaining -= exported
+
+        elif action == 'curtail':
+            row['curtailed_kwh'] += remaining
+            remaining = 0.0
+
+
+def _handle_deficit(deficit, strategy, row, battery_specs, battery_state,
+                    generator_specs, grid_mode, grid_cap_state):
+    """Fulfill energy deficit through battery, grid, and generator.
+
+    Modifies row dict in place.
+
+    Args:
+        deficit: Deficit energy in kWh (positive).
+        strategy: Dispatch strategy string.
+        row: Mutable row dict to update with dispatch results.
+        battery_specs: Battery specs dict or None.
+        battery_state: Mutable battery state dict.
+        generator_specs: Generator specs dict or None.
+        grid_mode: Grid interaction mode string.
+        grid_cap_state: Monthly grid cap tracking dict.
+    """
+    remaining = deficit
+
+    for action in _DEFICIT_ORDER[strategy]:
+        if remaining <= 0:
+            break
+
+        if action == 'battery' and battery_specs is not None:
+            delivered, soc_draw, ren_del = _discharge_battery(
+                remaining, battery_specs, battery_state)
+            row['battery_discharge_kwh'] += delivered
+            row['_discharge_renewable_kwh'] = row.get('_discharge_renewable_kwh', 0.0) + ren_del
+            remaining -= delivered
+
+        elif action == 'grid':
+            import_avail = _grid_import_available(grid_mode, grid_cap_state)
+            imported = min(remaining, import_avail)
+            row['grid_import_kwh'] += imported
+            remaining -= imported
+
+        elif action == 'generator' and generator_specs is not None:
+            delivered, excess, fuel, hours = _run_generator(
+                remaining, generator_specs)
+            row['generator_kwh'] += delivered
+            row['generator_fuel_liters'] += fuel
+            row['generator_runtime_hours'] += hours
+            remaining -= delivered
+
+            # Generator min-load excess: charge battery then curtail
+            if excess > 0:
+                if battery_specs is not None:
+                    accepted, stored = _charge_battery(
+                        excess, battery_specs, battery_state, renewable=False)
+                    row['battery_charge_kwh'] += accepted
+                    excess -= accepted
+                row['curtailed_kwh'] += excess
+
+    row['deficit_kwh'] = max(0.0, remaining)
+
+
 def _dispatch_day(day, total_demand_kwh, community_demand_kwh, water_demand_kwh,
-                  total_renewable_kwh, total_solar_kwh, total_wind_kwh,
-                  battery_specs, generator_specs, battery_state,
-                  strategy, grid_mode, grid_cap_state,
-                  net_metering_state, ag_tariff, commercial_tariff,
-                  diesel_price, export_rate):
+                  total_renewable_kwh, total_solar_kwh, total_wind_kwh, ctx):
     """Dispatch energy for a single day.
 
     Args:
@@ -790,21 +881,19 @@ def _dispatch_day(day, total_demand_kwh, community_demand_kwh, water_demand_kwh,
         total_renewable_kwh: Total renewable generation.
         total_solar_kwh: Solar subtotal (pass-through).
         total_wind_kwh: Wind subtotal (pass-through).
-        battery_specs: Battery specs dict or None.
-        generator_specs: Generator specs dict or None.
-        battery_state: Mutable carry-forward dict.
-        strategy: Dispatch strategy string.
-        grid_mode: Grid interaction mode string.
-        grid_cap_state: Monthly grid cap tracking dict.
-        net_metering_state: Net metering tracking dict.
-        ag_tariff: Agricultural electricity rate (USD/kWh).
-        commercial_tariff: Commercial electricity rate (USD/kWh).
-        diesel_price: Diesel price (USD/liter).
-        export_rate: Grid export compensation rate (USD/kWh).
+        ctx: Dispatch context dict with keys: battery_specs, generator_specs,
+            battery_state, strategy, grid_mode, grid_cap_state,
+            net_metering_state, ag_tariff, commercial_tariff, diesel_price,
+            export_rate.
 
     Returns:
         Tuple of (row_dict, battery_state).
     """
+    battery_specs = ctx['battery_specs']
+    battery_state = ctx['battery_state']
+    strategy = ctx['strategy']
+    grid_mode = ctx['grid_mode']
+
     row = _init_energy_dispatch_row(
         day, community_demand_kwh, water_demand_kwh, total_demand_kwh,
         total_solar_kwh, total_wind_kwh, total_renewable_kwh, battery_specs
@@ -813,94 +902,32 @@ def _dispatch_day(day, total_demand_kwh, community_demand_kwh, water_demand_kwh,
     row['policy_grid_mode'] = grid_mode
 
     net_load = total_demand_kwh - total_renewable_kwh
-    renewable_consumed = min(total_renewable_kwh, total_demand_kwh)
-    row['renewable_consumed_kwh'] = renewable_consumed
+    row['renewable_consumed_kwh'] = min(total_renewable_kwh, total_demand_kwh)
 
     if net_load <= 0:
-        # --- SURPLUS ---
-        surplus = -net_load
-        row['renewable_surplus_kwh'] = surplus
-        remaining = surplus
-
-        for action in _SURPLUS_ORDER[strategy]:
-            if remaining <= 0:
-                break
-
-            if action == 'battery' and battery_specs is not None:
-                accepted, stored = _charge_battery(
-                    remaining, battery_specs, battery_state, renewable=True)
-                row['battery_charge_kwh'] += accepted
-                row['_battery_charge_renewable_kwh'] = row.get('_battery_charge_renewable_kwh', 0.0) + accepted
-                remaining -= accepted
-
-            elif action == 'export':
-                export_avail = _grid_export_available(grid_mode, grid_cap_state)
-                exported = min(remaining, export_avail)
-                row['grid_export_kwh'] += exported
-                remaining -= exported
-
-            elif action == 'curtail':
-                row['curtailed_kwh'] += remaining
-                remaining = 0.0
-
+        _handle_surplus(-net_load, strategy, row, battery_specs, battery_state,
+                        grid_mode, ctx['grid_cap_state'])
     else:
-        # --- DEFICIT ---
-        deficit = net_load
-        remaining = deficit
-
-        for action in _DEFICIT_ORDER[strategy]:
-            if remaining <= 0:
-                break
-
-            if action == 'battery' and battery_specs is not None:
-                delivered, soc_draw, ren_del = _discharge_battery(
-                    remaining, battery_specs, battery_state)
-                row['battery_discharge_kwh'] += delivered
-                row['_discharge_renewable_kwh'] = row.get('_discharge_renewable_kwh', 0.0) + ren_del
-                remaining -= delivered
-
-            elif action == 'grid':
-                import_avail = _grid_import_available(grid_mode, grid_cap_state)
-                imported = min(remaining, import_avail)
-                row['grid_import_kwh'] += imported
-                remaining -= imported
-
-            elif action == 'generator' and generator_specs is not None:
-                delivered, excess, fuel, hours = _run_generator(
-                    remaining, generator_specs)
-                row['generator_kwh'] += delivered
-                row['generator_fuel_liters'] += fuel
-                row['generator_runtime_hours'] += hours
-                remaining -= delivered
-
-                # Generator min-load excess: charge battery then curtail
-                if excess > 0:
-                    if battery_specs is not None:
-                        accepted, stored = _charge_battery(
-                            excess, battery_specs, battery_state, renewable=False)
-                        row['battery_charge_kwh'] += accepted
-                        excess -= accepted
-                    row['curtailed_kwh'] += excess
-
-        row['deficit_kwh'] = max(0.0, remaining)
+        _handle_deficit(net_load, strategy, row, battery_specs, battery_state,
+                        ctx['generator_specs'], grid_mode, ctx['grid_cap_state'])
 
     # --- Costs ---
-    row['generator_fuel_cost'] = row['generator_fuel_liters'] * diesel_price
+    row['generator_fuel_cost'] = row['generator_fuel_liters'] * ctx['diesel_price']
 
     if grid_mode == 'net_metering':
         row['grid_import_cost'] = _compute_net_metering_cost(
             row['grid_import_kwh'], row['grid_export_kwh'],
-            net_metering_state, ag_tariff, commercial_tariff,
+            ctx['net_metering_state'], ctx['ag_tariff'], ctx['commercial_tariff'],
             community_demand_kwh, water_demand_kwh, total_demand_kwh
         )
     else:
         row['grid_import_cost'] = _compute_grid_import_cost(
             row['grid_import_kwh'], community_demand_kwh, water_demand_kwh,
-            total_demand_kwh, ag_tariff, commercial_tariff
+            total_demand_kwh, ctx['ag_tariff'], ctx['commercial_tariff']
         )
 
     if grid_mode == 'feed_in_tariff':
-        row['grid_export_revenue'] = row['grid_export_kwh'] * export_rate
+        row['grid_export_revenue'] = row['grid_export_kwh'] * ctx['export_rate']
     elif grid_mode == 'net_metering':
         row['grid_export_revenue'] = 0.0
     else:
@@ -973,6 +1000,18 @@ def _run_simulation(energy_df, demand_df, water_energy_series,
         'monthly_export': 0.0,
     }
 
+    # Dispatch context: equipment, policy, and mutable state
+    ctx = {
+        'battery_specs': battery_specs,
+        'generator_specs': generator_specs,
+        'battery_state': battery_state,
+        'strategy': strategy,
+        'grid_mode': grid_mode,
+        'grid_cap_state': grid_cap_state,
+        'net_metering_state': net_metering_state,
+        'export_rate': export_rate,
+    }
+
     # Index energy and demand DataFrames by day for lookup
     energy_lookup = energy_df.set_index('day')
     demand_lookup = demand_df.set_index('day')
@@ -1014,9 +1053,9 @@ def _run_simulation(energy_df, demand_df, water_energy_series,
         water_demand = water_energy_series[day_ts]
         total_demand = community_demand + water_demand
 
-        ag_tariff = ag_price_daily.loc[day_ts]
-        commercial_tariff = commercial_price_daily.loc[day_ts]
-        diesel_price = diesel_price_daily.loc[day_ts]
+        ctx['ag_tariff'] = ag_price_daily.loc[day_ts]
+        ctx['commercial_tariff'] = commercial_price_daily.loc[day_ts]
+        ctx['diesel_price'] = diesel_price_daily.loc[day_ts]
 
         row, battery_state = _dispatch_day(
             day=day_ts,
@@ -1026,17 +1065,7 @@ def _run_simulation(energy_df, demand_df, water_energy_series,
             total_renewable_kwh=total_renewable,
             total_solar_kwh=total_solar,
             total_wind_kwh=total_wind,
-            battery_specs=battery_specs,
-            generator_specs=generator_specs,
-            battery_state=battery_state,
-            strategy=strategy,
-            grid_mode=grid_mode,
-            grid_cap_state=grid_cap_state,
-            net_metering_state=net_metering_state,
-            ag_tariff=ag_tariff,
-            commercial_tariff=commercial_tariff,
-            diesel_price=diesel_price,
-            export_rate=export_rate,
+            ctx=ctx,
         )
 
         # Update monthly accumulators

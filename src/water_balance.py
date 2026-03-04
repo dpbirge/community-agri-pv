@@ -114,6 +114,69 @@ def _order_balance_columns(result):
     return result[ordered]
 
 
+def _compute_delivery_and_energy(result, field_specs):
+    """Compute per-field delivery volumes, application energy, and cost rollups.
+
+    Modifies result DataFrame in place.
+
+    Args:
+        result: Merged water balance DataFrame.
+        field_specs: Dict of field irrigation specs from get_field_irrigation_specs.
+    """
+    for field_name in field_specs:
+        demand_col = f'{field_name}_demand_m3'
+        delivered_col = f'{field_name}_delivered_m3'
+        energy_col = f'{field_name}_application_energy_kwh'
+        if demand_col in result.columns:
+            irrig_demand = result['irrigation_demand_m3']
+            delivery_ratio = result['irrigation_delivered_m3'].where(
+                irrig_demand > 0, 0.0) / irrig_demand.where(irrig_demand > 0, 1.0)
+            result[delivered_col] = (result[demand_col] * delivery_ratio).round(3)
+            rate = field_specs[field_name]['application_energy_kwh_per_m3']
+            result[energy_col] = (result[delivered_col] * rate).round(3)
+
+    app_energy_cols = [c for c in result.columns if c.endswith('_application_energy_kwh')]
+    result['application_energy_kwh'] = result[app_energy_cols].sum(axis=1).round(3) if app_energy_cols else 0.0
+
+    for col in ['pumping_energy_kwh', 'treatment_energy_kwh', 'application_energy_kwh']:
+        result[col] = result[col].round(3)
+    result['total_water_energy_kwh'] = (
+        result['pumping_energy_kwh'] +
+        result['treatment_energy_kwh'] +
+        result['application_energy_kwh']
+    ).round(3)
+
+    for col in ['municipal_irrigation_cost', 'municipal_community_cost', 'groundwater_cost']:
+        result[col] = result[col].round(3)
+    result['total_water_cost'] = (
+        result['municipal_irrigation_cost'] +
+        result['municipal_community_cost'] +
+        result['groundwater_cost']
+    ).round(3)
+
+
+def _compute_balance_diagnostics(result):
+    """Compute over-delivery and physical tank conservation check.
+
+    Modifies result DataFrame in place.
+
+    Args:
+        result: Merged water balance DataFrame with delivery and demand columns.
+    """
+    result['over_delivery_m3'] = (
+        result['irrigation_delivered_m3'] -
+        result['irrigation_demand_m3'] +
+        result['deficit_m3']
+    ).clip(lower=0.0).round(3)
+
+    result['balance_check'] = (
+        result['tank_volume_m3'].shift(1)
+        + result['total_sourced_to_tank_m3']
+        - result['irrigation_delivered_m3']
+        - result['tank_volume_m3']
+    ).round(6)
+
+
 def compute_daily_water_balance(farm_profiles_path, water_systems_path,
                                 water_policy_path, community_config_path,
                                 registry_path, *,
@@ -215,55 +278,8 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
     # Rename irrigation municipal cost for clarity
     result = result.rename(columns={'municipal_cost': 'municipal_irrigation_cost'})
 
-    # Per-field delivered volume (proportional to demand when deficit exists)
-    for field_name in field_specs:
-        demand_col = f'{field_name}_demand_m3'
-        delivered_col = f'{field_name}_delivered_m3'
-        energy_col = f'{field_name}_application_energy_kwh'
-        if demand_col in result.columns:
-            irrig_demand = result['irrigation_demand_m3']
-            delivery_ratio = result['irrigation_delivered_m3'].where(
-                irrig_demand > 0, 0.0) / irrig_demand.where(irrig_demand > 0, 1.0)
-            result[delivered_col] = (result[demand_col] * delivery_ratio).round(3)
-            rate = field_specs[field_name]['application_energy_kwh_per_m3']
-            result[energy_col] = (result[delivered_col] * rate).round(3)
-
-    # Total application energy
-    app_energy_cols = [c for c in result.columns if c.endswith('_application_energy_kwh')]
-    result['application_energy_kwh'] = result[app_energy_cols].sum(axis=1).round(3) if app_energy_cols else 0.0
-
-    # Total water energy (pumping + treatment + application)
-    for col in ['pumping_energy_kwh', 'treatment_energy_kwh', 'application_energy_kwh']:
-        result[col] = result[col].round(3)
-    result['total_water_energy_kwh'] = (
-        result['pumping_energy_kwh'] +
-        result['treatment_energy_kwh'] +
-        result['application_energy_kwh']
-    ).round(3)
-
-    # Total water cost (irrigation + community)
-    for col in ['municipal_irrigation_cost', 'municipal_community_cost', 'groundwater_cost']:
-        result[col] = result[col].round(3)
-    result['total_water_cost'] = (
-        result['municipal_irrigation_cost'] +
-        result['municipal_community_cost'] +
-        result['groundwater_cost']
-    ).round(3)
-
-    # Over-delivery from tank flush (fields receive more than demanded)
-    result['over_delivery_m3'] = (
-        result['irrigation_delivered_m3'] -
-        result['irrigation_demand_m3'] +
-        result['deficit_m3']
-    ).clip(lower=0.0).round(3)
-
-    # Physical tank conservation: start_of_day + sourced = delivered + end_of_day
-    result['balance_check'] = (
-        result['tank_volume_m3'].shift(1)
-        + result['total_sourced_to_tank_m3']
-        - result['irrigation_delivered_m3']
-        - result['tank_volume_m3']
-    ).round(6)
+    _compute_delivery_and_energy(result, field_specs)
+    _compute_balance_diagnostics(result)
 
     return _order_balance_columns(result)
 

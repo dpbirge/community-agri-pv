@@ -688,6 +688,75 @@ def _compute_utilization_metrics(sim_df, treatment_throughput_m3_hr,
 
 
 # ---------------------------------------------------------------------------
+# Shared deficit-reduction iteration
+# ---------------------------------------------------------------------------
+
+def _expand_storage(storage, storage_df):
+    """Expand storage capacity by 50% for deficit reduction iteration.
+
+    Args:
+        storage: Current storage dict.
+        storage_df: Storage catalog DataFrame.
+
+    Returns:
+        New storage dict with expanded capacity and updated costs.
+    """
+    new_cap = min(_SIZING_MAX_STORAGE_M3, int(storage['capacity_m3'] * 1.5))
+    stor_row = storage_df[storage_df['storage_type'] == storage['storage_type']].iloc[0]
+    return {
+        'storage_type': storage['storage_type'],
+        'capacity_m3': new_cap,
+        'capital_cost': stor_row['capital_cost_per_m3'] * new_cap,
+        'om_cost_per_year': stor_row['om_cost_per_m3_per_year'] * new_cap,
+    }
+
+
+def _iterate_until_target(metrics, target_deficit_fraction, wells, ff, ft, bt,
+                          storage, storage_df, max_wells, select_wells_fn,
+                          rebuild_fn, label='Sizing'):
+    """Iteratively reduce deficit by expanding wells or storage.
+
+    Shared loop used by both size_water_system and optimize_water_system.
+    Each iteration either adds a well (if below max_wells) or expands storage
+    by 50%. The rebuild_fn callback handles the function-specific steps of
+    rebuilding config, running simulation, and computing metrics.
+
+    Args:
+        metrics: Initial metrics dict with 'deficit_fraction' key.
+        target_deficit_fraction: Acceptable deficit as fraction of demand.
+        wells: Current well list.
+        ff: Feed factor.
+        ft: Treatment fraction.
+        bt: Blended well TDS.
+        storage: Current storage dict.
+        storage_df: Storage catalog DataFrame.
+        max_wells: Maximum number of wells to select.
+        select_wells_fn: Callable(n_wells) -> (wells, ff, ft, bt).
+        rebuild_fn: Callable(wells, ff, ft, bt, storage) -> (metrics, extras).
+        label: Logging label for iteration messages.
+
+    Returns:
+        Tuple of (wells, ff, ft, bt, storage, metrics, extras).
+    """
+    extras = {}
+    for iteration in range(3):
+        if metrics['deficit_fraction'] <= target_deficit_fraction:
+            break
+        logger.info('%s iteration %d: deficit %.4f > target %.4f',
+                    label, iteration + 1, metrics['deficit_fraction'],
+                    target_deficit_fraction)
+
+        if len(wells) < max_wells:
+            wells, ff, ft, bt = select_wells_fn(len(wells) + 1)
+        else:
+            storage = _expand_storage(storage, storage_df)
+
+        metrics, extras = rebuild_fn(wells, ff, ft, bt, storage)
+
+    return wells, ff, ft, bt, storage, metrics, extras
+
+
+# ---------------------------------------------------------------------------
 # Public API — from-scratch sizing
 # ---------------------------------------------------------------------------
 
@@ -798,42 +867,28 @@ def size_water_system(irrigation_demand_df, registry_path, *,
                                       treatment_throughput, treatment_df, bt)
 
     # Step 7: Iterate if deficit exceeds target
-    for iteration in range(3):
-        if metrics['deficit_fraction'] <= target_deficit_fraction:
-            break
-        logger.info('Sizing iteration %d: deficit %.4f > target %.4f',
-                    iteration + 1, metrics['deficit_fraction'], target_deficit_fraction)
+    def _select_fn(n_wells):
+        return _select_wells(well_df, pump_df, demand['p95_daily_demand_m3'],
+                             strictest_tds, goal_tds, treatment_df, n_wells, objective)
 
-        if len(wells) < max_wells:
-            wells, ff, ft, bt = _select_wells(
-                well_df, pump_df, demand['p95_daily_demand_m3'],
-                strictest_tds, goal_tds, treatment_df, len(wells) + 1, objective)
-        else:
-            new_cap = min(_SIZING_MAX_STORAGE_M3, int(storage['capacity_m3'] * 1.5))
-            stor_row = storage_df[storage_df['storage_type'] == storage['storage_type']].iloc[0]
-            storage = {
-                'storage_type': storage['storage_type'],
-                'capacity_m3': new_cap,
-                'capital_cost': stor_row['capital_cost_per_m3'] * new_cap,
-                'om_cost_per_year': stor_row['om_cost_per_m3_per_year'] * new_cap,
-            }
+    def _rebuild_fn(wells_, ff_, ft_, bt_, storage_):
+        nonlocal treatment_throughput
+        wec = sum(w['flow_m3_day'] for w in wells_)
+        if ft_ > 0 and bt_ > 0:
+            tr = _snap_tds_to_band(bt_, treatment_df)
+            recovery = tr['recovery_rate_pct'] / 100.0
+            demand_based = (demand['p95_daily_demand_m3'] * ft_) / (24 * recovery)
+            treatment_throughput = min(demand_based, wec / 24)
+        wd = wec / ff_ if ff_ > 0 else 0.0
+        mc = _size_municipal(demand, wd, municipal_available, objective)
+        cfg = _build_sizing_config(wells_, treatment_throughput, goal_tds, mc, storage_)
+        sdf = _run_sizing_simulation(cfg, irrigation_demand_df, pump_df, treatment_df, dispatch_strategy)
+        return _compute_sizing_metrics(sdf, irrigation_demand_df, wells_, storage_,
+                                       treatment_throughput, treatment_df, bt_), {}
 
-        well_extraction_capacity = sum(w['flow_m3_day'] for w in wells)
-        if ft > 0 and bt > 0:
-            treat_row = _snap_tds_to_band(bt, treatment_df)
-            recovery = treat_row['recovery_rate_pct'] / 100.0
-            demand_based = (demand['p95_daily_demand_m3'] * ft) / (24 * recovery)
-            well_based = well_extraction_capacity / 24
-            treatment_throughput = min(demand_based, well_based)
-
-        well_delivery = well_extraction_capacity / ff if ff > 0 else 0.0
-        municipal_cfg = _size_municipal(demand, well_delivery, municipal_available, objective)
-        config = _build_sizing_config(wells, treatment_throughput, goal_tds,
-                                      municipal_cfg, storage)
-        sim_df = _run_sizing_simulation(config, irrigation_demand_df,
-                                        pump_df, treatment_df, dispatch_strategy)
-        metrics = _compute_sizing_metrics(sim_df, irrigation_demand_df, wells, storage,
-                                          treatment_throughput, treatment_df, bt)
+    wells, ff, ft, bt, storage, metrics, _ = _iterate_until_target(
+        metrics, target_deficit_fraction, wells, ff, ft, bt,
+        storage, storage_df, max_wells, _select_fn, _rebuild_fn, 'Sizing')
 
     if max_capital_budget is not None and metrics['total_capex'] > max_capital_budget:
         logger.warning('Sized system CAPEX (%.0f) exceeds budget (%.0f)',
@@ -995,50 +1050,34 @@ def optimize_water_system(irrigation_demand_df, registry_path, *,
         sim_df, treatment_throughput_m3_hr, efficiency_df)
 
     # Step 7: Iterate if deficit exceeds target
-    for iteration in range(3):
-        if metrics['deficit_fraction'] <= target_deficit_fraction:
-            break
-        logger.info('Optimizer iteration %d: deficit %.4f > target %.4f',
-                    iteration + 1, metrics['deficit_fraction'], target_deficit_fraction)
+    def _select_fn(n_wells):
+        return _select_wells_for_treatment(
+            well_df, pump_df, max_daily_feed_m3,
+            strictest_tds, goal_tds, treatment_df, n_wells, objective)
 
-        # Try adding wells first, then expand storage
-        if len(wells) < max_wells:
-            wells, ff, ft, bt = _select_wells_for_treatment(
-                well_df, pump_df, max_daily_feed_m3,
-                strictest_tds, goal_tds, treatment_df, len(wells) + 1, objective)
-        else:
-            new_cap = min(_SIZING_MAX_STORAGE_M3, int(storage['capacity_m3'] * 1.5))
-            stor_row = storage_df[storage_df['storage_type'] == storage['storage_type']].iloc[0]
-            storage = {
-                'storage_type': storage['storage_type'],
-                'capacity_m3': new_cap,
-                'capital_cost': stor_row['capital_cost_per_m3'] * new_cap,
-                'om_cost_per_year': stor_row['om_cost_per_m3_per_year'] * new_cap,
-            }
-
-        well_extraction_capacity = sum(w['flow_m3_day'] for w in wells)
-        well_delivery = well_extraction_capacity / ff if ff > 0 else 0.0
-        municipal_cfg = _size_municipal(demand, well_delivery, municipal_available, objective)
-
-        config = _build_sizing_config(wells, treatment_throughput_m3_hr, goal_tds,
-                                      municipal_cfg, storage)
-        sim_df = _run_sizing_simulation(config, irrigation_demand_df,
-                                        pump_df, treatment_df, dispatch_strategy)
-
+    def _rebuild_fn(wells_, ff_, ft_, bt_, storage_):
+        nonlocal utilization_metrics
+        wec = sum(w['flow_m3_day'] for w in wells_)
+        wd = wec / ff_ if ff_ > 0 else 0.0
+        mc = _size_municipal(demand, wd, municipal_available, objective)
+        cfg = _build_sizing_config(wells_, treatment_throughput_m3_hr, goal_tds, mc, storage_)
+        sdf = _run_sizing_simulation(cfg, irrigation_demand_df, pump_df, treatment_df, dispatch_strategy)
         if efficiency_df is not None:
-            sim_df = _apply_efficiency_adjustment(
-                sim_df, treatment_throughput_m3_hr, efficiency_df)
-
-        metrics = _compute_sizing_metrics(sim_df, irrigation_demand_df, wells, storage,
-                                          treatment_throughput_m3_hr, treatment_df, bt)
-        if bt > 0 and treatment_throughput_m3_hr > 0:
-            treat_row = _snap_tds_to_band(bt, treatment_df)
-            treatment_capex = treat_row['capital_cost_per_m3_day'] * treatment_throughput_m3_hr * 24
-            metrics['total_capex'] = round(metrics['total_capex'] - treatment_capex, 2)
-        metrics['treatment_capex_excluded'] = True
-
+            sdf = _apply_efficiency_adjustment(sdf, treatment_throughput_m3_hr, efficiency_df)
+        m = _compute_sizing_metrics(sdf, irrigation_demand_df, wells_, storage_,
+                                    treatment_throughput_m3_hr, treatment_df, bt_)
+        if bt_ > 0 and treatment_throughput_m3_hr > 0:
+            tr = _snap_tds_to_band(bt_, treatment_df)
+            tcapex = tr['capital_cost_per_m3_day'] * treatment_throughput_m3_hr * 24
+            m['total_capex'] = round(m['total_capex'] - tcapex, 2)
+        m['treatment_capex_excluded'] = True
         utilization_metrics = _compute_utilization_metrics(
-            sim_df, treatment_throughput_m3_hr, efficiency_df)
+            sdf, treatment_throughput_m3_hr, efficiency_df)
+        return m, {}
+
+    wells, ff, ft, bt, storage, metrics, _ = _iterate_until_target(
+        metrics, target_deficit_fraction, wells, ff, ft, bt,
+        storage, storage_df, max_wells, _select_fn, _rebuild_fn, 'Optimizer')
 
     if max_capital_budget is not None and metrics['total_capex'] > max_capital_budget:
         logger.warning('Optimized system CAPEX (%.0f) exceeds budget (%.0f)',
