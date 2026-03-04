@@ -16,9 +16,13 @@ Usage:
     save_energy(df, output_dir='simulation/')
 """
 
-import yaml
-import pandas as pd
+import logging
 from pathlib import Path
+
+import pandas as pd
+import yaml
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -259,13 +263,12 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
 
     expected_rows = len(pv_df)
     if len(df) < expected_rows:
-        import logging
         drop_pct = (expected_rows - len(df)) / expected_rows * 100
         msg = (f'Energy date merge dropped {expected_rows - len(df)} rows '
                f'({drop_pct:.1f}%) — PV and wind data have different date ranges')
         if drop_pct > 5:
             raise ValueError(msg)
-        logging.getLogger(__name__).warning(msg)
+        logger.warning(msg)
 
     # Reorder: day first, then agripv, community solar, wind
     agripv_cols = [c for c in agripv.columns if c != 'day'] if not agripv.empty else []

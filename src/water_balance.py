@@ -21,13 +21,14 @@ Usage:
     save_daily_water_balance(df, output_dir='simulation/')
 """
 
-import yaml
-import pandas as pd
 from pathlib import Path
 
+import pandas as pd
+import yaml
+
+from src.community_demand import compute_daily_demands
 from src.irrigation_demand import compute_irrigation_demand, get_field_irrigation_specs
 from src.water import compute_water_supply
-from src.community_demand import compute_daily_demands
 
 
 def _load_yaml(path):

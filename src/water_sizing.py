@@ -26,8 +26,9 @@ Usage:
 """
 
 import logging
-import pandas as pd
 from pathlib import Path
+
+import pandas as pd
 
 from src.water import (
     _load_yaml, _load_csv, _resolve_water_paths,
