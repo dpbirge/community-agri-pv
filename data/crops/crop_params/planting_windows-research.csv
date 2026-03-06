@@ -12,6 +12,8 @@
 #   Dates are transplanting/field dates (not nursery sowing dates). Multiple windows per crop
 #   reflect year-round irrigation capability and Egyptian three-season agriculture
 #   (winter/shitawi, summer/seifi, nili). Agri-PV shading noted where it extends viability.
+#   Offset dates (±10 days from primary/secondary windows) added for planting schedule
+#   optimization — same season length and agronomic conditions as parent window.
 # UNITS:
 #   - planting_date_mmdd: Planting date in MM-DD format (year set by simulation)
 #   - expected_season_length_days: Days from planting to final harvest
@@ -23,21 +25,57 @@
 # ASSUMPTIONS: Drip irrigation available year-round; brackish groundwater desalination; agri-PV
 #   fixed-tilt 28 degrees provides partial shading for secondary windows
 crop,planting_date_mmdd,season_label,window_type,expected_season_length_days,notes
+tomato,02-05,winter-spring,offset,135,Offset -10d from 02-15; early winter-spring planting
 tomato,02-15,winter-spring,primary,135,Early-maturing varieties; highest quality window; warm region timing
+tomato,02-25,winter-spring,offset,135,Offset +10d from 02-15; late winter-spring planting
+tomato,03-22,spring,offset,135,Offset -10d from 04-01; early spring planting
 tomato,04-01,spring,primary,135,Main national production season; optimal temperatures for fruit set
+tomato,04-11,spring,offset,135,Offset +10d from 04-01; late spring planting
+tomato,07-22,nili,offset,120,Offset -10d from 08-01; early nili planting
 tomato,08-01,nili,secondary,120,Heat-resistant varieties required; reduced yields 10-15%; ensures winter supply
+tomato,08-11,nili,offset,120,Offset +10d from 08-01; late nili planting
+tomato,10-22,fall-winter,offset,135,Offset -10d from 11-01; early fall-winter planting
 tomato,11-01,fall-winter,primary,135,Warm arid regions; cold-tolerant varieties needed for late-season growth
-potato,09-15,fall,primary,120,Export-quality nili season; tuber formation in cooling temps; Sep-Jan harvest
-potato,11-15,winter,primary,120,Second winter planting wave; harvest Mar-Apr; reliable yields
+tomato,11-11,fall-winter,offset,135,Offset +10d from 11-01; late fall-winter planting
+potato,01-05,winter-spring,offset,110,Offset -10d from 01-15; early winter-spring planting
 potato,01-15,winter-spring,secondary,110,Domestic market; good yields; risk of late-season heat stress on tubers
-onion,12-01,fall-winter,primary,150,Main Egyptian season; transplanted from Oct nursery; short-day Giza 20/Beheri varieties
+potato,01-25,winter-spring,offset,110,Offset +10d from 01-15; late winter-spring planting
+potato,09-05,fall,offset,120,Offset -10d from 09-15; early fall planting
+potato,09-15,fall,primary,120,Export-quality nili season; tuber formation in cooling temps; Sep-Jan harvest
+potato,09-25,fall,offset,120,Offset +10d from 09-15; late fall planting
+potato,11-05,winter,offset,120,Offset -10d from 11-15; early winter planting
+potato,11-15,winter,primary,120,Second winter planting wave; harvest Mar-Apr; reliable yields
+potato,11-25,winter,offset,120,Offset +10d from 11-15; late winter planting
+onion,01-05,winter,offset,150,Offset -10d from 01-15; early winter transplant
 onion,01-15,winter,primary,150,Second transplanting wave from Nov nursery; harvest Jun; reliable yields
+onion,01-25,winter,offset,150,Offset +10d from 01-15; late winter transplant
+onion,03-22,spring,offset,130,Offset -10d from 04-01; early spring planting
 onion,04-01,spring,secondary,130,Green/spring onions primarily; heat stress reduces dry bulb quality
-kale,10-01,fall,primary,85,Cool season onset; good growth; harvest Dec-Jan
-kale,12-01,winter,primary,85,Peak quality; mild Sinai winter temps 17-21C; harvest Feb-Mar
+onion,04-11,spring,offset,130,Offset +10d from 04-01; late spring planting
+onion,11-21,fall-winter,offset,150,Offset -10d from 12-01; early fall-winter transplant
+onion,12-01,fall-winter,primary,150,Main Egyptian season; transplanted from Oct nursery; short-day Giza 20/Beheri varieties
+onion,12-11,fall-winter,offset,150,Offset +10d from 12-01; late fall-winter transplant
+kale,01-22,winter-spring,offset,85,Offset -10d from 02-01; early winter-spring planting
 kale,02-01,winter-spring,primary,85,Good quality before heat onset; harvest Apr-May
+kale,02-11,winter-spring,offset,85,Offset +10d from 02-01; late winter-spring planting
+kale,03-05,spring,offset,75,Offset -10d from 03-15; early spring planting
 kale,03-15,spring,secondary,75,Only recommended under agri-PV shading; heat-tolerant variety required
+kale,03-25,spring,offset,75,Offset +10d from 03-15; late spring planting
+kale,09-21,fall,offset,85,Offset -10d from 10-01; early fall planting
+kale,10-01,fall,primary,85,Cool season onset; good growth; harvest Dec-Jan
+kale,10-11,fall,offset,85,Offset +10d from 10-01; late fall planting
+kale,11-21,winter,offset,85,Offset -10d from 12-01; early winter planting
+kale,12-01,winter,primary,85,Peak quality; mild Sinai winter temps 17-21C; harvest Feb-Mar
+kale,12-11,winter,offset,85,Offset +10d from 12-01; late winter planting
+cucumber,02-05,winter-spring,offset,95,Offset -10d from 02-15; early winter-spring planting
 cucumber,02-15,winter-spring,primary,95,Best quality; moderate temps during fruit set; Feb-May harvest
+cucumber,02-25,winter-spring,offset,95,Offset +10d from 02-15; late winter-spring planting
+cucumber,03-22,spring,offset,85,Offset -10d from 04-01; early spring planting
 cucumber,04-01,spring,secondary,85,Good yields but heat stress risk late in season; may produce bitter fruit above 35C
+cucumber,04-11,spring,offset,85,Offset +10d from 04-01; late spring planting
+cucumber,08-22,fall,offset,95,Offset -10d from 09-01; early fall planting
 cucumber,09-01,fall,primary,95,Excellent window; declining temps through season; good fruit quality
+cucumber,09-11,fall,offset,95,Offset +10d from 09-01; late fall planting
+cucumber,10-05,fall-winter,offset,95,Offset -10d from 10-15; early fall-winter planting
 cucumber,10-15,fall-winter,secondary,95,Good quality; risk of cool nights slowing growth in late season
+cucumber,10-25,fall-winter,offset,95,Offset +10d from 10-15; late fall-winter planting

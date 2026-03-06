@@ -211,7 +211,7 @@ def _schedule_basis_vector(schedule, condition, efficiency, curves_cache, date_i
         curve = curves_cache.get((crop, code, condition))
         if curve is not None:
             total = total.add(curve, fill_value=0.0)
-    result = (total.fillna(0.0) * 10 / efficiency).values
+    result = (total.reindex(date_index).fillna(0.0) * 10 / efficiency).values
     result = np.nan_to_num(result, nan=0.0, posinf=0.0, neginf=0.0)
     return result
 
@@ -267,18 +267,36 @@ def _equal_split_x0(field_groups, n_vars):
     return x0
 
 
-def _build_constraints(field_groups):
-    """Build SLSQP equality constraints: areas per field sum to original."""
+def _build_constraints(field_groups, min_planted_pct=1.0):
+    """Build SLSQP constraints for per-field area totals.
+
+    When min_planted_pct is 1.0, uses equality constraints (areas sum to
+    original). When < 1.0, uses inequality constraints allowing the
+    optimizer to reduce planted area down to min_planted_pct of original.
+    """
     constraints = []
-    for _, area, indices in field_groups:
-        constraints.append({
-            'type': 'eq',
-            'fun': lambda x, idx=indices, a=area: sum(x[i] for i in idx) - a,
-        })
+    if min_planted_pct >= 1.0:
+        for _, area, indices in field_groups:
+            constraints.append({
+                'type': 'eq',
+                'fun': lambda x, idx=indices, a=area: sum(x[i] for i in idx) - a,
+            })
+    else:
+        for _, area, indices in field_groups:
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda x, idx=indices, a=area, p=min_planted_pct: (
+                    sum(x[i] for i in idx) - a * p),
+            })
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda x, idx=indices, a=area: (
+                    a - sum(x[i] for i in idx)),
+            })
     return constraints
 
 
-def _solve_minimize_variance(B, field_groups):
+def _solve_minimize_variance(B, field_groups, min_planted_pct=1.0):
     """Minimize variance of total daily irrigation demand.
 
     var(B @ x) = mean((B @ x)^2) - mean(B @ x)^2. Both terms are
@@ -305,13 +323,13 @@ def _solve_minimize_variance(B, field_groups):
         result = scipy_minimize(
             objective, x0, jac=gradient, method='SLSQP',
             bounds=[(0, None)] * n_vars,
-            constraints=_build_constraints(field_groups),
+            constraints=_build_constraints(field_groups, min_planted_pct),
             options={'maxiter': 1000, 'ftol': 1e-12},
         )
     return result.x
 
 
-def _solve_match_supply(B, field_groups, target):
+def _solve_match_supply(B, field_groups, target, min_planted_pct=1.0):
     """Minimize squared difference between demand shape and scaled target.
 
     Target is rescaled so its mean matches initial demand mean, then
@@ -346,7 +364,7 @@ def _solve_match_supply(B, field_groups, target):
         result = scipy_minimize(
             objective, x0, jac=gradient, method='SLSQP',
             bounds=[(0, None)] * n_vars,
-            constraints=_build_constraints(field_groups),
+            constraints=_build_constraints(field_groups, min_planted_pct),
             options={'maxiter': 1000, 'ftol': 1e-12},
         )
     return result.x, scaled_target
@@ -381,22 +399,33 @@ def _build_optimized_profile(original_config, schedule_labels, x, min_area_ha):
                 'area_ha': area,
             })
 
-    # Redistribute lost area from filtering
+    # Compute target area per field: sum of optimizer allocations (including
+    # those below min_area_ha that were filtered out), capped at original
     original_areas = {}
-    for (field, _), _ in zip(schedule_labels, x):
+    allocated_areas = defaultdict(float)
+    for (field, _), area in zip(schedule_labels, x):
         original_areas[field['name']] = field['area_ha']
+        allocated_areas[field['name']] += float(area)
 
+    # Redistribute area lost to min_area_ha filtering back to largest sub-field
     for field_name, allocs in field_allocs.items():
         total_kept = sum(a['area_ha'] for a in allocs)
-        lost = original_areas.get(field_name, 0) - total_kept
+        target = min(allocated_areas[field_name], original_areas[field_name])
+        lost = target - total_kept
         if lost > 0.01 and allocs:
             largest = max(allocs, key=lambda a: a['area_ha'])
             largest['area_ha'] += lost
 
-    # Round areas and convert to native Python float (avoid numpy in YAML)
-    for allocs in field_allocs.values():
+    # Round areas, then correct the largest sub-field so the total matches
+    for field_name, allocs in field_allocs.items():
         for a in allocs:
             a['area_ha'] = round(float(a['area_ha']), 2)
+        target = round(min(allocated_areas[field_name], original_areas[field_name]), 2)
+        rounded_total = sum(a['area_ha'] for a in allocs)
+        residual = round(target - rounded_total, 2)
+        if abs(residual) > 0 and allocs:
+            largest = max(allocs, key=lambda a: a['area_ha'])
+            largest['area_ha'] = round(largest['area_ha'] + residual, 2)
 
     # Map field -> farm
     field_to_farm = {}
@@ -433,6 +462,15 @@ def _build_optimized_profile(original_config, schedule_labels, x, min_area_ha):
                     'plantings': _schedule_to_plantings(alloc['schedule']),
                 })
 
+    # Preserve fields that had no optimization variables (e.g. no valid
+    # schedule alternatives found). These were never in schedule_labels
+    # so would otherwise be silently dropped from the output.
+    optimized_field_names = set(field_allocs.keys())
+    for farm in original_config['farms']:
+        for field in farm['fields']:
+            if field['name'] not in optimized_field_names:
+                new_farms[farm['name']]['fields'].append(dict(field))
+
     config_name = original_config.get('config_name', 'farm_collective') + '_optimized'
     return {'config_name': config_name, 'farms': list(new_farms.values())}
 
@@ -467,6 +505,8 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
                                objective='minimize_variance',
                                water_policy_path=None,
                                min_area_ha=0.1,
+                               min_planted_pct=1.0,
+                               n_years=None,
                                root_dir=None):
     """Optimize planting dates and field splits to smooth irrigation demand.
 
@@ -482,6 +522,12 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
         objective: 'minimize_variance' or 'match_supply'.
         water_policy_path: Path to water_policy.yaml.
         min_area_ha: Minimum sub-field area; smaller allocations are pruned.
+        min_planted_pct: Minimum planted area as fraction of original total
+            per field (0.0-1.0). At 1.0, all area must be planted. Lower
+            values let the optimizer reduce planted area to balance demand
+            against energy supply.
+        n_years: Number of years to optimize over, starting from the first
+            year in the data. None uses all available years.
         root_dir: Repository root. Defaults to parent of settings/.
 
     Returns:
@@ -525,6 +571,10 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
     curves_cache = _preload_curves(growth_dir, all_fields, available, irrigation_policy)
     date_index = _build_date_index(curves_cache)
 
+    if n_years is not None:
+        cutoff = pd.Timestamp(year=date_index[0].year + n_years, month=1, day=1)
+        date_index = date_index[date_index < cutoff]
+
     B, field_groups, schedule_labels = _build_optimization_problem(
         fields_with_schedules, curves_cache, date_index, irrig_lookup
     )
@@ -547,7 +597,7 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
     target = None
     scaled_target = None
     if objective == 'minimize_variance':
-        x_opt = _solve_minimize_variance(B, field_groups)
+        x_opt = _solve_minimize_variance(B, field_groups, min_planted_pct)
     elif objective == 'match_supply':
         if energy_config_path is None or community_config_path is None:
             raise ValueError(
@@ -576,7 +626,7 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
         avail_series = pd.Series(available_energy.values, index=merged['day'].values)
         target = avail_series.reindex(date_index, fill_value=0.0).values
 
-        x_opt, scaled_target = _solve_match_supply(B, field_groups, target)
+        x_opt, scaled_target = _solve_match_supply(B, field_groups, target, min_planted_pct)
     else:
         raise ValueError(f"Unknown objective: {objective}")
 
@@ -589,6 +639,11 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
         farm_config, schedule_labels, x_opt, min_area_ha
     )
 
+    original_total_ha = sum(
+        f['area_ha'] for farm in farm_config['farms'] for f in farm['fields'])
+    optimized_total_ha = sum(
+        f['area_ha'] for farm in optimized_config['farms'] for f in farm['fields'])
+
     summary = {
         'objective': objective,
         'before': _demand_metrics(demand_before),
@@ -600,6 +655,10 @@ def optimize_planting_schedule(farm_profiles_path, registry_path, *,
         'n_fields_before': sum(len(f['fields']) for f in farm_config['farms']),
         'n_fields_after': sum(len(f['fields']) for f in optimized_config['farms']),
         'n_schedules_evaluated': sum(len(s) for _, s in fields_with_schedules),
+        'area_ha_before': original_total_ha,
+        'area_ha_after': optimized_total_ha,
+        'planted_area_pct': (optimized_total_ha / original_total_ha * 100
+                             if original_total_ha > 0 else 100.0),
     }
 
     return {
