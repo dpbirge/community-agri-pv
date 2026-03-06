@@ -11,16 +11,16 @@ config_name: baseline_energy_system
 # --- Solar System ---
 community_solar:
   low_density:
-    area_ha: 0.0
+    area_ha: 0.04
   medium_density:
     area_ha: 0.0
   high_density:
-    area_ha: 0.05
+    area_ha: 0.0
  
 # --- Wind System ---
 wind_turbines:
   small_turbine:
-    number: 5
+    number: 4
   medium_turbine:
     number: 0
   large_turbine:

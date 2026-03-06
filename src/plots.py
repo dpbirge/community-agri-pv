@@ -262,8 +262,8 @@ def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
         supply_data, supply_labels, supply_colors = [], [], []
         for col, label, color in [
             ('gw_treated_to_tank_m3', 'GW Treated', '#5b9bd5'),
-            ('gw_untreated_to_tank_m3', 'GW Untreated', '#a8d4f0'),
-            ('municipal_to_tank_m3', 'Municipal (Irrigation)', '#1a3a5c'),
+            ('gw_untreated_to_tank_m3', 'GW Untreated', '#1a3a5c'),
+            ('municipal_to_tank_m3', 'Municipal (Irrigation)', '#a8d4f0'),
         ]:
             if col in sub.columns:
                 supply_data.append(sub[col].values)
@@ -293,8 +293,8 @@ def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
 
         if 'municipal_to_tank_m3' in sub.columns:
             cumulative = sub['municipal_to_tank_m3'].cumsum()
-            ax_cumul.fill_between(sub['day'], cumulative, color='#1a3a5c', alpha=0.5)
-            ax_cumul.plot(sub['day'], cumulative, color='#1a3a5c', linewidth=0.8)
+            ax_cumul.fill_between(sub['day'], cumulative, color='#a8d4f0', alpha=0.5)
+            ax_cumul.plot(sub['day'], cumulative, color='#a8d4f0', linewidth=0.8)
         ax_cumul.set_title('Cumulative Municipal Water — Irrigation')
         ax_cumul.set_ylabel('Cumulative (m³)')
         cumul_peak = cumulative.iloc[-1] if 'municipal_to_tank_m3' in sub.columns else 0
@@ -308,8 +308,8 @@ def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
         source_colors = ['#f0f0f0', '#9ecae1', '#a1d99b', '#31a354', '#fdae6b', '#9467bd']
         source_map = {cat: i for i, cat in enumerate(source_categories)}
 
-        flush_categories = ['none', 'tds_exceedance', 'look_ahead_drain']
-        flush_colors = ['#f0f0f0', '#e6550d', '#fdae6b']
+        flush_categories = ['none', 'overnight_refill']
+        flush_colors = ['#f0f0f0', '#fdae6b']
         flush_map = {cat: i for i, cat in enumerate(flush_categories)}
 
         deficit_categories = ['No deficit', 'Deficit']
@@ -318,8 +318,8 @@ def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
         policy_rows = [
             (ax_src, sub['policy_primary_source'].map(lambda x: source_map.get(str(x), 0)).values,
              source_colors, source_categories, 'Primary Source'),
-            (ax_flush, sub['policy_flush_reason'].map(lambda x: flush_map.get(str(x), 0)).values,
-             flush_colors, flush_categories, 'Flush Reason'),
+            (ax_flush, sub['policy_tds_action'].map(lambda x: flush_map.get(str(x), 0)).values,
+             flush_colors, flush_categories, 'TDS Action'),
             (ax_deficit, sub['policy_deficit'].astype(int).values,
              deficit_colors, deficit_categories, 'Deficit'),
         ]
@@ -359,15 +359,15 @@ def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
 # Energy balance visualization
 # ---------------------------------------------------------------------------
 
-def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35):
+def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35, clip=True):
     """Combined energy supply, demand, and battery state on a three-panel plot.
 
-    Top panel: stacked supply sources meeting demand (renewable consumed,
+    Top panel: stacked supply sources meeting demand (solar direct, wind direct,
     battery discharge, grid import, generator) with total demand as a line
-    overlay and battery SOC as a red line on a secondary axis.
+    overlay and battery SOC as a red line.
 
-    Middle panel: stacked surplus disposition (battery charge, grid export,
-    curtailed) with renewable surplus as a solid green line overlay.
+    Middle panel: stacked surplus disposition (battery charge, grid export
+    split by solar/wind proportion, curtailed) with renewable surplus line.
 
     Bottom panel: cumulative net metering (export - import) with green fill
     for net credit and red fill for net debit.
@@ -377,6 +377,9 @@ def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35):
         years: Number of years to plot from the start. Default 1.
         ylim: Upper limit for the supply panel y-axis (kWh). None = auto.
         hspace: Vertical spacing between subplots. Default 0.35.
+        clip: If True (default), supply stack shows dispatched sources clipped
+            to demand. If False, shows full solar/wind generation plus dispatch
+            sources so the demand line overlays the total supply.
 
     Returns:
         matplotlib Figure.
@@ -400,18 +403,49 @@ def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35):
                 color='red', linewidth=1.0, label='Battery SOC', zorder=5
             )
 
-        # Stacked supply areas
+        # Stacked supply areas (renewable split into solar/wind by proportion)
+        import numpy as np
+        total_re = sub['total_solar_kwh'] + sub['total_wind_kwh']
+        solar_frac = np.where(total_re > 0, sub['total_solar_kwh'] / total_re, 0.5)
+        wind_frac = 1.0 - solar_frac
+
         supply_data, supply_labels, supply_colors = [], [], []
-        for col, label, color in [
-            ('renewable_consumed_kwh', 'Renewable (direct)', '#66bb6a'),
-            ('battery_discharge_kwh', 'Battery Discharge', '#ffa726'),
-            ('grid_import_kwh', 'Grid Import', '#5b9bd5'),
-            ('generator_kwh', 'Generator', '#ef5350'),
-        ]:
-            if col in sub.columns:
-                supply_data.append(sub[col].values)
-                supply_labels.append(label)
-                supply_colors.append(color)
+        if clip:
+            if 'renewable_consumed_kwh' in sub.columns:
+                consumed = sub['renewable_consumed_kwh'].values
+                supply_data.append(consumed * solar_frac)
+                supply_labels.append('Solar (direct)')
+                supply_colors.append('#ffd54f')
+                supply_data.append(consumed * wind_frac)
+                supply_labels.append('Wind (direct)')
+                supply_colors.append('#42a5f5')
+            for col, label, color in [
+                ('battery_discharge_kwh', 'Battery Discharge', '#e65100'),
+                ('grid_import_kwh', 'Grid Import', '#333333'),
+                ('generator_kwh', 'Generator', '#666666'),
+            ]:
+                if col in sub.columns:
+                    supply_data.append(sub[col].values)
+                    supply_labels.append(label)
+                    supply_colors.append(color)
+        else:
+            if 'total_solar_kwh' in sub.columns:
+                supply_data.append(sub['total_solar_kwh'].values)
+                supply_labels.append('Solar')
+                supply_colors.append('#ffd54f')
+            if 'total_wind_kwh' in sub.columns:
+                supply_data.append(sub['total_wind_kwh'].values)
+                supply_labels.append('Wind')
+                supply_colors.append('#42a5f5')
+            for col, label, color in [
+                ('battery_discharge_kwh', 'Battery Discharge', '#e65100'),
+                ('grid_import_kwh', 'Grid Import', '#333333'),
+                ('generator_kwh', 'Generator', '#666666'),
+            ]:
+                if col in sub.columns:
+                    supply_data.append(sub[col].values)
+                    supply_labels.append(label)
+                    supply_colors.append(color)
         if supply_data:
             ax_supply.stackplot(sub['day'], supply_data, labels=supply_labels,
                                 colors=supply_colors, alpha=0.7, zorder=2)
@@ -439,15 +473,22 @@ def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35):
         # --- Bottom panel: surplus disposition ---
 
         surplus_data, surplus_labels, surplus_colors = [], [], []
-        for col, label, color in [
-            ('battery_charge_kwh', 'Battery Charge', '#ffa726'),
-            ('grid_export_kwh', 'Grid Export', '#42a5f5'),
-            ('curtailed_kwh', 'Curtailed', '#bdbdbd'),
-        ]:
-            if col in sub.columns:
-                surplus_data.append(sub[col].values)
-                surplus_labels.append(label)
-                surplus_colors.append(color)
+        if 'battery_charge_kwh' in sub.columns:
+            surplus_data.append(sub['battery_charge_kwh'].values)
+            surplus_labels.append('Battery Charge')
+            surplus_colors.append('#e65100')
+        if 'grid_export_kwh' in sub.columns:
+            export = sub['grid_export_kwh'].values
+            surplus_data.append(export * solar_frac)
+            surplus_labels.append('Grid Export (Solar)')
+            surplus_colors.append('#ffd54f')
+            surplus_data.append(export * wind_frac)
+            surplus_labels.append('Grid Export (Wind)')
+            surplus_colors.append('#42a5f5')
+        if 'curtailed_kwh' in sub.columns:
+            surplus_data.append(sub['curtailed_kwh'].values)
+            surplus_labels.append('Curtailed')
+            surplus_colors.append('#bdbdbd')
         if surplus_data:
             ax_surplus.stackplot(sub['day'], surplus_data, labels=surplus_labels,
                                  colors=surplus_colors, alpha=0.7, zorder=2)
@@ -455,7 +496,7 @@ def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35):
         # Renewable surplus line
         if 'renewable_surplus_kwh' in sub.columns:
             ax_surplus.plot(sub['day'], sub['renewable_surplus_kwh'],
-                            color='green', linewidth=0.8, linestyle='-',
+                            color='black', linewidth=0.8, linestyle='-',
                             label='Renewable Surplus', zorder=4)
 
         ax_surplus.set_ylabel('Energy (kWh/day)')

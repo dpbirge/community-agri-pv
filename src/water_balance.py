@@ -67,8 +67,7 @@ def _order_balance_columns(result):
         'municipal_community_m3',
     ]
 
-    delivery_cols = ['irrigation_delivered_m3', 'tank_flush_delivered_m3',
-                     'safety_flush_m3', 'look_ahead_drain_m3', 'deficit_m3']
+    delivery_cols = ['irrigation_delivered_m3', 'overnight_refill_m3', 'deficit_m3']
     delivery_cols += sorted([c for c in result.columns if c.endswith('_delivered_m3')
                              and c not in delivery_cols])
 
@@ -87,7 +86,7 @@ def _order_balance_columns(result):
 
     balance_cols = ['over_delivery_m3', 'balance_check']
 
-    policy_cols = ['policy_strategy', 'policy_primary_source', 'policy_flush_reason', 'policy_deficit']
+    policy_cols = ['policy_strategy', 'policy_primary_source', 'policy_tds_action', 'policy_deficit']
 
     # Monthly cap tracking
     cap_cols = ['gw_cap_used_month_m3', 'muni_cap_used_month_m3',
@@ -175,7 +174,6 @@ def _compute_balance_diagnostics(result):
         result['tank_volume_m3'].shift(1)
         + result['total_sourced_to_tank_m3']
         - result['irrigation_delivered_m3']
-        - result['look_ahead_drain_m3']
         - result['tank_volume_m3']
     ).round(6)
 
