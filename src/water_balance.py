@@ -130,8 +130,9 @@ def _compute_delivery_and_energy(result, field_specs):
         energy_col = f'{field_name}_application_energy_kwh'
         if demand_col in result.columns:
             irrig_demand = result['irrigation_demand_m3']
-            delivery_ratio = result['irrigation_delivered_m3'].where(
+            delivery_ratio = (result['irrigation_delivered_m3'].where(
                 irrig_demand > 0, 0.0) / irrig_demand.where(irrig_demand > 0, 1.0)
+            ).clip(upper=1.0)
             result[delivered_col] = (result[demand_col] * delivery_ratio).round(3)
             rate = field_specs[field_name]['application_energy_kwh_per_m3']
             result[energy_col] = (result[delivered_col] * rate).round(3)
@@ -174,6 +175,7 @@ def _compute_balance_diagnostics(result):
         result['tank_volume_m3'].shift(1)
         + result['total_sourced_to_tank_m3']
         - result['irrigation_delivered_m3']
+        - result['look_ahead_drain_m3']
         - result['tank_volume_m3']
     ).round(6)
 

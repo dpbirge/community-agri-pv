@@ -681,6 +681,7 @@ def _init_energy_dispatch_row(day, community_demand_kwh, water_demand_kwh,
         'grid_import_kwh': 0.0,
         'grid_export_kwh': 0.0,
         'generator_kwh': 0.0,
+        'generator_excess_kwh': 0.0,
         'curtailed_kwh': 0.0,
         'deficit_kwh': 0.0,
         'generator_fuel_liters': 0.0,
@@ -860,6 +861,7 @@ def _handle_deficit(deficit, strategy, row, battery_specs, battery_state,
 
             # Generator min-load excess: charge battery then curtail
             if excess > 0:
+                row['generator_excess_kwh'] += excess
                 if battery_specs is not None:
                     accepted, stored = _charge_battery(
                         excess, battery_specs, battery_state, renewable=False)
@@ -1107,7 +1109,8 @@ def _order_energy_balance_columns(df):
     dispatch_cols = ['renewable_consumed_kwh', 'renewable_surplus_kwh',
                      'battery_charge_kwh', 'battery_discharge_kwh',
                      'grid_import_kwh', 'grid_export_kwh',
-                     'generator_kwh', 'curtailed_kwh', 'deficit_kwh']
+                     'generator_kwh', 'generator_excess_kwh',
+                     'curtailed_kwh', 'deficit_kwh']
 
     battery_cols = ['battery_soc_kwh', 'battery_soc_fraction',
                     'battery_renewable_fraction']

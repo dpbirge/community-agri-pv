@@ -886,21 +886,24 @@ def _finalize_dispatch_row(row, tank, demand_m3, tds_req, flush_reason,
     draw_fresh, draw_fresh_tds = deliveries['draw_fresh']
     drain_vol, drain_tds = deliveries['drain']
 
-    total_delivered = flush_vol + draw_existing + draw_fresh + drain_vol
-    if total_delivered > 0:
+    # Crop delivery = water intentionally drawn to meet irrigation demand.
+    # Safety flush counts (it displaces demand) but look-ahead drain does not
+    # — drain is pre-emptive disposal to prepare TDS for the *next* day.
+    crop_delivered = flush_vol + draw_existing + draw_fresh
+    if crop_delivered > 0:
         delivered_tds = _blend_tds(
-            [flush_vol, draw_existing, draw_fresh, drain_vol],
-            [flush_tds, draw_existing_tds, draw_fresh_tds, drain_tds])
+            [flush_vol, draw_existing, draw_fresh],
+            [flush_tds, draw_existing_tds, draw_fresh_tds])
     else:
         delivered_tds = 0.0
 
     row['tank_flush_delivered_m3'] = flush_vol + drain_vol
     row['safety_flush_m3'] = flush_vol
     row['look_ahead_drain_m3'] = drain_vol
-    row['total_delivered_m3'] = total_delivered
+    row['total_delivered_m3'] = crop_delivered
     row['delivered_tds_ppm'] = delivered_tds
-    row['tds_exceedance_ppm'] = max(0.0, delivered_tds - tds_req) if total_delivered > 0 else 0.0
-    row['deficit_m3'] = max(0.0, demand_m3 - total_delivered)
+    row['tds_exceedance_ppm'] = max(0.0, delivered_tds - tds_req) if crop_delivered > 0 else 0.0
+    row['deficit_m3'] = max(0.0, demand_m3 - crop_delivered)
     row['total_sourced_to_tank_m3'] = (row['gw_untreated_to_tank_m3'] +
                                        row['gw_treated_to_tank_m3'] +
                                        row['municipal_to_tank_m3'])
