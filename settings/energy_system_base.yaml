@@ -11,7 +11,7 @@ config_name: baseline_energy_system
 # --- Solar System ---
 community_solar:
   low_density:
-    area_ha: 0.
+    area_ha: 0.0
   medium_density:
     area_ha: 0.0
   high_density:
@@ -36,7 +36,7 @@ generator:
 battery:
   has_battery: true
   type: lithium_iron_phosphate_medium   # row key in batteries-toy.csv (200 kWh LFP)
-  capacity_kwh: 250
+  capacity_kwh: 1000
 
 # --- Grid Connection ---
 grid_connection: full_grid
