@@ -56,7 +56,7 @@ def _order_balance_columns(result):
     demand_section = ['irrigation_demand_m3', 'community_water_demand_m3', 'total_water_demand_m3']
     demand_section += sorted([c for c in result.columns if c.endswith('_demand_m3')
                               and c not in demand_section])
-    demand_section += sorted([c for c in result.columns if c.endswith('_etc_m3')])
+    demand_section += sorted([c for c in result.columns if c.endswith('_etc_delivery_m3')])
     # Per-building community water breakdown
     demand_section += sorted([c for c in result.columns if c.startswith('community_')
                               and c.endswith('_water_m3') and c != 'community_water_demand_m3'])
@@ -93,7 +93,8 @@ def _order_balance_columns(result):
                 'gw_monthly_cap_m3', 'muni_monthly_cap_m3']
 
     # Treatment throughput utilization
-    treatment_cols = ['treatment_feed_m3', 'treatment_max_feed_m3', 'treatment_reject_m3']
+    treatment_cols = ['treatment_feed_m3', 'treatment_max_feed_m3', 'treatment_reject_m3',
+                      'treatment_utilization_pct']
 
     # Well columns from supply
     well_cols = [c for c in result.columns if c.endswith('_extraction_m3') or
@@ -156,13 +157,15 @@ def _compute_delivery_and_energy(result, field_specs):
     ).round(3)
 
 
-def _compute_balance_diagnostics(result):
+def _compute_balance_diagnostics(result, initial_tank_m3):
     """Compute over-delivery and physical tank conservation check.
 
     Modifies result DataFrame in place.
 
     Args:
         result: Merged water balance DataFrame with delivery and demand columns.
+        initial_tank_m3: Initial tank volume (m3) from water_systems config,
+            used as the previous-day tank level for row 0.
     """
     result['over_delivery_m3'] = (
         result['irrigation_delivered_m3'] -
@@ -170,8 +173,10 @@ def _compute_balance_diagnostics(result):
         result['deficit_m3']
     ).clip(lower=0.0).round(3)
 
+    prev_tank = result['tank_volume_m3'].shift(1)
+    prev_tank.iloc[0] = initial_tank_m3
     result['balance_check'] = (
-        result['tank_volume_m3'].shift(1)
+        prev_tank
         + result['total_sourced_to_tank_m3']
         - result['irrigation_delivered_m3']
         - result['tank_volume_m3']
@@ -238,10 +243,11 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
         root_dir=root_dir,
     )
 
-    # 5. Get municipal cost per m3 from water systems config
+    # 5. Get municipal cost and initial tank level from water systems config
     ws_config = _load_yaml(water_systems_path)
     system = next(s for s in ws_config['systems'] if s['name'] == water_system_name)
     muni_cost_per_m3 = system['municipal_source']['cost_per_m3']
+    initial_tank_m3 = system['storage']['initial_level_m3']
 
     # --- Build unified output ---
 
@@ -253,7 +259,7 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
     result = result.rename(columns={'total_delivered_m3': 'irrigation_delivered_m3'})
     irrig_cols_to_merge = ['day', 'total_demand_m3']
     demand_cols = [c for c in irrig_df.columns if c.endswith('_demand_m3') and c != 'total_demand_m3']
-    etc_m3_cols = [c for c in irrig_df.columns if c.endswith('_etc_m3')]
+    etc_m3_cols = [c for c in irrig_df.columns if c.endswith('_etc_delivery_m3')]
     irrig_cols_to_merge += demand_cols + etc_m3_cols
     result = result.merge(
         irrig_df[irrig_cols_to_merge].rename(columns={'total_demand_m3': 'irrigation_demand_m3'}),
@@ -281,7 +287,7 @@ def compute_daily_water_balance(farm_profiles_path, water_systems_path,
     result = result.rename(columns={'municipal_cost': 'municipal_irrigation_cost'})
 
     _compute_delivery_and_energy(result, field_specs)
-    _compute_balance_diagnostics(result)
+    _compute_balance_diagnostics(result, initial_tank_m3)
 
     return _order_balance_columns(result)
 

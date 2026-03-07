@@ -37,7 +37,7 @@ class TestComputeIrrigationDemandColumns(unittest.TestCase):
 
         # Baseline has 4 fields: north_field, south_field, east_field, west_field
         for field in ['north_field', 'south_field', 'east_field', 'west_field']:
-            self.assertIn(f'{field}_etc_mm_per_ha', df.columns)
+            self.assertIn(f'{field}_irrigation_mm_per_ha', df.columns)
             self.assertIn(f'{field}_demand_m3', df.columns)
             self.assertIn(f'{field}_crop', df.columns)
 
@@ -56,7 +56,7 @@ class TestDemandScalingFormula(unittest.TestCase):
 
         # Check first 10 active days
         for _, row in active.head(10).iterrows():
-            etc_mm = row['north_field_etc_mm_per_ha']
+            etc_mm = row['north_field_irrigation_mm_per_ha']
             demand_m3 = row['north_field_demand_m3']
             expected = round(etc_mm * 1.0 * 10 / 0.90, 3)
             self.assertAlmostEqual(demand_m3, expected, places=2,
@@ -69,7 +69,7 @@ class TestDemandScalingFormula(unittest.TestCase):
         self.assertGreater(len(active), 0)
 
         for _, row in active.head(10).iterrows():
-            etc_mm = row['west_field_etc_mm_per_ha']
+            etc_mm = row['west_field_irrigation_mm_per_ha']
             demand_m3 = row['west_field_demand_m3']
             expected = round(etc_mm * 1.0 * 10 / 0.75, 3)
             self.assertAlmostEqual(demand_m3, expected, places=2,
@@ -88,7 +88,7 @@ class TestFallowDaysAreZero(unittest.TestCase):
 
         # All fallow days should have zero demand and zero ETc
         self.assertTrue((fallow['north_field_demand_m3'] == 0.0).all())
-        self.assertTrue((fallow['north_field_etc_mm_per_ha'] == 0.0).all())
+        self.assertTrue((fallow['north_field_irrigation_mm_per_ha'] == 0.0).all())
 
 
 class TestTotalDemandEqualsSumOfFields(unittest.TestCase):

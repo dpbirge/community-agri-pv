@@ -29,13 +29,14 @@ wind_turbines:
 # --- Generator System ---
 generator:
   has_generator: true
-  type: diesel_100kw          # row key in generators-toy.csv (capacity_kw=100)
-  rated_capacity_kw: 50
+  type: diesel_100kw          # row key in generators-toy.csv (100 kW engine)
+  rated_capacity_kw: 50       # operational limit (derated); Willans idle losses use engine size from CSV
+  reference_hours: 24         # hours over which to spread deficit for power sizing
 
 # --- Battery System ---
 battery:
   has_battery: true
-  type: lithium_iron_phosphate_medium   # row key in batteries-toy.csv (200 kWh LFP)
+  type: lithium_iron_phosphate_community   # row key in batteries-toy.csv (1000 kWh LFP)
   capacity_kwh: 1000
 
 # --- Grid Connection ---

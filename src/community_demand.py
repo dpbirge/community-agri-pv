@@ -163,6 +163,21 @@ def compute_daily_demands(config_path, registry_path, *, root_dir=None):
     bld_energy_df = _load_csv(paths['buildings_energy'])
     bld_water_df = _load_csv(paths['buildings_water'])
 
+    # validate date alignment across all four building demand CSVs before concat
+    _ref_dates = hh_energy_df['date'].values
+    for _label, _df in [
+        ('household_water', hh_water_df),
+        ('buildings_energy', bld_energy_df),
+        ('buildings_water', bld_water_df),
+    ]:
+        assert len(_df) == len(hh_energy_df), (
+            f"Row count mismatch: household_energy has {len(hh_energy_df)} rows, "
+            f"{_label} has {len(_df)} rows"
+        )
+        assert (_df['date'].values == _ref_dates).all(), (
+            f"Date mismatch between household_energy and {_label}"
+        )
+
     hh_energy = _scale_households(hh_energy_df, households, 'kwh', 'energy_kwh', 'count', 'energy_multiplier')
     hh_water = _scale_households(hh_water_df, households, 'm3', 'water_m3', 'count', 'water_multiplier')
     bld_energy = _scale_buildings(bld_energy_df, buildings, 'kwh_per_m2', 'energy_kwh', 'area_m2', 'energy_multiplier')

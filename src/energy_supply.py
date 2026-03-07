@@ -280,13 +280,11 @@ def compute_daily_energy(config_path, registry_path, *, farm_profiles_path=None,
     solar_cols = agripv_cols + [c for c in community_solar.columns if c != 'day']
     wind_cols = [c for c in wind.columns if c != 'day']
 
-    df = _add_energy_totals(df, solar_cols=solar_cols, wind_cols=wind_cols)
-
     if degradation_rate and degradation_rate > 0:
         start = pd.Timestamp(degradation_start) if degradation_start else df['day'].iloc[0]
         df = _apply_degradation(df, solar_cols, degradation_rate, start)
-        df['total_solar_kwh'] = df[solar_cols].sum(axis=1)
-        df['total_renewable_kwh'] = df['total_solar_kwh'] + df['total_wind_kwh']
+
+    df = _add_energy_totals(df, solar_cols=solar_cols, wind_cols=wind_cols)
 
     return df
 

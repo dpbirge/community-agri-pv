@@ -90,7 +90,7 @@ def _validate(water_df, energy_df, energy_system_path):
     # --- No-crash already implied by reaching this point ---
 
     # 1. NaN check — required columns
-    required_water = ['total_demand_m3', 'total_delivered_m3']
+    required_water = ['total_water_demand_m3', 'irrigation_delivered_m3']
     required_energy = ['total_demand_kwh', 'total_renewable_kwh']
     for col in required_water:
         if col in water_df.columns and water_df[col].isna().any():

@@ -1228,10 +1228,14 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             tank['fill_m3'] = 0.0
             tank['tds_ppm'] = 0.0
 
-    # 5. Second source+draw pass
+    # 5. Second source+draw pass — adjust cap states for first-pass extraction
+    p1_gw_cap = dict(gw_cap_state)
+    p1_gw_cap['used'] = gw_cap_state['used'] + row['total_groundwater_extracted_m3']
+    p1_muni_cap = dict(muni_cap_state)
+    p1_muni_cap['used'] = muni_cap_state['used'] + row['municipal_to_tank_m3']
     demand_remaining, draw_fresh, draw_fresh_tds = _second_source_pass(
         demand_remaining, tds_req, wells, treatment, municipal,
-        tank, gw_cap_state, muni_cap_state, row, source_priority,
+        tank, p1_gw_cap, p1_muni_cap, row, source_priority,
         draw_fresh, draw_fresh_tds)
 
     # 6. Look-ahead prefill
@@ -1258,16 +1262,33 @@ def _dispatch_day(demand_m3, tds_req, next_tds_req, wells, treatment, municipal,
             row['treatment_energy_kwh'] *= multiplier
             row['treatment_energy_multiplier'] = multiplier
 
-    if strategy == 'maximize_treatment_efficiency':
-        max_feed = treatment['throughput_m3_hr'] * 24
-        row['treatment_utilization_pct'] = (
-            row['treatment_feed_m3'] / max_feed * 100 if max_feed > 0 else 0.0)
+    max_feed = treatment['throughput_m3_hr'] * 24
+    row['treatment_utilization_pct'] = (
+        row['treatment_feed_m3'] / max_feed * 100 if max_feed > 0 else 0.0)
 
     # 6. Overnight TDS refill for tomorrow
+    on_gw_cap = dict(gw_cap_state)
+    on_gw_cap['used'] = gw_cap_state['used'] + row['total_groundwater_extracted_m3']
+    on_muni_cap = dict(muni_cap_state)
+    on_muni_cap['used'] = muni_cap_state['used'] + row['municipal_to_tank_m3']
     overnight_vol = _overnight_tds_refill(
         tank, next_tds_req, wells, treatment, municipal,
-        gw_cap_state, muni_cap_state, row, source_priority)
+        on_gw_cap, on_muni_cap, row, source_priority)
     row['overnight_refill_m3'] = overnight_vol
+
+    # Recompute sourced_tds_ppm from accumulated volumes across all phases
+    total_sourced = (row['gw_untreated_to_tank_m3'] +
+                     row['gw_treated_to_tank_m3'] +
+                     row['municipal_to_tank_m3'])
+    if total_sourced > 0:
+        raw_gw_tds = (_volume_weighted_tds(wells, row['total_groundwater_extracted_m3'])
+                      if row['total_groundwater_extracted_m3'] > 0 else 0.0)
+        treated_tds = (treatment['goal_output_tds_ppm']
+                       if treatment['lookup_df'] is not None else 0.0)
+        row['sourced_tds_ppm'] = _sourced_blend_tds(
+            row['gw_untreated_to_tank_m3'], row['gw_treated_to_tank_m3'],
+            row['municipal_to_tank_m3'],
+            raw_gw_tds, treated_tds, municipal['tds_ppm'])
 
     # Finalize delivery totals, energy/cost sums, and policy metadata
     deliveries = {
@@ -1296,7 +1317,10 @@ def _run_simulation(demand_df, wells, treatment, municipal, tank_init, policy,
         treatment: Dict with goal_output_tds_ppm, throughput_m3_hr, lookup_df.
         municipal: Dict with tds_ppm, cost_per_m3, throughput_m3_hr.
         tank_init: Dict with fill_m3, tds_ppm, capacity_m3.
-        policy: Dict with strategy key.
+        policy: Dict with strategy key. Optional tds_look_ahead_days (default
+            7) caps how far ahead the simulation scans for the next non-NaN
+            crop TDS requirement. Prevents unnecessary overnight refills
+            during long fallow gaps.
         gw_monthly_cap: Monthly groundwater cap (m3) or None.
         muni_monthly_cap: Monthly municipal cap (m3) or None.
         look_ahead: Boolean for cap enforcement mode.
@@ -1316,6 +1340,7 @@ def _run_simulation(demand_df, wells, treatment, municipal, tank_init, policy,
 
     tds_col = demand_df['crop_tds_requirement_ppm'].values
     n_days = len(demand_df)
+    tds_look_ahead = policy.get('tds_look_ahead_days', 7) or n_days
 
     # Pre-compute treatment target for smoothing strategy
     if policy.get('strategy') == 'maximize_treatment_efficiency':
@@ -1349,7 +1374,8 @@ def _run_simulation(demand_df, wells, treatment, municipal, tank_init, policy,
             muni_used_month = 0.0
 
         next_tds_req = float('nan')
-        for j in range(i + 1, n_days):
+        tds_scan_end = min(i + 1 + tds_look_ahead, n_days)
+        for j in range(i + 1, tds_scan_end):
             if not math.isnan(tds_col[j]):
                 next_tds_req = tds_col[j]
                 break

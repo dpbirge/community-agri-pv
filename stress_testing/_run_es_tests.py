@@ -72,16 +72,17 @@ def universal_checks(energy_df, water_df, has_battery=False):
     if not checks['non_negative_quantities']:
         checks['non_negative_details'] = neg_found
 
-    # 3. Energy conservation: demand = renewable + grid_import + generator - curtailed - grid_export +/- battery
-    if all(c in energy_df.columns for c in ['total_demand_kwh', 'total_renewable_kwh', 'grid_import_kwh', 'generator_kwh']):
-        supply = (
-            energy_df['total_renewable_kwh']
-            + energy_df['grid_import_kwh']
-            + energy_df['generator_kwh']
-        )
-        demand = energy_df['total_demand_kwh']
-        surplus = supply - demand
-        max_imbalance = float(surplus.abs().max()) if len(surplus) > 0 else 0.0
+    # 3. Energy conservation: renewable_consumed + grid_import + generator + battery_discharge + deficit = demand
+    req_cols = ['renewable_consumed_kwh', 'total_demand_kwh']
+    if all(c in energy_df.columns for c in req_cols):
+        supply = energy_df['renewable_consumed_kwh'].copy()
+        for col in ['generator_kwh', 'grid_import_kwh', 'battery_discharge_kwh']:
+            if col in energy_df.columns:
+                supply = supply + energy_df[col]
+        if 'deficit_kwh' in energy_df.columns:
+            supply = supply + energy_df['deficit_kwh']
+        imbalance = (supply - energy_df['total_demand_kwh']).abs()
+        max_imbalance = float(imbalance.max()) if len(imbalance) > 0 else 0.0
         checks['energy_conservation_max_imbalance_kwh'] = round(max_imbalance, 4)
         checks['energy_conservation_ok'] = max_imbalance < 1.0  # allow 1 kWh tolerance
 

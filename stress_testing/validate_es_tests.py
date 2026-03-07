@@ -24,9 +24,10 @@ NON_NEG_ENERGY = [
 ]
 
 NON_NEG_WATER = [
-    'total_irrigation_demand_m3',
-    'groundwater_m3', 'municipal_m3', 'treated_m3',
-    'tank_level_m3',
+    'irrigation_demand_m3',
+    'total_groundwater_extracted_m3', 'municipal_to_tank_m3',
+    'municipal_community_m3', 'treatment_feed_m3',
+    'tank_volume_m3',
 ]
 
 KEY_ENERGY_COLS = [
@@ -93,17 +94,17 @@ for test_name in TESTS:
             failures.append(f'Battery SOC > 0.96: {soc_max_violation} rows')
 
     # --- 6. Tank bounds ---
-    if 'tank_level_m3' in wdf.columns:
+    if 'tank_volume_m3' in wdf.columns:
         # Tank capacity from water_systems_balanced.yaml is 200 m3
-        tank_over = (wdf['tank_level_m3'] > 200.01).sum()
+        tank_over = (wdf['tank_volume_m3'] > 200.01).sum()
         if tank_over > 0:
-            failures.append(f'Tank level > 200 m3: {tank_over} rows')
+            failures.append(f'Tank volume > 200 m3: {tank_over} rows')
 
     # --- 7. Water balance check ---
-    # total supply (groundwater + municipal + tank discharge) should roughly match demand + tank fill
-    if all(c in wdf.columns for c in ['total_supply_m3', 'total_irrigation_demand_m3']):
-        supply_total = wdf['total_supply_m3'].sum()
-        demand_total = wdf['total_irrigation_demand_m3'].sum()
+    # Sourced-to-tank should roughly track irrigation demand over the year
+    if all(c in wdf.columns for c in ['total_sourced_to_tank_m3', 'irrigation_demand_m3']):
+        supply_total = wdf['total_sourced_to_tank_m3'].sum()
+        demand_total = wdf['irrigation_demand_m3'].sum()
         if supply_total < demand_total * 0.5:
             failures.append(f'Water supply ({supply_total:.0f}) far below demand ({demand_total:.0f})')
 

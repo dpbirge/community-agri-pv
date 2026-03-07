@@ -61,7 +61,7 @@ def validate(water_df, test_id, has_tank=True):
     checks = {}
 
     # Check 1: No NaN in key columns
-    key_cols = ['total_demand_m3', 'total_delivered_m3', 'deficit_m3']
+    key_cols = ['total_water_demand_m3', 'irrigation_delivered_m3', 'deficit_m3']
     nan_check = all(
         col in water_df.columns and not water_df[col].isna().any()
         for col in key_cols
@@ -96,7 +96,6 @@ def validate(water_df, test_id, has_tank=True):
 
     # Check 5: Tank bounds
     if has_tank and 'tank_volume_m3' in water_df.columns:
-        # Try to get capacity from water systems yaml
         tank_min_ok = water_df['tank_volume_m3'].ge(-0.01).all()
         checks['tank_lower_bound'] = bool(tank_min_ok)
     else:
@@ -107,12 +106,16 @@ def validate(water_df, test_id, has_tank=True):
 
 def key_metrics(water_df):
     metrics = {}
-    for col in ['total_water_cost', 'treatment_m3', 'municipal_m3',
-                'groundwater_m3', 'deficit_m3']:
-        if col in water_df.columns:
-            metrics[f'total_{col}'] = round(water_df[col].sum(), 2)
-        else:
-            metrics[f'total_{col}'] = 'N/A'
+
+    def _col_sum(col):
+        return round(water_df[col].sum(), 2) if col in water_df.columns else 'N/A'
+
+    metrics['total_water_cost'] = _col_sum('total_water_cost')
+    metrics['total_treatment_feed_m3'] = _col_sum('treatment_feed_m3')
+    metrics['total_municipal_to_tank_m3'] = _col_sum('municipal_to_tank_m3')
+    metrics['total_municipal_community_m3'] = _col_sum('municipal_community_m3')
+    metrics['total_groundwater_extracted_m3'] = _col_sum('total_groundwater_extracted_m3')
+    metrics['total_deficit_m3'] = _col_sum('deficit_m3')
     if 'deficit_m3' in water_df.columns:
         metrics['deficit_days_count'] = int((water_df['deficit_m3'] > 0.001).sum())
     else:
@@ -136,10 +139,10 @@ try:
     metrics = key_metrics(water_df)
     # Per-test checks
     per_test = {}
-    if 'groundwater_tds_ppm' in water_df.columns:
-        per_test['avg_gw_tds'] = round(water_df['groundwater_tds_ppm'].mean(), 1)
-    if 'treatment_m3' in water_df.columns:
-        per_test['total_treatment_m3'] = round(water_df['treatment_m3'].sum(), 2)
+    if 'well_1_tds_ppm' in water_df.columns:
+        per_test['well_1_tds_ppm'] = round(water_df['well_1_tds_ppm'].mean(), 1)
+    if 'treatment_feed_m3' in water_df.columns:
+        per_test['total_treatment_feed_m3'] = round(water_df['treatment_feed_m3'].sum(), 2)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
                         'per_test': per_test, 'notes': '', 'df': water_df}
     print(f"WS1 PASS — metrics: {metrics}")
@@ -161,9 +164,9 @@ try:
     checks = validate(water_df, test_id)
     metrics = key_metrics(water_df)
     per_test = {}
-    if 'treatment_m3' in water_df.columns and 'groundwater_m3' in water_df.columns:
-        gw_total = water_df['groundwater_m3'].sum()
-        treat_total = water_df['treatment_m3'].sum()
+    if 'treatment_feed_m3' in water_df.columns and 'total_groundwater_extracted_m3' in water_df.columns:
+        gw_total = water_df['total_groundwater_extracted_m3'].sum()
+        treat_total = water_df['treatment_feed_m3'].sum()
         per_test['treatment_as_pct_of_gw'] = round(
             100 * treat_total / gw_total if gw_total > 0 else 0, 1)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
@@ -187,10 +190,10 @@ try:
     checks = validate(water_df, test_id)
     metrics = key_metrics(water_df)
     per_test = {}
-    if 'flush_m3' in water_df.columns:
-        per_test['total_flush_m3'] = round(water_df['flush_m3'].sum(), 2)
-    if 'municipal_m3' in water_df.columns:
-        per_test['total_municipal_m3'] = round(water_df['municipal_m3'].sum(), 2)
+    if 'tank_flush_delivered_m3' in water_df.columns:
+        per_test['total_flush_m3'] = round(water_df['tank_flush_delivered_m3'].sum(), 2)
+    if 'municipal_to_tank_m3' in water_df.columns:
+        per_test['total_municipal_to_tank_m3'] = round(water_df['municipal_to_tank_m3'].sum(), 2)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
                         'per_test': per_test, 'notes': '', 'df': water_df}
     print(f"WS3 PASS — metrics: {metrics}")
@@ -214,8 +217,8 @@ try:
     per_test = {}
     if 'deficit_m3' in water_df.columns:
         per_test['peak_deficit_m3'] = round(water_df['deficit_m3'].max(), 2)
-    if 'municipal_m3' in water_df.columns:
-        per_test['total_municipal_m3'] = round(water_df['municipal_m3'].sum(), 2)
+    if 'municipal_to_tank_m3' in water_df.columns:
+        per_test['total_municipal_to_tank_m3'] = round(water_df['municipal_to_tank_m3'].sum(), 2)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
                         'per_test': per_test, 'notes': '', 'df': water_df}
     print(f"WS4 PASS — metrics: {metrics}")
@@ -237,8 +240,8 @@ try:
     checks = validate(water_df, test_id)
     metrics = key_metrics(water_df)
     per_test = {}
-    if 'treatment_m3' in water_df.columns:
-        per_test['peak_treatment_m3'] = round(water_df['treatment_m3'].max(), 2)
+    if 'treatment_feed_m3' in water_df.columns:
+        per_test['peak_treatment_feed_m3'] = round(water_df['treatment_feed_m3'].max(), 2)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
                         'per_test': per_test, 'notes': '', 'df': water_df}
     print(f"WS5 PASS — metrics: {metrics}")
@@ -337,8 +340,8 @@ try:
     checks = validate(water_df, test_id)
     metrics = key_metrics(water_df)
     per_test = {}
-    if 'municipal_m3' in water_df.columns:
-        per_test['total_municipal_m3'] = round(water_df['municipal_m3'].sum(), 2)
+    if 'municipal_to_tank_m3' in water_df.columns:
+        per_test['total_municipal_to_tank_m3'] = round(water_df['municipal_to_tank_m3'].sum(), 2)
     if 'total_water_cost' in water_df.columns:
         per_test['total_water_cost'] = round(water_df['total_water_cost'].sum(), 2)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
@@ -362,10 +365,10 @@ try:
     checks = validate(water_df, test_id)
     metrics = key_metrics(water_df)
     per_test = {}
-    if 'treatment_m3' in water_df.columns:
-        per_test['total_treatment_m3'] = round(water_df['treatment_m3'].sum(), 2)
-    if 'municipal_m3' in water_df.columns:
-        per_test['total_municipal_m3'] = round(water_df['municipal_m3'].sum(), 2)
+    if 'treatment_feed_m3' in water_df.columns:
+        per_test['total_treatment_feed_m3'] = round(water_df['treatment_feed_m3'].sum(), 2)
+    if 'municipal_to_tank_m3' in water_df.columns:
+        per_test['total_municipal_to_tank_m3'] = round(water_df['municipal_to_tank_m3'].sum(), 2)
     results[test_id] = {'status': 'PASS', 'checks': checks, 'metrics': metrics,
                         'per_test': per_test, 'notes': '', 'df': water_df}
     print(f"WS10 PASS — metrics: {metrics}")

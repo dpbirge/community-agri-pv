@@ -48,6 +48,12 @@ cap_enforcement:
 # minimize_draw:      prefer municipal water; use groundwater only after cap is hit
 strategy: minimize_cost
 
+# --- TDS Look-Ahead ---
+# How far ahead (days) the simulation scans for the next crop TDS requirement
+# when deciding overnight refills. Prevents unnecessary refills during long
+# fallow gaps where the next crop is weeks away. Set to null for unbounded.
+tds_look_ahead_days: 7
+
 # --- Tank Prefill ---
 # After meeting daily irrigation demand, use remaining source capacity to
 # prefill the tank when upcoming demand is forecast to exceed throughput.

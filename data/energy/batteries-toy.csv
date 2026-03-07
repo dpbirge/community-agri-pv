@@ -9,4 +9,5 @@ type_id,capacity_kwh,power_kw,round_trip_efficiency,cycle_life,depth_of_discharg
 lithium_iron_phosphate_small,50,12.5,0.92,4500,80,12,350,0.10,0.90,0.95,0.95,0.5
 lithium_iron_phosphate_medium,200,50,0.92,4500,80,12,300,0.10,0.90,0.95,0.95,0.5
 lithium_iron_phosphate_large,500,125,0.92,4500,80,12,250,0.10,0.90,0.95,0.95,0.5
+lithium_iron_phosphate_community,1000,250,0.92,4500,80,12,220,0.10,0.90,0.95,0.95,0.5
 vanadium_redox_flow,400,80,0.75,12000,100,20,400,0.10,0.90,0.95,0.95,0.5

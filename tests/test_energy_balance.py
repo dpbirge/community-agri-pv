@@ -7,16 +7,23 @@ not mocked data.
 
 import pandas as pd
 import pytest
+import yaml
 from pathlib import Path
 
 SIMULATION_DIR = Path(__file__).parent.parent / "simulation"
 BALANCE_PATH = SIMULATION_DIR / "daily_energy_balance.csv"
 GENERATION_PATH = SIMULATION_DIR / "daily_energy_generation.csv"
 
-# Battery policy constants (from current config)
-BATTERY_SOC_MIN = 0.20
-BATTERY_SOC_MAX = 0.95
-BATTERY_CAPACITY_KWH = 200.0
+# Load battery constants from config files
+_SETTINGS_DIR = Path(__file__).parent.parent / "settings"
+with open(_SETTINGS_DIR / "energy_system_base.yaml") as _f:
+    _energy_system = yaml.safe_load(_f)
+with open(_SETTINGS_DIR / "energy_policy_base.yaml") as _f:
+    _energy_policy = yaml.safe_load(_f)
+
+BATTERY_CAPACITY_KWH = float(_energy_system['battery']['capacity_kwh'])
+BATTERY_SOC_MIN = float(_energy_policy['battery']['soc_min'])
+BATTERY_SOC_MAX = float(_energy_policy['battery']['soc_max'])
 
 # Floating-point tolerance for energy conservation checks
 TOLERANCE_KWH = 0.01

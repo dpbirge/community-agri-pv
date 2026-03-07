@@ -890,6 +890,10 @@ def size_water_system(irrigation_demand_df, registry_path, *,
         metrics, target_deficit_fraction, wells, ff, ft, bt,
         storage, storage_df, max_wells, _select_fn, _rebuild_fn, 'Sizing')
 
+    config = _build_sizing_config(wells, treatment_throughput, goal_tds,
+                                  _size_municipal(demand, sum(w['flow_m3_day'] for w in wells) / ff if ff > 0 else 0.0, municipal_available, objective),
+                                  storage)
+
     if max_capital_budget is not None and metrics['total_capex'] > max_capital_budget:
         logger.warning('Sized system CAPEX (%.0f) exceeds budget (%.0f)',
                        metrics['total_capex'], max_capital_budget)
@@ -1078,6 +1082,10 @@ def optimize_water_system(irrigation_demand_df, registry_path, *,
     wells, ff, ft, bt, storage, metrics, _ = _iterate_until_target(
         metrics, target_deficit_fraction, wells, ff, ft, bt,
         storage, storage_df, max_wells, _select_fn, _rebuild_fn, 'Optimizer')
+
+    config = _build_sizing_config(wells, treatment_throughput_m3_hr, goal_tds,
+                                  _size_municipal(demand, sum(w['flow_m3_day'] for w in wells) / ff if ff > 0 else 0.0, municipal_available, objective),
+                                  storage)
 
     if max_capital_budget is not None and metrics['total_capex'] > max_capital_budget:
         logger.warning('Optimized system CAPEX (%.0f) exceeds budget (%.0f)',

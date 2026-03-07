@@ -256,7 +256,7 @@ def compute_community_harvest(water_balance_df, *, farm_profiles_path,
             area_ha = field['area_ha']
             condition = field['condition']
             delivered_col = f'{field_name}_delivered_m3'
-            etc_col = f'{field_name}_etc_m3'
+            etc_col = f'{field_name}_etc_delivery_m3'
 
             for planting_entry in field['plantings']:
                 crop = planting_entry['crop']
@@ -264,11 +264,11 @@ def compute_community_harvest(water_balance_df, *, farm_profiles_path,
                     mmdd = planting_code_to_mmdd(planting_code)
                     season_length = season_lookup[(crop, mmdd)]
 
-                    for year in range(sim_start.year, sim_end.year + 1):
+                    for year in range(sim_start.year - 1, sim_end.year + 1):
                         planting_date = pd.Timestamp(f'{year}-{mmdd}')
                         harvest_date = planting_date + pd.Timedelta(days=season_length)
 
-                        if harvest_date > sim_end or planting_date < sim_start:
+                        if harvest_date > sim_end or harvest_date <= sim_start:
                             continue
 
                         mask = (water_balance_df['day'] >= planting_date) & (
@@ -279,6 +279,11 @@ def compute_community_harvest(water_balance_df, *, farm_profiles_path,
 
                         delivered = season_df.set_index('day')[delivered_col]
                         etc_ref = season_df.set_index('day')[etc_col]
+
+                        # Skip seasons with no demand data (e.g. planted
+                        # before sim_start and not tracked by irrigation)
+                        if etc_ref.sum() == 0:
+                            continue
 
                         yield_kg_ha = compute_harvest_yield(
                             crop=crop, planting=planting_code,

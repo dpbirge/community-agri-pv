@@ -19,7 +19,7 @@ strategy: minimize_generator
 grid:
   mode: full_grid   # full_grid | net_metering | feed_in_tariff | self_consumption
                             # | limited_grid | off_grid
-  monthly_import_cap_kwh: 5000  # null = unlimited; max monthly grid import (kWh)
+  monthly_import_cap_kwh: null  # null = unlimited; max monthly grid import (kWh)
   monthly_export_cap_kwh: null  # null = unlimited; max monthly grid export (kWh)
   export_rate_usd_kwh: null     # explicit FIT rate override; null = look up from CSV by capacity_tier
   capacity_tier: null           # project_size_category in feed_in_tariff_rates CSV

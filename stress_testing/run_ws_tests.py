@@ -47,7 +47,7 @@ def validate(water_df, energy_df):
 
     # Check 2: non-negative quantities
     non_neg_cols = [c for c in water_df.columns if any(
-        k in c for k in ['_m3', '_kwh', '_cost', 'tank_level']
+        k in c for k in ['_m3', '_kwh', '_cost', 'tank_volume']
     )]
     for col in non_neg_cols:
         if (water_df[col] < -0.01).any():
@@ -71,13 +71,12 @@ def validate(water_df, energy_df):
             failures.append("Date continuity broken in water_df")
 
     # Check 5: tank bounds
-    if 'tank_level_m3' in water_df.columns:
-        # find tank capacity from water systems — use a loose check
-        max_level = water_df['tank_level_m3'].max()
+    if 'tank_volume_m3' in water_df.columns:
+        max_level = water_df['tank_volume_m3'].max()
         if max_level > 10000:
-            failures.append(f"tank_level_m3 suspiciously large: {max_level:.1f}")
-        if (water_df['tank_level_m3'] < -0.01).any():
-            failures.append("tank_level_m3 went negative")
+            failures.append(f"tank_volume_m3 suspiciously large: {max_level:.1f}")
+        if (water_df['tank_volume_m3'] < -0.01).any():
+            failures.append("tank_volume_m3 went negative")
 
     return failures
 
@@ -93,42 +92,36 @@ def extract_metrics(water_df):
     """
     metrics = {}
 
+    def _col_sum(col):
+        return float(water_df[col].sum()) if col in water_df.columns else 0.0
+
     # total water cost
-    cost_cols = [c for c in water_df.columns if 'cost' in c and '_m3' not in c]
-    if cost_cols:
-        metrics['total_water_cost'] = water_df[cost_cols].sum().sum()
-    else:
-        metrics['total_water_cost'] = None
+    metrics['total_water_cost'] = _col_sum('total_water_cost') or None
 
-    # total treatment
-    treat_cols = [c for c in water_df.columns if 'treatment' in c and '_m3' in c and 'cost' not in c]
-    if treat_cols:
-        metrics['total_treatment_m3'] = water_df[treat_cols].sum().sum()
-    else:
-        metrics['total_treatment_m3'] = 0.0
+    # treatment: actual feed volume only (not max_feed capacity or reject brine)
+    metrics['total_treatment_m3'] = _col_sum('treatment_feed_m3')
 
-    # total municipal
-    muni_cols = [c for c in water_df.columns if 'municipal' in c and '_m3' in c and 'cost' not in c]
-    if muni_cols:
-        metrics['total_municipal_m3'] = water_df[muni_cols].sum().sum()
-    else:
-        metrics['total_municipal_m3'] = 0.0
+    # municipal: irrigation tank + community building supply
+    metrics['total_municipal_m3'] = (
+        _col_sum('municipal_to_tank_m3') + _col_sum('municipal_community_m3')
+    )
 
-    # total groundwater
-    gw_cols = [c for c in water_df.columns if 'groundwater' in c and '_m3' in c and 'cost' not in c]
-    if gw_cols:
-        metrics['total_groundwater_m3'] = water_df[gw_cols].sum().sum()
-    else:
-        metrics['total_groundwater_m3'] = 0.0
+    # groundwater
+    metrics['total_groundwater_m3'] = _col_sum('total_groundwater_extracted_m3')
+
+    # irrigation delivered
+    metrics['total_delivered_m3'] = _col_sum('irrigation_delivered_m3')
 
     # deficit
-    deficit_cols = [c for c in water_df.columns if 'deficit' in c and '_m3' in c]
-    if deficit_cols:
-        metrics['total_deficit_m3'] = water_df[deficit_cols].sum().sum()
-        metrics['deficit_day_count'] = (water_df[deficit_cols].sum(axis=1) > 0.01).sum()
+    metrics['total_deficit_m3'] = _col_sum('deficit_m3')
+    if 'deficit_m3' in water_df.columns:
+        metrics['deficit_day_count'] = int((water_df['deficit_m3'] > 0.01).sum())
     else:
-        metrics['total_deficit_m3'] = 0.0
         metrics['deficit_day_count'] = 0
+
+    # tank level
+    if 'tank_volume_m3' in water_df.columns:
+        metrics['avg_tank_volume_m3'] = round(float(water_df['tank_volume_m3'].mean()), 2)
 
     return metrics
 

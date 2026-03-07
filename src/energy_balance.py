@@ -177,8 +177,11 @@ def _build_generator_specs(energy_system_config, policy_config, equipment_path):
         equipment_path: Path to generators CSV.
 
     Returns:
-        Dict with rated_capacity_kw, min_load_kw, sfc_coefficient_a,
-        sfc_coefficient_b. Or None.
+        Dict with rated_capacity_kw, engine_capacity_kw, min_load_kw,
+        sfc_coefficient_a, sfc_coefficient_b. engine_capacity_kw is the
+        physical engine size from the catalog (used for Willans idle losses);
+        rated_capacity_kw is the operational limit (may be derated via config).
+        Or None.
     """
     gen_cfg = energy_system_config.get('generator', {})
     if not gen_cfg.get('has_generator', False):
@@ -187,13 +190,16 @@ def _build_generator_specs(energy_system_config, policy_config, equipment_path):
     row = _load_equipment_specs(equipment_path, gen_cfg['type'])
     pol_gen = policy_config.get('generator', {})
     rated_kw = gen_cfg.get('rated_capacity_kw', row['capacity_kw'])
+    engine_kw = row['capacity_kw']
     min_load_frac = pol_gen.get('min_load_fraction', row.get('min_load_fraction', 0.30))
 
     return {
         'rated_capacity_kw': rated_kw,
+        'engine_capacity_kw': engine_kw,
         'min_load_kw': min_load_frac * rated_kw,
         'sfc_coefficient_a': row['sfc_coefficient_a'],
         'sfc_coefficient_b': row['sfc_coefficient_b'],
+        'reference_hours': gen_cfg.get('reference_hours', 24.0),
     }
 
 
@@ -538,11 +544,13 @@ def _run_generator(deficit_kwh, generator_specs):
     When the deficit requires less than min_load power, the generator runs at
     minimum load for at least 6 hours (one operational shift: startup, run,
     shutdown). Excess beyond the deficit is offered to the battery or curtailed.
-    Fuel consumption follows the Willans line model.
+    Fuel consumption follows the Willans line model:
+    fuel_L = (a * engine_kw + b * power_kw) * hours, where engine_kw is the
+    physical engine size (for idle losses) and power_kw is actual output.
 
     Args:
         deficit_kwh: Energy needed from generator (kWh).
-        generator_specs: Generator specs dict.
+        generator_specs: Generator specs dict (must include engine_capacity_kw).
 
     Returns:
         Tuple of (delivered_kwh, excess_kwh, fuel_liters, runtime_hours).
@@ -552,11 +560,13 @@ def _run_generator(deficit_kwh, generator_specs):
         return 0.0, 0.0, 0.0, 0.0
 
     rated_kw = generator_specs['rated_capacity_kw']
+    engine_kw = generator_specs['engine_capacity_kw']
     min_load_kw = generator_specs['min_load_kw']
     a = generator_specs['sfc_coefficient_a']
     b = generator_specs['sfc_coefficient_b']
+    reference_hours = generator_specs.get('reference_hours', 24.0)
 
-    power_kw = max(deficit_kwh / 24.0, min_load_kw)
+    power_kw = max(deficit_kwh / reference_hours, min_load_kw)
     power_kw = min(power_kw, rated_kw)
 
     if power_kw <= min_load_kw + 1e-9:
@@ -573,8 +583,8 @@ def _run_generator(deficit_kwh, generator_specs):
         delivered = min(output, deficit_kwh)
         excess = output - delivered
 
-    # Fuel via Willans line
-    fuel = (a * rated_kw + b * power_kw) * hours
+    # Fuel via Willans line — use engine_kw (physical engine size) for idle losses
+    fuel = (a * engine_kw + b * power_kw) * hours
 
     return delivered, excess, fuel, hours
 
@@ -937,6 +947,30 @@ def _dispatch_day(day, total_demand_kwh, community_demand_kwh, water_demand_kwh,
         row['grid_export_revenue'] = 0.0
 
     _finalize_energy_dispatch_row(row, battery_specs, battery_state)
+
+    # Internal energy conservation checks (tolerance 0.01 kWh)
+    _TOL = 0.01
+
+    # Demand balance: all demand accounted for by sources + unmet deficit
+    demand_lhs = row['total_demand_kwh']
+    demand_rhs = (row['renewable_consumed_kwh'] + row['battery_discharge_kwh']
+                  + row['grid_import_kwh'] + row['generator_kwh']
+                  + row['deficit_kwh'])
+    assert abs(demand_lhs - demand_rhs) < _TOL, (
+        f"Energy demand conservation violated on {day}: "
+        f"demand={demand_lhs:.4f}, sources+deficit={demand_rhs:.4f}, "
+        f"gap={demand_lhs - demand_rhs:.6f}"
+    )
+
+    # Generation balance: all generated energy accounted for by sinks
+    gen_lhs = row['total_renewable_kwh'] + row['generator_excess_kwh']
+    gen_rhs = (row['renewable_consumed_kwh'] + row['battery_charge_kwh']
+               + row['grid_export_kwh'] + row['curtailed_kwh'])
+    assert abs(gen_lhs - gen_rhs) < _TOL, (
+        f"Energy generation conservation violated on {day}: "
+        f"generated={gen_lhs:.4f}, sinks={gen_rhs:.4f}, "
+        f"gap={gen_lhs - gen_rhs:.6f}"
+    )
 
     return row, battery_state
 

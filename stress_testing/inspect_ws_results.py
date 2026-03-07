@@ -46,7 +46,7 @@ for test_name in TESTS:
                 print(f"    {col} (str): {nonempty.sum()} non-empty rows, examples: {df.loc[nonempty, col].value_counts().head(3).to_dict()}")
 
     # tank level
-    tank_cols = [c for c in df.columns if 'tank_level' in c]
+    tank_cols = [c for c in df.columns if 'tank_volume' in c]
     if tank_cols:
         for col in tank_cols:
             print(f"  {col}: min={df[col].min():.2f}, max={df[col].max():.2f}, mean={df[col].mean():.2f}")

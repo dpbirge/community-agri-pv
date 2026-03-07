@@ -31,7 +31,7 @@ COL_GROUNDWATER = 'total_groundwater_extracted_m3'
 COL_DEFICIT = 'deficit_m3'
 COL_COST = 'total_water_cost'
 COL_TOTAL_DEMAND = 'total_water_demand_m3'
-COL_TOTAL_DELIVERED = 'total_delivered_m3'
+COL_IRRIGATION_DELIVERED = 'irrigation_delivered_m3'
 COL_BALANCE = 'balance_check'
 COL_TANK = 'tank_volume_m3'
 COL_DAY = 'day'
@@ -139,7 +139,7 @@ def universal_checks(water_df, energy_df, test_dir):
 
     # 2. No NaN in key columns
     key_cols = [COL_TOTAL_DEMAND, COL_DEFICIT]
-    # total_delivered_m3 may not exist — use irrigation_delivered_m3 + community cols if needed
+    # irrigation_delivered_m3 tracks water delivered to fields
     nan_found = []
     for col in key_cols:
         if col in water_df.columns:
