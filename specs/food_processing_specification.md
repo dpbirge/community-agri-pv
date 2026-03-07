@@ -50,10 +50,15 @@ dehydration, trimming, and handling losses).
   price series for all 5 crops. Used by the market module (not this module)
   but value-add multipliers in processing_specs reference these ratios.
 
+**Harvest input** (`simulation/`):
+
+- `daily_harvest_yields.csv` — daily harvest output from `crop_yield.py`.
+  Already produced by `save_harvest_yields()` in `src/crop_yield.py` and
+  called from `notebooks/simulation.ipynb`. Columns match this spec:
+  `day`, `{field}_{crop}_harvest_kg`, `total_harvest_kg`.
+
 ### Not Yet Implemented
 
-- `simulation/daily_harvest_yields.csv` — daily harvest output from `crop_yield.py`
-  (prerequisite; crop_yield.py must be extended to produce this CSV)
 - `settings/food_processing_base.yaml` — processing policy configuration
 - `src/food_processing.py` — processing and storage engine
 - Scenario file entry (`food_processing:` line in `scenario_base.yaml`)
@@ -303,7 +308,9 @@ for each crop:
 ### Queue Spoilage
 
 Produce sitting in a processing queue is **unprocessed fresh product** and
-spoils at the fresh ambient spoilage rate. The queue shrinks daily due to both
+spoils at that crop's fresh ambient spoilage rate from
+`storage_spoilage_rates-toy.csv` (e.g., tomato = 3.5%/day, kale = 4.0%/day),
+regardless of destination pathway. The queue shrinks daily due to both
 spoilage and processing:
 
 ```
@@ -319,8 +326,9 @@ exceed equipment capacity lose product to spoilage while waiting.
 ### Non-Working Days
 
 On non-working days (based on `working_days_per_week`), no processing occurs
-but queue spoilage still applies. The weekly schedule assumes day 7 (Saturday
-in Egypt) is the rest day.
+but queue spoilage still applies. The rest day is Saturday, which maps to
+Python's `date.weekday() == 5`. The `_is_working_day` helper returns `False`
+when `date.weekday() == 5` and `working_days_per_week == 6`.
 
 ---
 
@@ -365,6 +373,32 @@ few times per year per crop (typically 1–4 plantings), so even long-lived
 products like canned (730 days) accumulate at most ~8–16 active cohorts
 across a 15-year simulation.
 
+### Cohort Data Structure
+
+Cohorts are stored as a plain dict of lists, keyed by `(crop, pathway)`.
+Each list entry is a dict with `production_date` and `remaining_kg`. This
+structure is passed into and returned from `_step_day()` — no mutable
+global state, consistent with the functional programming pattern used by
+all other `src/` modules.
+
+```python
+# Example cohort state
+cohorts = {
+    ('tomato', 'dried'): [
+        {'production_date': Timestamp('2015-06-10'), 'remaining_kg': 42.1},
+        {'production_date': Timestamp('2015-06-11'), 'remaining_kg': 38.7},
+    ],
+    ('tomato', 'canned'): [
+        {'production_date': Timestamp('2015-06-10'), 'remaining_kg': 155.0},
+    ],
+}
+```
+
+On each day, `_step_day()` receives the current `cohorts` dict and returns
+an updated copy. Expired cohorts (where `day - production_date > shelf_life_days`)
+are removed. Daily spoilage reduces `remaining_kg` in place before the copy
+is returned.
+
 ---
 
 ## Energy Tracking
@@ -387,6 +421,14 @@ The `energy_kw_continuous` column in `processing_equipment-toy.csv` is the
 machine's power rating, retained for peak demand sizing and capital planning
 but **not used** in the daily energy calculation (using both would double-count).
 
+**Data update required:** The `fresh` rows in `processing_specs-research.csv`
+currently have `energy_kwh_per_kg = 0.0`, but fresh produce passes through
+the `washing_sorting_line` (5 kW continuous, 3000 kg/day capacity, 8 hrs/day).
+The implied per-kg energy is `5 kW × 8 hrs / 3000 kg ≈ 0.013 kWh/kg`. Update
+the five `fresh` rows in `processing_specs-research.csv` to `energy_kwh_per_kg
+= 0.013` and `labor_hours_per_kg = 0.06` (matching the equipment spec) before
+implementation so that fresh processing is not silently zero-energy.
+
 ### Cold Storage Energy
 
 For products stored under `climate_controlled` conditions:
@@ -406,6 +448,33 @@ total_storage_energy_kwh    = cold_storage_kwh
 total_food_energy_kwh       = total_processing_energy_kwh + total_storage_energy_kwh
 ```
 
+### Energy Balance Integration
+
+The food processing module's `total_food_processing_energy_kwh` column feeds
+into `compute_daily_energy_balance()` in `src/energy_balance.py` as a third
+demand component alongside community building demand and water system demand.
+
+**Required changes to `src/energy_balance.py`:**
+
+1. Add a `food_processing_df` keyword argument to `compute_daily_energy_balance()`,
+   defaulting to `None` (backwards-compatible with existing callers).
+
+2. When provided, extract a daily energy series from the DataFrame's
+   `total_food_processing_energy_kwh` column, merge on `day`, and add it
+   to `total_demand_kwh`:
+
+   ```python
+   total_demand = community_demand + water_demand + food_processing_demand
+   ```
+
+3. Add a `food_processing_energy_demand_kwh` column to the output DataFrame
+   and include it in `_order_energy_balance_columns()`.
+
+4. For tariff assignment, food processing energy uses the agricultural tariff
+   (same as water energy) since the processing facility is part of the farm
+   operation. The existing `_compute_grid_import_cost()` tariff split logic
+   should treat food processing demand like water demand.
+
 ---
 
 ## Labor Tracking
@@ -416,28 +485,53 @@ total_food_energy_kwh       = total_processing_energy_kwh + total_storage_energy
 processing_labor_hrs = processed_kg_today * labor_hours_per_kg
 ```
 
-Where `labor_hours_per_kg` comes from `processing_specs-research.csv`.
-Worker category assignment from `processing_labor-research.csv` — typically
-`processing_worker` for packaged/canned/dried.
+The authoritative source for processing labor is
+`processing_labor-research.csv` (`data/labor/`), which provides both
+`labor_hours_per_kg` and `worker_category` per crop × processing_type.
+The `labor_hours_per_kg` column in `processing_specs-research.csv` is a
+convenience duplicate retained for human reference — the module reads labor
+data exclusively from `processing_labor-research.csv`.
 
 ### Storage Labor
 
-From `storage_labor-research.csv`, two types:
+From `storage_labor-research.csv`. The CSV has a richer structure than
+the simple formula below — the aggregation logic handles it as follows.
 
-1. **Recurring monthly labor** (temperature monitoring, quality inspection,
-   inventory management, cleaning, pest monitoring): converted to daily rate
-   per ton of inventory.
+**Recurring monthly labor** (unit = `per_ton_per_month`). The CSV lists
+separate activity types (temperature_monitoring, quality_inspection,
+inventory_management, cleaning, pest_monitoring, moisture_monitoring),
+each with its own `hours_per_unit` and `worker_category`. The module
+sums all `per_ton_per_month` activities for the matching crop and
+storage type, then converts to a daily rate:
 
-   ```
-   daily_storage_labor_hrs = inventory_tons * monthly_rate_hrs_per_ton / 30
-   ```
+```
+monthly_rate = sum of hours_per_unit for all per_ton_per_month activities
+               matching (crop, storage_type)
+daily_storage_labor_hrs = inventory_tons * monthly_rate / 30
+```
 
-2. **One-time loading/unloading labor**: applied on the day product enters or
-   leaves storage.
+**Wildcard crop entries.** Rows with crop values `fresh_all`, `canned_all`,
+`dried_all`, or `all` apply to every crop in that product category. When
+loading, expand these into per-crop entries. For example, `canned_all`
+maps to all five crops' canned inventory.
 
-   ```
-   loading_labor_hrs = newly_stored_tons * loading_rate_hrs_per_ton
-   ```
+**One-time loading/unloading labor** (unit = `per_ton_per_turnover`):
+applied on the day product enters or leaves storage.
+
+```
+loading_labor_hrs = newly_stored_tons * loading_rate_hrs_per_ton
+```
+
+**Facility-level labor** (units = `per_day`, `per_week`,
+`per_cold_room_per_month`). These are fixed overhead not tied to inventory
+volume. Convert each to a daily rate:
+- `per_day`: use directly
+- `per_week`: divide by 7
+- `per_cold_room_per_month`: multiply by number of cold rooms (assume 2
+  at community scale) and divide by 30
+
+Add facility-level labor to the daily total on every day that has any
+inventory in the corresponding storage type (cold or ambient).
 
 ### Curing Labor
 
@@ -566,7 +660,12 @@ def save_food_processing(df, *, output_path='simulation/daily_food_processing.cs
 
 ```python
 def load_food_processing(*, output_path='simulation/daily_food_processing.csv'):
-    """Read previously saved processing results."""
+    """Read previously saved processing results.
+
+    Uses parse_dates=['day'] for consistency with all other load_*()
+    functions in the codebase (e.g., load_daily_water_balance,
+    load_energy, load_demands).
+    """
 ```
 
 ### Internal Helpers
@@ -619,13 +718,17 @@ food_processing:
   storage_spoilage:      data/food_processing/storage_spoilage_rates-toy.csv
   fresh_packaging:       data/food_processing/fresh_packaging-toy.csv
   processed_packaging:   data/food_processing/processed_packaging-toy.csv
+  processing_labor:      data/labor/processing_labor-research.csv
+  storage_labor:         data/labor/storage_labor-research.csv
 ```
 
 ---
 
 ## Scenario File Addition
 
-Uncomment and set in `scenarios/scenario_base.yaml`:
+Replace the existing commented-out line in `scenarios/scenario_base.yaml`
+(which incorrectly reads `settings/food_processing.yaml` without the `_base`
+suffix) with:
 
 ```yaml
 food_processing: settings/food_processing_base.yaml

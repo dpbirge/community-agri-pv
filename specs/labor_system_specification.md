@@ -86,12 +86,12 @@ When multiple fields plant or harvest the same crop on the same date, labor
 demand concentrates into sharp peaks. The baseline farm profile
 (`farm_profile_base.yaml`) has 4 fields across 2 farms:
 
-| Field | Area | Plantings |
-|---|---|---|
-| north_field | 1 ha | kale (oct01), tomato (feb15) |
-| south_field | 1 ha | potato (sep15), onion (jan15) |
-| east_field | 1 ha | cucumber (feb15), cucumber (sep01) |
-| west_field | 1 ha | tomato (apr01), kale (dec01) |
+| Field | Area | Condition | Plantings |
+|---|---|---|---|
+| north_field | 4.9 ha | openfield | kale (oct01), tomato (feb15) |
+| south_field | 0.1 ha | underpv_low | potato (sep15), onion (jan15) |
+| east_field | 4.9 ha | openfield | cucumber (feb15), cucumber (sep01) |
+| west_field | 0.1 ha | underpv_low | tomato (apr01), kale (dec01) |
 
 Two tomato plantings (north feb15, west apr01) and two kale plantings (north
 oct01, west dec01) create overlapping harvest-labor periods. If fields were
@@ -183,7 +183,7 @@ method depends on the activity:
 | land_preparation | Uniform over first 5 days of initial stage | Equipment-limited; done before planting |
 | planting_transplant / planting_direct_seed | Uniform over initial stage days 6–end | Follows land prep |
 | weeding_manual | Uniform over development stage | Continuous during rapid vegetative growth |
-| fertilizer_application | Two pulses: 50% over days 1–7 of initial, 50% over days 1–7 of mid | Split application is standard practice |
+| fertilizer_application | Two pulses: 50% over days 1–7 of initial, 50% over days 1–min(7, mid_stage_days) of mid | Split application is standard practice; pulse window clamped to stage length |
 | pest_scouting | One day per week during development + mid stages | Weekly scouting rounds |
 | irrigation_management | Uniform over entire season | Daily system checks proportional to area |
 | harvesting | Uniform over late stage | Continuous picking/digging during maturation |
@@ -224,13 +224,33 @@ system configurations to determine equipment counts:
 
 | Equipment | Annual Hours | Per-Unit Basis | Source Config |
 |---|---|---|---|
-| PV systems | 40 hrs/100 kW/yr | total community + agri-PV kW | energy_system_base.yaml + farm profiles |
-| Wind turbines | 50 hrs/100 kW/yr | total wind kW | energy_system_base.yaml |
+| PV systems | 40 hrs/100 kW/yr | total community + agri-PV kW (see kW computation below) | energy_system_base.yaml + farm profiles + pv_systems CSV |
+| Wind turbines | 50 hrs/100 kW/yr | total wind kW (see kW computation below) | energy_system_base.yaml + wind_turbines CSV |
 | BWRO treatment | 300 hrs/unit/yr | treatment unit count | water_systems_base.yaml |
 | Wells | 100 hrs/well/yr | well count | water_systems_base.yaml |
 | Batteries | 25 hrs/unit/yr | battery count (0 or 1) | energy_system_base.yaml |
 | Generators | 35 hrs/unit/yr | generator count (0 or 1) | energy_system_base.yaml |
 | Irrigation systems | 7 hrs/ha/yr | irrigated area | farm_profile_base.yaml |
+
+**Computing installed kW for PV and wind maintenance:**
+
+The energy system config specifies PV by `area_ha` and wind by turbine `number`,
+not by kW capacity. The labor module computes installed kW as follows:
+
+- **Community solar kW:** For each density level in `energy_system_base.yaml`,
+  load `pv_systems-research.csv` (via registry key `energy_equipment.pv_systems`)
+  to get `ground_coverage_pct`, `panel_area_m2`, and `panel_wattage_w`. Then:
+  `kw = area_ha × 10000 × (ground_coverage_pct / 100) / panel_area_m2 × panel_wattage_w / 1000`.
+- **Agri-PV kW:** For each field with `condition: underpv_*`, extract the density
+  level from the condition suffix (e.g., `underpv_low` → `low`). Use the same
+  formula with the field's `area_ha`.
+- **Wind kW:** For each turbine type in `energy_system_base.yaml`, load
+  `wind_turbines-research.csv` (via registry key `energy_equipment.wind_turbines`)
+  to get `rated_capacity_kw`. Then: `kw = number × rated_capacity_kw`.
+
+The helper `_compute_maintenance_daily_labor` loads these spec CSVs via the
+data registry and computes total installed kW before applying the annual
+maintenance rate.
 
 ### Irrigation System Labor Modifier
 
@@ -319,6 +339,21 @@ cost_currency: usd
 **Add to `settings/data_registry_base.yaml`:**
 
 ```yaml
+# --- Crops (add to existing section) ---
+crops:
+  crop_coefficients:   data/crops/crop_params/crop_coefficients-research.csv
+
+# --- Weather (new section) ---
+weather:
+  openfield:           data/weather/daily_weather_openfield-research.csv
+  underpv:             data/weather/daily_weather_underpv-research.csv
+
+# --- Energy Equipment (add to existing section) ---
+energy_equipment:
+  pv_systems:          data/energy/pv_systems-research.csv
+  wind_turbines:       data/energy/wind_turbines-research.csv
+
+# --- Labor (new section) ---
 labor:
   requirements: data/labor/labor_requirements-research.csv
   wages: data/labor/labor_wages-research.csv
@@ -369,18 +404,31 @@ labor_policy: settings/labor_policy_base.yaml
 | `quality_inspector_hours` | Hours for quality_inspector category |
 | `logistics_driver_hours` | Hours for logistics_driver category |
 
+Note: `processing_worker_hours` is not included because processing labor is
+deferred (see Deferred Features). The 9 categories above cover all labor
+activities in scope. The identity check `sum({category}_hours) ==
+total_labor_hours` applies to these 9 categories only.
+
 ### Workforce (headcount/day)
 
 | Column | Description |
 |---|---|
 | `field_worker_count` | `ceil(field_worker_hours / standard_day_hours)` |
+| `field_supervisor_count` | `ceil(field_supervisor_hours / standard_day_hours)` |
 | `seasonal_harvester_count` | `ceil(seasonal_harvester_hours / standard_day_hours)` |
 | `equipment_operator_count` | `ceil(equipment_operator_hours / standard_day_hours)` |
+| `irrigation_technician_count` | `ceil(irrigation_technician_hours / standard_day_hours)` |
+| `maintenance_technician_count` | `ceil(maintenance_technician_hours / standard_day_hours)` |
+| `manager_administrator_count` | `ceil(manager_administrator_hours / standard_day_hours)` |
+| `quality_inspector_count` | `ceil(quality_inspector_hours / standard_day_hours)` |
+| `logistics_driver_count` | `ceil(logistics_driver_hours / standard_day_hours)` |
 | `total_workforce_count` | Sum of all category counts |
 
-Headcount uses `standard_day_hours` (8 hours) as the denominator. The module
-does not reduce labor on heat stress days — it reports the full demand and
-flags the unsafe conditions separately.
+Headcount uses `standard_day_hours` (8 hours) as the denominator. One count
+column per active worker category (all 9 categories used by this module;
+`processing_worker` is excluded because processing labor is deferred). The
+module does not reduce labor on heat stress days — it reports the full demand
+and flags the unsafe conditions separately.
 
 ### Cost (per day)
 
@@ -441,6 +489,17 @@ flags the unsafe conditions separately.
   inversely with late-stage length — a shorter late stage concentrates the
   same total harvest hours into fewer days, requiring more harvesters.
 
+  **Minimum late stage guard:** If the adjusted late stage would be ≤ 0
+  days (e.g., kale spring mar15: non-late stages sum to 80 but season is
+  75 days; cucumber spring apr01: non-late stages sum to 85 = season
+  length), the module raises `ValueError` identifying the crop, planting
+  window, and the mismatch. This prevents division-by-zero in the
+  spreading formula. These windows are invalid for labor modeling — the
+  helper functions must skip them when testing alternative planting dates.
+  The `test_staggered_plantings` and `test_crop_mix` helpers should catch
+  this error and exclude the invalid combination from results rather than
+  propagating the exception.
+
 - `_build_all_field_schedules(farm_config, season_lookup, stage_lookup, sim_year, *, water_system_name)` —
   Iterate all fields across all farms, call `_build_field_schedule` for each,
   return a dict of `{field_name: schedule_df}`.
@@ -478,8 +537,9 @@ flags the unsafe conditions separately.
 ### Heat Stress Tracking
 
 - `_load_daily_temperatures(registry, root_dir, *, condition='openfield')` —
-  Load the daily weather CSV matching the specified condition. Extract the
-  daily max temperature column. Return a Series indexed by date.
+  Load the daily weather CSV via registry key `weather.{condition}` (e.g.,
+  `weather.openfield`). Extract the `temp_max_c` column. Return a Series
+  indexed by date.
 
 - `_compute_heat_flags(temp_c, policy)` — Given the day's max temperature
   and heat stress policy config, return a dict with `heat_stress_flag` (0/1)
@@ -518,8 +578,9 @@ def compute_daily_labor_demand(
 1. Load farm profile config, data registry, labor policy (or defaults).
 2. Load labor requirements and wages from registry.
 3. Load crop coefficient stage durations → `stage_lookup` dict.
-4. Load planting windows → `season_lookup` dict (reuses `_load_season_lengths`
-   from `src/farm_profile.py`).
+4. Load planting windows → `season_lookup` dict (calls `load_season_lengths`
+   from `src/farm_profile.py` — renamed from `_load_season_lengths` to make
+   it part of the public API).
 5. Build field schedules for the simulation year — one DataFrame per field with
    daily growth stages.
 6. For each field, compute daily labor hours by activity using
@@ -590,8 +651,13 @@ def compute_labor_profile(
 ):
 ```
 
-Identical to `compute_daily_labor_demand` except it accepts a parsed dict
-instead of a file path for the farm profile.
+**Implementation pattern:** `compute_daily_labor_demand` is a thin wrapper
+that loads the farm profile YAML from `farm_profiles_path` and delegates to
+`compute_labor_profile`. All orchestration logic lives in
+`compute_labor_profile`. This avoids code duplication — the file-path entry
+point is a convenience for standalone and notebook usage, while the dict entry
+point enables the helper functions to pass modified configs without writing
+temporary files.
 
 ### `summarize_labor_profile()`
 
@@ -728,7 +794,7 @@ difference (alternative − baseline) for each numeric metric.
 | `settings/farm_profile_base.yaml` | Field definitions and crop schedules |
 | `settings/energy_system_base.yaml` | Equipment counts for maintenance labor |
 | `settings/water_systems_base.yaml` | Well/treatment counts for maintenance labor |
-| `src/farm_profile.py` | `planting_code_to_mmdd()`, `normalize_plantings()` |
+| `src/farm_profile.py` | `planting_code_to_mmdd()`, `normalize_plantings()`, `load_season_lengths()` (rename `_load_season_lengths` to public) |
 
 ### New Files Required
 
@@ -741,8 +807,9 @@ difference (alternative − baseline) for each numeric metric.
 
 | File | Change |
 |---|---|
-| `settings/data_registry_base.yaml` | Add `labor:` section with 3 entries |
+| `settings/data_registry_base.yaml` | Add `labor:` section, `crops.crop_coefficients`, `weather:` section, `energy_equipment.pv_systems`, `energy_equipment.wind_turbines` |
 | `scenarios/scenario_base.yaml` | Add `labor_policy:` key |
+| `src/farm_profile.py` | Rename `_load_season_lengths` → `load_season_lengths` (make public) |
 
 ---
 
@@ -837,6 +904,12 @@ specifically requested.
   `distribution_labor-research.csv`) but the daily yield volumes needed to
   drive it are not yet modeled. Add when `src/crop_yield.py` produces daily
   yield volumes.
+- **Per-kg logistics labor** — `logistics_loading` and `logistics_unloading`
+  (0.002 hrs/kg each) in `labor_requirements-research.csv` require daily kg
+  throughput volumes that are not available at the daily timestep. Only the
+  fixed daily logistics rates (`logistics_transport`, `logistics_inventory`)
+  are included in this module. Add per-kg logistics when post-harvest
+  pipeline modeling provides daily dispatch volumes.
 - **Hourly labor scheduling** — the daily timestep is sufficient for workforce
   planning. Intra-day scheduling (morning vs. afternoon shifts) is a future
   refinement.

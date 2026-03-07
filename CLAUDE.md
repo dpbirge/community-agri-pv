@@ -41,7 +41,10 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
 - `/simulation` - Output CSVs from simulation runs (Layer 3 outputs)
 - `/specs` - Simulation design specifications (water, energy, farming, labor, food processing)
 - `/src` - Simulation engine source code (Layer 3)
-- `/stress_testing` - Stress testing scripts and configs (empty)
+- `/stress_testing` - Stress testing scripts and configs
+    - `./baseline` - Baseline YAML configs for stress test scenarios (energy, water, farm profiles)
+    - `./individual_tests` - Per-scenario test directories (energy_*, water_*, farm_*, cross_*, etc.)
+    - `./run_*.py` - Runner scripts for each test domain (energy, water, farm, cross-domain)
 - `/tests` - Test suites (pytest)
 
 ## Key Files
@@ -63,8 +66,13 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
 - `src/community_demand.py` - Daily household/building energy and water demands
 - `src/crop_yield.py` - FAO Paper 33 water-yield response function and community harvest
 - `src/farm_profile.py` - Planting normalization and overlap validation
-- `src/plots.py` - Stacked area and policy heatmap visualizations
+- `src/intraday_estimate.py` - Intraday battery adequacy estimation from daily energy balance
+- `src/planting_optimizer.py` - Planting schedule optimizer for irrigation demand smoothing
+- `src/plots.py` - Stacked area, balance, and policy heatmap visualizations
+- `settings/farm_profile_optimized.yaml` - Optimized farm profile output from planting optimizer
 - `notebooks/simulation.ipynb` - Main simulation notebook (primary user entry point)
+- `notebooks/helpers/planting_optimization.ipynb` - Planting schedule optimization analysis
+- `notebooks/helpers/simulation_checks.ipynb` - Post-simulation validation checks
 
 ## Conventions
 
@@ -88,6 +96,8 @@ Functional programming throughout — no classes, no stateful data. Each `src/` 
 - `compute_daily_demands()` — community building demands in `src/community_demand.py`; scales per-unit data by household count or building area with optional multipliers
 - `compute_harvest_yield()` — FAO water-yield response in `src/crop_yield.py`; computes final yield from cumulative ETa/ETc ratio after dynamic irrigation simulation
 - `compute_community_harvest()` — community-level harvest in `src/crop_yield.py`; runs yield model for all fields in the water balance, returns daily growth and final yields per field
+- `estimate_intraday_balance()` — battery adequacy screening in `src/intraday_estimate.py`; decomposes daily totals into hourly profiles via shape factors, computes minimum battery swing per day using cumulative net energy method
+- `optimize_planting_schedule()` — planting date optimizer in `src/planting_optimizer.py`; varies planting dates and field splits to smooth irrigation demand (minimize_variance) or align with renewable supply (match_supply)
 
 ## Development
 

@@ -11,12 +11,15 @@ Usage:
     fig = plot_energy_balance(energy_balance_df, years=3)
 """
 
+import math
 from datetime import datetime
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
-import pandas as pd
+from matplotlib.colors import BoundaryNorm, ListedColormap
+from matplotlib.patches import Patch
 
 
 # ---------------------------------------------------------------------------
@@ -239,11 +242,6 @@ def plot_water_balance(df, *, years=1, ylim=None, hspace=0.35):
     Returns:
         matplotlib Figure.
     """
-    import math
-    import matplotlib.dates as mdates
-    from matplotlib.colors import ListedColormap, BoundaryNorm
-    from matplotlib.patches import Patch
-
     sub = _subset_years(df, years)
 
     with _dark_mode_style():
@@ -384,8 +382,6 @@ def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35, clip=True):
     Returns:
         matplotlib Figure.
     """
-    import matplotlib.dates as mdates
-
     sub = _subset_years(df, years)
 
     with _dark_mode_style():
@@ -404,7 +400,6 @@ def plot_energy_balance(df, *, years=1, ylim=None, hspace=0.35, clip=True):
             )
 
         # Stacked supply areas (renewable split into solar/wind by proportion)
-        import numpy as np
         total_re = sub['total_solar_kwh'] + sub['total_wind_kwh']
         solar_frac = np.where(total_re > 0, sub['total_solar_kwh'] / total_re, 0.5)
         wind_frac = 1.0 - solar_frac
