@@ -19,7 +19,7 @@
 #   - Potato benefits from shade during tuber initiation (heat-sensitive stage) but is moderately light-demanding
 #   - Onion is relatively heat-tolerant but benefits from reduced ET; moderate shade tolerance
 #   - Values marked "estimated" are extrapolated from related crop or shade-level studies; all others have direct or close-analog empirical support
-crop_name,pv_density,temperature_reduction_C,et_reduction_pct,par_reduction_pct,net_yield_effect_pct,heat_stress_threshold_C,source
+crop,pv_density,temperature_reduction_C,et_reduction_pct,par_reduction_pct,net_yield_effect_pct,heat_stress_threshold_C,source
 tomato,low,1.5,10,18,5,35,Barron-Gafford2019;Marrou2013
 tomato,medium,3.0,18,35,3,35,Barron-Gafford2019;Marrou2013
 tomato,high,4.5,28,55,-12,35,estimated;MDPI-AgriEng2025

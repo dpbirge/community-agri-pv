@@ -180,7 +180,7 @@ Source: FAO Paper 33 (Doorenbos & Kassam, 1979).
 
 | Column              | Type   | Unit            | Description                                                |
 |---------------------|--------|-----------------|------------------------------------------------------------|
-| `crop_name`         | string | --              | Crop name (note: uses `crop_name`, not `crop`)             |
+| `crop`              | string | --              | Crop name                                                  |
 | `ky_whole_season`   | float  | dimensionless   | Yield sensitivity to water deficit (whole-season Ky)        |
 | `wue_curvature`     | float  | dimensionless   | Controls concavity of water-yield curve (beta parameter)    |
 | `source`            | string | --              | Citation                                                    |
@@ -261,7 +261,7 @@ Source: Barron-Gafford et al. (2019), Marrou et al. (2013), Weselek et al. (2021
 
 | Column                    | Type   | Unit         | Description                                         |
 |---------------------------|--------|--------------|-----------------------------------------------------|
-| `crop_name`               | string | --           | Crop name                                           |
+| `crop`                    | string | --           | Crop name                                           |
 | `pv_density`              | string | --           | Panel density: `low`, `medium`, `high`              |
 | `temperature_reduction_C` | float  | degrees C    | Average daytime air temperature reduction            |
 | `et_reduction_pct`        | float  | percentage   | Evapotranspiration reduction percentage              |
@@ -637,7 +637,7 @@ One row per calendar day across the simulation period. Most rows are zeros; non-
 | `{field}_{crop}_harvest_kg`      | float    | kg   | Total harvest for this field-crop on this date   |
 | `total_harvest_kg`               | float    | kg   | Sum of all field-crop harvest columns            |
 
-Column naming convention: `{field_name}_{crop_name}_harvest_kg`. Example columns from the baseline configuration:
+Column naming convention: `{field_name}_{crop}_harvest_kg`. Example columns from the baseline configuration:
 
 - `east_field_cucumber_harvest_kg`
 - `north_field_kale_harvest_kg`
@@ -668,63 +668,39 @@ This DataFrame is not saved to disk but is used to generate the daily CSV and pr
 
 ---
 
-## Gaps and Issues
+## Gaps and Design Notes
 
-### 1. Harvest Yield Logic Not in a Source Module
+### Resolved Items
 
-The harvest yield assembly loop (iterating over farms/fields/plantings/years, extracting delivery series from the water balance, calling `compute_harvest_yield()`, building the daily output CSV) is implemented entirely in the simulation notebook. There is no `compute_harvest_yields()` (plural) function in `src/` that orchestrates the full community harvest. This means:
+**1. Harvest yield logic** — `compute_community_harvest()` and `save_harvest_yields()` now exist in `src/crop_yield.py`, following the same public API pattern as other modules. The simulation notebook imports and calls these directly.
 
-- The logic cannot be tested with `pytest`.
-- Other notebooks or scripts that need harvest data must duplicate the loop.
-- The `save` and `load` pattern used by all other modules (`save_harvest_yields()`, `load_harvest_yields()`) does not exist for this subsystem.
+**2. Tests** — `tests/test_crop_yield.py`, `tests/test_farm_profile.py`, and `tests/test_irrigation_demand.py` provide pytest coverage for the farming subsystem.
 
-Recommendation: Extract the notebook harvest loop into a `src/crop_yield.py` public function like `compute_community_harvest()` with corresponding `save_harvest_yields()` and `load_harvest_yields()` functions, following the same pattern as `src/irrigation_demand.py` and `src/water_balance.py`.
+**3. Planting windows in data registry** — `planting_windows-research.csv` is now registered under `crops.planting_windows` in `settings/data_registry_base.yaml`.
 
-### 2. Per-Field Delivered Volume Uses Proportional Allocation, Not Per-Field Tracking
+**4. Column name consistency** — All crop data files now use `crop` as the crop identifier column. Previously, some files (yield response factors, microclimate yield effects, food processing specs, handling loss rates, storage spoilage rates, processing labor) used `crop_name`. Standardized to `crop` across all CSV files.
 
-In `src/water_balance.py`, per-field delivered volume is computed as:
+**5. Weather year range** — The simulation runs all weather years present in the crop daily growth CSVs (2010-2024). No `start_date`/`end_date` fields in scenario config.
+
+**6. Cross-year planting season handling** — `validate_no_overlap()` in `src/farm_profile.py` projects all plantings into two consecutive reference years (2020 and 2021), checking all cross-year pairs. A November planting extending into March is correctly tested against early-year plantings on the same field. Same-planting-code pairs across years are excluded (same annual event, not an overlap).
+
+### Design Decisions (Not Gaps)
+
+**Proportional water allocation** — In `src/water_balance.py`, per-field delivered volume is computed as a proportional share of total irrigation delivery:
 
 ```python
 delivery_ratio = irrigation_delivered / irrigation_demand
 field_delivered = field_demand * delivery_ratio
 ```
 
-This means all fields receive the same proportional reduction when there is a deficit. In reality, different crops have different water stress sensitivities (Ky values), and an optimizing dispatch system might prioritize water to more sensitive crops. The current uniform proportional allocation is a simplification.
+All fields receive the same proportional reduction during deficit days. This is the intended behavior for the simulation's scope. Crop-sensitivity-based prioritization (routing more water to high-Ky crops during shortfalls) would require a field-level dispatch optimizer, which is beyond the current model's purpose.
 
-### 3. Biomass Tracking is Decorative in the Yield Model
+**Biomass columns are diagnostic only** — The crop daily growth CSVs contain `biomass_kg_ha` and `cumulative_biomass_kg_ha` columns tracking daily dry matter accumulation via the RUE model. These are not used to compute yield. The actual yield calculation uses the FAO water-yield response formula (`potential_yield * f^(1/alpha) * avg_Kt`), which is decoupled from cumulative biomass to avoid the dry-matter-fraction amplification problem (crops with >95% water content produce unrealistic fresh yields from any reasonable dry biomass). The biomass columns are retained for educational and diagnostic purposes.
 
-The crop daily growth CSVs contain `biomass_kg_ha` and `cumulative_biomass_kg_ha` columns that track daily dry matter accumulation via the RUE model. However, the actual yield calculation (`yield_fresh_kg_ha`) is entirely based on the FAO water-yield response formula using `potential_yield * f^(1/alpha) * avg_Kt`. The cumulative biomass values are never used to compute yield. The generation script comment explicitly states this is intentional: "Yield is decoupled from cumulative biomass to avoid the dm_frac amplification problem (crops with >95% water content produce unrealistic fresh yields from any reasonable dry biomass)."
+**Temperature stress coefficient loaded from `full_eto` policy** — `compute_harvest_yield()` loads `temp_stress_coeff` from the crop daily growth CSV filtered to `irrigation_policy='full_eto'`. This works correctly in both static and dynamic mode because `temp_stress_coeff` depends only on weather (temperature), not on water application. Water stress affects `Ks` (water stress coefficient), not `Kt` (temperature stress coefficient). The filter choice is arbitrary — any policy would return the same `Kt` values for a given weather year.
 
-This means the biomass columns serve as diagnostic/educational tracking only, not as inputs to the yield function.
+### Future Enhancement: Salt Stress in Yield
 
-### 4. Temperature Stress Coefficient Source Mismatch
+The crop growth parameters file includes salt tolerance data (`tds_no_penalty_ppm`, `tds_lethal_ppm`, `tds_yield_decline_pct_per_100ppm`) and the irrigation demand module computes `crop_tds_requirement_ppm`. However, `compute_harvest_yield()` does not apply a TDS-based yield penalty. This is acceptable because the water supply dispatch system uses TDS blending logic to keep delivered water within crop tolerance thresholds — salt stress should not occur under normal operation.
 
-`compute_harvest_yield()` in `src/crop_yield.py` loads `temp_stress_coeff` from the crop daily growth CSV filtered to `irrigation_policy='full_eto'` and the specific `weather_year`. This is correct for static mode where the policy matches. However, in dynamic mode, the temperature stress coefficient should be the same regardless of irrigation policy (it depends only on weather, not water application). The choice to filter by `full_eto` works correctly because `temp_stress_coeff` does not vary by irrigation policy within the same weather year -- water stress affects `Ks`, not `Kt`. This is not a bug but could be confusing to future maintainers.
-
-### 5. No Explicit Salt Stress in Yield Computation
-
-The crop growth parameters file includes detailed salt tolerance data (`tds_no_penalty_ppm`, `tds_lethal_ppm`, `tds_yield_decline_pct_per_100ppm`) and the irrigation demand module computes `crop_tds_requirement_ppm`. However, `compute_harvest_yield()` does not include any TDS-based yield penalty. If delivered water TDS exceeds crop thresholds, the yield response function is unaffected. The TDS data currently only influences the water supply dispatch system (blending decisions) but not the final yield.
-
-**Planned enhancement**: Add an optional `delivered_tds_series` parameter to `compute_harvest_yield()` that applies a Maas-Hoffman linear salt stress penalty using the existing crop salt tolerance parameters. The daily salt stress coefficient `Ks_salt` would interpolate linearly between `tds_no_penalty_ppm` (Ks_salt=1.0) and `tds_lethal_ppm` (Ks_salt=0.0), then the season-average `avg_Ks_salt` would multiply into the yield formula alongside `avg_Kt`. See `docs/planning/farming_crop_yield_gaps_plan.md` Gap 5 for full implementation details.
-
-### 6. Cross-Year Planting Season Handling
-
-The overlap validator in `src/farm_profile.py` uses a fixed reference year (2020) to check for season overlaps. This works for single-year checks but does not account for plantings that cross the year boundary (e.g., a November planting that harvests in March). The `validate_no_overlap()` function handles this via `timedelta` arithmetic, but the reference year approach could miss overlaps between a late-year planting in one cycle and an early-year planting in the next cycle for the same field.
-
-In the actual simulation (notebook), the year-by-year iteration handles cross-year seasons correctly because it uses actual calendar dates.
-
-### 7. Column Name Inconsistency in Yield Response Factors
-
-The yield response factors CSV uses `crop_name` as the crop identifier column, while all other crop data files use `crop`. This requires `crop_yield.py` to filter by `yrf_df['crop_name'] == crop` while `crop_growth_params` uses `cgp_df['crop'] == crop`. This inconsistency is minor but introduces a coupling that would break if column names were standardized.
-
-### 8. No Tests for Farming Subsystem
-
-There are no visible test files specifically covering `src/farm_profile.py`, `src/crop_yield.py`, or `src/irrigation_demand.py`. Each module has an `if __name__ == '__main__':` block for quick standalone verification, but no `pytest`-compatible test suite validates overlap detection, demand calculation correctness, or yield formula accuracy.
-
-### 9. Planting Windows File Not in Data Registry
-
-The `planting_windows-research.csv` file is not registered in `settings/data_registry_base.yaml`. Instead, `src/farm_profile.py` infers its path from the `growth_params` entry's parent directory. This breaks the registry convention used for all other data files and means changing the registry path for `growth_params` could silently break the planting windows lookup if the file is not co-located.
-
-### 10. Weather Year Range Determines Simulation Scope
-
-**Resolved**: The `start_date`/`end_date` fields have been removed from `scenario_base.yaml`. The simulation intentionally runs all weather years present in the crop daily growth CSVs (2010-2024), providing 15 years of multi-year yield data for analysis. Date range filtering may be added as a future enhancement if needed for scenario comparison.
+If salt stress modeling were needed (e.g., for scenarios where blending capacity is insufficient), the implementation path would be: add an optional `delivered_tds_series` parameter to `compute_harvest_yield()` that applies a Maas-Hoffman linear penalty using the existing crop salt tolerance parameters. The daily `Ks_salt` would interpolate between `tds_no_penalty_ppm` (1.0) and `tds_lethal_ppm` (0.0), and the season-average would multiply into the yield formula alongside `avg_Kt`. The data infrastructure is already in place; only the yield function would need modification.

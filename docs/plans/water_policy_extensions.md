@@ -259,7 +259,7 @@ This produces new rows in every crop growth CSV with `irrigation_policy = rdi`.
 Add per-stage Ky columns to `yield_response_factors-research.csv`:
 
 ```csv
-crop_name, ky_whole_season, ky_initial, ky_development, ky_mid, ky_late, wue_curvature, source, notes
+crop, ky_whole_season, ky_initial, ky_development, ky_mid, ky_late, wue_curvature, source, notes
 tomato,    1.05,            0.40,       0.70,            1.10,   0.20,    3.5,           FAO 33, Table 12
 potato,    1.10,            0.45,       0.70,            0.80,   0.20,    3.5,           FAO 33, Table 12
 onion,     1.10,            0.45,       0.70,            0.80,   0.30,    3.5,           FAO 33, Table 12

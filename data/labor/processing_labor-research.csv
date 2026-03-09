@@ -11,7 +11,7 @@
 # DEPENDENCIES: None
 # ASSUMPTIONS: Semi-automated community-scale equipment, not industrial. Hot arid climate (Sinai Peninsula).
 #
-crop_name,processing_type,labor_hours_per_kg,worker_category
+crop,processing_type,labor_hours_per_kg,worker_category
 tomato,fresh,0.0,none
 tomato,packaged,0.02,processing_worker
 tomato,canned,0.07,processing_worker

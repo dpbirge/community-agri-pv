@@ -14,7 +14,7 @@
 #   - Local/regional marketing (20-100 km transport)
 #   - Same-day or next-day sale for fresh pathway
 #   - Solar-assisted drying in favorable arid climate
-crop_name,pathway,loss_pct,source,notes
+crop,pathway,loss_pct,source,notes
 tomato,fresh,28.0,FAO Egypt tomato value chain 2021,25-49% farm-to-consumer; 28% for farm-to-first-sale in hot climate
 tomato,packaged,8.0,FAO postharvest handling guidelines,5% sorting rejects + 3% handling damage
 tomato,canned,5.0,FAO Nubaria SDT Project,3% grading reject + 2% processing spillage

@@ -2,7 +2,7 @@
 # DATE: 2026-02-02
 # DESCRIPTION: Spoilage rates and shelf life for crop products by storage condition
 # UNITS:
-#   - crop_name: Crop name (e.g., tomato, potato)
+#   - crop: Crop name (e.g., tomato, potato)
 #   - product_type: Processing type (e.g., fresh, dried, canned, packaged)
 #   - storage_condition: ambient (25-35C) or climate_controlled (2-8C)
 #   - spoilage_rate_pct_per_day: Daily percentage loss to spoilage
@@ -10,7 +10,7 @@
 # LOGIC: Fresh products spoil fastest; dried/canned last longest
 # DEPENDENCIES: processing_specs-toy.csv (product types must match)
 # ASSUMPTIONS: Hot arid ambient conditions (25-35C), proper cold chain for controlled
-crop_name,product_type,storage_condition,spoilage_rate_pct_per_day,shelf_life_days
+crop,product_type,storage_condition,spoilage_rate_pct_per_day,shelf_life_days
 tomato,fresh,ambient,3.5,10
 tomato,fresh,climate_controlled,1.0,28
 potato,fresh,ambient,2.0,14

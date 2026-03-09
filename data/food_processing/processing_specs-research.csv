@@ -27,7 +27,7 @@
 #   - Value-add multipliers reflect Egyptian wholesale/export market conditions
 #   - Labor estimates assume semi-manual community operations (4x more labor-intensive than industrial)
 #   - Dried product target moisture: tomato 14%, potato 6.5%, onion 5%, kale 8%, cucumber 5%
-crop_name,processing_type,energy_kwh_per_kg,labor_hours_per_kg,weight_loss_pct,value_add_multiplier,processing_time_hours,storage_life_days
+crop,processing_type,energy_kwh_per_kg,labor_hours_per_kg,weight_loss_pct,value_add_multiplier,processing_time_hours,storage_life_days
 tomato,fresh,0.0,0.0,0.0,1.0,0.0,10
 tomato,packaged,0.05,0.02,3.0,1.2,2.0,12
 tomato,canned,0.45,0.07,12.0,2.0,8.0,730
